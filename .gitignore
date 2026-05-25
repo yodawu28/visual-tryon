@@ -1,0 +1,90 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# Environment Variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+
+# Data & Models
+data/*
+!data/.gitkeep
+models/*
+!models/.gitkeep
+
+# ML Models (InsightFace downloads)
+*.onnx
+*.params
+
+# Temporary files
+*.log
+*.tmp
+.DS_Store
+
+# Output files
+anonymized_response.json
+analysis_response.json
+vto_request.json
+*.jpg
+*.png
+*.jpeg
+!tests/fixtures/sample_images/*.jpg
+!tests/fixtures/sample_images/*.png
+
+# MCP & Code Graph
+.vibe-map/code_graph.db
+.vibe-map/logs/
+
+.claude
+.codex
+AGENTS.md
+CLAUDE.md
+
+docs
+data
+.vibe-map
+internal-docs
+.mcp.json

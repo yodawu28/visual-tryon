@@ -1,0 +1,51 @@
+# Web Framework
+fastapi==0.115.5
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+
+# ML & Computer Vision
+insightface==0.7.3
+onnxruntime==1.21.1
+opencv-python-headless==4.10.0.84
+numpy==1.26.4
+
+# Image Processing
+Pillow==11.0.0
+
+# OpenAI
+openai==1.58.1
+
+# Replicate (for remote mode)
+replicate==1.0.4
+
+# Diffusers (for local CatVTON)
+# NOTE: diffusers 0.32+ requires transformers 4.41+. Using compatible versions.
+diffusers==0.32.2
+transformers==4.46.3
+accelerate==1.2.1
+safetensors==0.4.5
+torch>=2.0.0
+
+# Configuration
+pydantic==2.10.3
+pydantic-settings==2.7.0
+python-dotenv==1.0.1
+
+# Utilities
+aiofiles==24.1.0
+httpx==0.28.1
+playwright==1.59.0
+
+# Error Handling
+tenacity==9.0.0
+
+# Development
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+black==24.10.0
+ruff==0.8.4
+mypy==1.13.0
+
+# Memory profiling
+psutil==6.1.0

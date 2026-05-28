@@ -120,10 +120,7 @@ def test_build_avatar_dry_run_plan_contains_summary_and_no_raw_measurements(
     assert planned_run["model"] == "flux-kontext-apps/multi-image-kontext-pro"
     assert planned_run["input_mapping"] == "flux_kontext_multi_image"
     assert planned_run["prompt_variant"] == "flux-kontext-outfit-preview-v1"
-    assert (
-        planned_run["avatar_prompt_variant"]
-        == "avatar-garment-preview-context-v1"
-    )
+    assert planned_run["avatar_prompt_variant"] == "avatar-garment-preview-context-v1"
     serialized = str(plan)
     assert "182" not in serialized
     assert "84" not in serialized
@@ -171,9 +168,9 @@ def test_avatar_eval_runner_writes_success_report(tmp_path):
     generated_path = Path(preview_result["generated_image_path"])
     assert generated_path.exists()
     assert generated_path.read_bytes() == b"generated-image"
-    generated_prompt = (
-        image_generator.generate_tryon_from_b64.call_args.kwargs["inpainting_prompt"]
-    )
+    generated_prompt = image_generator.generate_tryon_from_b64.call_args.kwargs[
+        "inpainting_prompt"
+    ]
     assert "personalized avatar mannequin" in generated_prompt
 
 

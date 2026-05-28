@@ -126,7 +126,7 @@ def build_preview_generator_from_config(
     return generator
 
 
-def _validate_preview_model_configs(
+def validate_preview_model_configs(
     preview_model_configs: list[PreviewModelConfig],
 ) -> None:
     unsupported_input_mappings = sorted(
@@ -156,6 +156,12 @@ def _validate_preview_model_configs(
         )
 
 
+def _validate_preview_model_configs(
+    preview_model_configs: list[PreviewModelConfig],
+) -> None:
+    validate_preview_model_configs(preview_model_configs)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     cases = load_eval_cases(args.manifest)
@@ -168,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
         if not preview_model_configs:
             raise ValueError("No enabled preview model configs found in model matrix")
 
-        _validate_preview_model_configs(preview_model_configs)
+        validate_preview_model_configs(preview_model_configs)
 
         if args.dry_run:
             plan = build_dry_run_plan(

@@ -69,6 +69,27 @@ def _write_matrix(tmp_path: Path) -> Path:
     return matrix_path
 
 
+def _write_matrix_without_prompt_variant(tmp_path: Path) -> Path:
+    matrix_path = tmp_path / "model_matrix_without_prompt_variant.json"
+    matrix_path.write_text(
+        json.dumps(
+            {
+                "preview_models": [
+                    {
+                        "run_id": "flux-avatar-current",
+                        "model": "flux-kontext-apps/multi-image-kontext-pro",
+                        "model_version": None,
+                        "input_mapping": "flux_kontext_multi_image",
+                        "enabled": True,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return matrix_path
+
+
 def test_parse_args_supports_avatar_preview_eval_options(tmp_path):
     manifest_path = tmp_path / "manifest.json"
     matrix_path = tmp_path / "model_matrix.json"
@@ -147,6 +168,29 @@ def test_main_dry_run_prints_plan_and_does_not_instantiate_preview_generators(
         ],
     }
     generator_builder.assert_not_called()
+
+
+def test_main_dry_run_defaults_avatar_prompt_variant(tmp_path, capsys):
+    manifest_path = _write_manifest(tmp_path)
+    matrix_path = _write_matrix_without_prompt_variant(tmp_path)
+
+    return_code = run_avatar_preview_eval.main(
+        [
+            "--manifest",
+            str(manifest_path),
+            "--model-matrix",
+            str(matrix_path),
+            "--dry-run",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+
+    assert return_code == 0
+    assert (
+        payload["planned_runs"][0]["prompt_variant"]
+        == "flux-kontext-outfit-preview-v1"
+    )
 
 
 def test_main_dry_run_requires_model_matrix(tmp_path):

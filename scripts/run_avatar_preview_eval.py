@@ -22,7 +22,6 @@ from src.modules.evaluation.harness import (
 from src.modules.image_generator.replicate_avatar_preview_generator import (
     ReplicateAvatarPreviewGenerator,
 )
-from scripts.run_vto_eval import _positive_int
 
 SUPPORTED_AVATAR_PREVIEW_INPUT_MAPPINGS = {
     ReplicateAvatarPreviewGenerator.DEFAULT_INPUT_MAPPING,
@@ -30,6 +29,17 @@ SUPPORTED_AVATAR_PREVIEW_INPUT_MAPPINGS = {
 SUPPORTED_AVATAR_PREVIEW_PROMPT_VARIANTS = (
     ReplicateAvatarPreviewGenerator.PROMPT_VARIANTS
 )
+
+
+def _positive_int(value: str) -> int:
+    try:
+        parsed_value = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a positive integer") from exc
+
+    if parsed_value <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed_value
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -108,6 +118,31 @@ def validate_avatar_preview_model_configs(
         )
 
 
+def load_avatar_preview_model_configs(matrix_path: Path) -> list[PreviewModelConfig]:
+    preview_model_configs = load_preview_model_configs(matrix_path)
+    return [
+        _with_avatar_prompt_default(preview_config)
+        for preview_config in preview_model_configs
+    ]
+
+
+def _with_avatar_prompt_default(
+    preview_config: PreviewModelConfig,
+) -> PreviewModelConfig:
+    if (
+        preview_config.input_mapping == ReplicateAvatarPreviewGenerator.DEFAULT_INPUT_MAPPING
+        and preview_config.prompt_variant == "preview-garment-swap-v1"
+    ):
+        return PreviewModelConfig(
+            run_id=preview_config.run_id,
+            model=preview_config.model,
+            model_version=preview_config.model_version,
+            input_mapping=preview_config.input_mapping,
+            prompt_variant=ReplicateAvatarPreviewGenerator.DEFAULT_PROMPT_VERSION,
+        )
+    return preview_config
+
+
 def build_avatar_preview_generator_from_config(
     preview_config: PreviewModelConfig,
 ) -> ReplicateAvatarPreviewGenerator:
@@ -128,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.limit_cases is not None:
         cases = cases[: args.limit_cases]
 
-    preview_model_configs = load_preview_model_configs(args.model_matrix)
+    preview_model_configs = load_avatar_preview_model_configs(args.model_matrix)
     if not preview_model_configs:
         raise ValueError("No enabled preview model configs found in model matrix")
 

@@ -18,9 +18,12 @@ from src.modules.avatar_preview import (
     AvatarProfileInput,
     DerivedAvatarProfile,
     build_avatar_preview_context_prompt,
-    build_preview_cache_key,
     derive_avatar_profile,
     report_safe_profile,
+)
+from src.modules.avatar_preview.cache_keys import (
+    build_preview_cache_key,
+    preview_context_prompt_hash,
 )
 from src.modules.evaluation.harness import (
     PreviewModelConfig,
@@ -167,6 +170,7 @@ class AvatarEvalRunner:
         avatar_image_b64 = _file_to_base64(eval_case.avatar_image_path)
         product_image_b64 = _file_to_base64(eval_case.product_image_path)
         prompt = build_avatar_preview_context_prompt(eval_case.derived_profile)
+        prompt_sha256 = preview_context_prompt_hash(prompt)
 
         preview_results = [
             self._run_preview_generator(
@@ -176,6 +180,7 @@ class AvatarEvalRunner:
                 avatar_image_b64=avatar_image_b64,
                 product_image_b64=product_image_b64,
                 prompt=prompt,
+                prompt_sha256=prompt_sha256,
                 avatar_image_sha256=avatar_image_sha256,
                 product_image_sha256=product_image_sha256,
                 output_dir=output_dir,
@@ -207,6 +212,7 @@ class AvatarEvalRunner:
         avatar_image_b64: str,
         product_image_b64: str,
         prompt: str,
+        prompt_sha256: str,
         avatar_image_sha256: str,
         product_image_sha256: str,
         output_dir: Path,
@@ -264,12 +270,14 @@ class AvatarEvalRunner:
                 "model": preview_model,
                 "input_mapping": preview_input_mapping,
                 "prompt_version": preview_prompt_version,
+                "preview_context_prompt_sha256": prompt_sha256,
                 "latency_seconds": time.perf_counter() - preview_started,
                 "generated_image_bytes": len(generated_image_bytes),
                 "generated_image_path": str(generated_image_path),
                 "preview_cache_key": build_preview_cache_key(
                     avatar_image_sha256=avatar_image_sha256,
                     product_image_sha256=product_image_sha256,
+                    preview_context_prompt_sha256=prompt_sha256,
                     preview_model_id=preview_model,
                     preview_prompt_version=preview_prompt_version,
                     input_mapping=preview_input_mapping,
@@ -284,6 +292,7 @@ class AvatarEvalRunner:
                 "model": preview_metadata["model"],
                 "input_mapping": preview_metadata["input_mapping"],
                 "prompt_version": preview_metadata["prompt_version"],
+                "preview_context_prompt_sha256": prompt_sha256,
                 "latency_seconds": time.perf_counter() - preview_started,
                 "generated_image_bytes": None,
                 "generated_image_path": None,

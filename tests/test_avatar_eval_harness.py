@@ -164,6 +164,7 @@ def test_avatar_eval_runner_writes_success_report(tmp_path):
     assert preview_result["model"] == "flux-kontext-apps/multi-image-kontext-pro"
     assert preview_result["input_mapping"] == "flux_kontext_multi_image"
     assert preview_result["prompt_version"] == "flux-kontext-outfit-preview-v1"
+    assert len(preview_result["preview_context_prompt_sha256"]) == 64
     assert preview_result["preview_cache_key"].startswith("avatar-preview:v1:")
     generated_path = Path(preview_result["generated_image_path"])
     assert generated_path.exists()
@@ -198,6 +199,7 @@ def test_avatar_eval_runner_records_preview_failure(tmp_path):
     assert preview_result["error"] == "provider unavailable"
     assert preview_result["generated_image_path"] is None
     assert preview_result["generated_image_bytes"] is None
+    assert len(preview_result["preview_context_prompt_sha256"]) == 64
     assert preview_result["preview_cache_key"] is None
 
 

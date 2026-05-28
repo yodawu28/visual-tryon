@@ -20,6 +20,10 @@ def derived_profile_hash(profile: DerivedAvatarProfile) -> str:
     return hashlib.sha256(_stable_json(payload).encode("utf-8")).hexdigest()
 
 
+def preview_context_prompt_hash(prompt: str) -> str:
+    return hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+
+
 def build_avatar_cache_key(
     *,
     derived_profile: DerivedAvatarProfile,
@@ -42,6 +46,7 @@ def build_preview_cache_key(
     *,
     avatar_image_sha256: str,
     product_image_sha256: str,
+    preview_context_prompt_sha256: str,
     preview_model_id: str,
     preview_prompt_version: str,
     input_mapping: str,
@@ -55,6 +60,7 @@ def build_preview_cache_key(
         "preview_model_id": preview_model_id,
         "preview_prompt_version": preview_prompt_version,
         "preview_context_prompt_version": PREVIEW_CONTEXT_PROMPT_VERSION,
+        "preview_context_prompt_sha256": preview_context_prompt_sha256,
         "input_mapping": input_mapping,
         "seed": seed,
     }

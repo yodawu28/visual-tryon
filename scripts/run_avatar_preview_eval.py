@@ -15,11 +15,20 @@ from src.modules.evaluation.avatar_harness import (
     build_avatar_dry_run_plan,
     load_avatar_eval_cases,
 )
-from src.modules.evaluation.harness import load_preview_model_configs
-from scripts.run_vto_eval import (
-    _positive_int,
-    build_preview_generator_from_config,
-    validate_preview_model_configs,
+from src.modules.evaluation.harness import (
+    PreviewModelConfig,
+    load_preview_model_configs,
+)
+from src.modules.image_generator.replicate_avatar_preview_generator import (
+    ReplicateAvatarPreviewGenerator,
+)
+from scripts.run_vto_eval import _positive_int
+
+SUPPORTED_AVATAR_PREVIEW_INPUT_MAPPINGS = {
+    ReplicateAvatarPreviewGenerator.DEFAULT_INPUT_MAPPING,
+}
+SUPPORTED_AVATAR_PREVIEW_PROMPT_VARIANTS = (
+    ReplicateAvatarPreviewGenerator.PROMPT_VARIANTS
 )
 
 
@@ -65,6 +74,50 @@ def _default_report_path() -> Path:
     return settings.eval_report_dir / f"avatar-preview-eval-{timestamp}.json"
 
 
+def validate_avatar_preview_model_configs(
+    preview_model_configs: list[PreviewModelConfig],
+) -> None:
+    unsupported_input_mappings = sorted(
+        {
+            preview_config.input_mapping
+            for preview_config in preview_model_configs
+            if preview_config.input_mapping not in SUPPORTED_AVATAR_PREVIEW_INPUT_MAPPINGS
+        }
+    )
+    if unsupported_input_mappings:
+        raise ValueError(
+            "Unsupported avatar preview input_mapping values: "
+            f"{', '.join(unsupported_input_mappings)}"
+        )
+
+    unsupported_prompt_variants = sorted(
+        {
+            preview_config.prompt_variant
+            for preview_config in preview_model_configs
+            if (
+                preview_config.prompt_variant
+                not in SUPPORTED_AVATAR_PREVIEW_PROMPT_VARIANTS
+            )
+        }
+    )
+    if unsupported_prompt_variants:
+        raise ValueError(
+            "Unsupported avatar preview prompt_variant values: "
+            f"{', '.join(unsupported_prompt_variants)}"
+        )
+
+
+def build_avatar_preview_generator_from_config(
+    preview_config: PreviewModelConfig,
+) -> ReplicateAvatarPreviewGenerator:
+    generator = ReplicateAvatarPreviewGenerator()
+    generator.model = preview_config.model
+    generator.model_version = preview_config.model_version
+    generator.input_mapping = preview_config.input_mapping
+    generator.prompt_variant = preview_config.prompt_variant
+    return generator
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if args.model_matrix is None:
@@ -78,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
     if not preview_model_configs:
         raise ValueError("No enabled preview model configs found in model matrix")
 
-    validate_preview_model_configs(preview_model_configs)
+    validate_avatar_preview_model_configs(preview_model_configs)
 
     if args.dry_run:
         plan = build_avatar_dry_run_plan(cases, preview_model_configs)
@@ -89,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
     preview_generators = [
         (
             preview_config.run_id,
-            build_preview_generator_from_config(preview_config),
+            build_avatar_preview_generator_from_config(preview_config),
         )
         for preview_config in preview_model_configs
     ]

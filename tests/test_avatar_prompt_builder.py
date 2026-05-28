@@ -3,6 +3,7 @@ from src.modules.avatar_preview.cache_keys import (
     build_avatar_cache_key,
     build_preview_cache_key,
     derived_profile_hash,
+    preview_context_prompt_hash,
 )
 from src.modules.avatar_preview.profile import (
     AvatarProfileInput,
@@ -86,6 +87,7 @@ def test_derived_profile_hash_is_stable_and_cache_safe():
 
 def test_cache_keys_do_not_include_raw_measurements():
     derived = derive_avatar_profile(_detailed_profile_input())
+    preview_context_prompt = build_avatar_preview_context_prompt(derived)
 
     avatar_key = build_avatar_cache_key(
         derived_profile=derived,
@@ -95,13 +97,15 @@ def test_cache_keys_do_not_include_raw_measurements():
     preview_key = build_preview_cache_key(
         avatar_image_sha256="a" * 64,
         product_image_sha256="b" * 64,
+        preview_context_prompt_sha256=preview_context_prompt_hash(
+            preview_context_prompt
+        ),
         preview_model_id="flux-kontext-apps/multi-image-kontext-pro",
         preview_prompt_version="flux-kontext-outfit-preview-v1",
         input_mapping="flux_kontext_multi_image",
         seed=42,
     )
     avatar_prompt = build_avatar_generation_prompt(derived)
-    preview_context_prompt = build_avatar_preview_context_prompt(derived)
 
     serialized = f"{avatar_prompt} {preview_context_prompt} {avatar_key} {preview_key}"
     for raw_field_name in (
@@ -123,6 +127,7 @@ def test_preview_cache_key_changes_with_preview_context_prompt_version(monkeypat
     first_key = build_preview_cache_key(
         avatar_image_sha256="a" * 64,
         product_image_sha256="b" * 64,
+        preview_context_prompt_sha256="c" * 64,
         preview_model_id="flux-kontext-apps/multi-image-kontext-pro",
         preview_prompt_version="flux-kontext-outfit-preview-v1",
         input_mapping="flux_kontext_multi_image",
@@ -137,6 +142,34 @@ def test_preview_cache_key_changes_with_preview_context_prompt_version(monkeypat
     second_key = build_preview_cache_key(
         avatar_image_sha256="a" * 64,
         product_image_sha256="b" * 64,
+        preview_context_prompt_sha256="c" * 64,
+        preview_model_id="flux-kontext-apps/multi-image-kontext-pro",
+        preview_prompt_version="flux-kontext-outfit-preview-v1",
+        input_mapping="flux_kontext_multi_image",
+        seed=42,
+    )
+
+    assert second_key != first_key
+
+
+def test_preview_cache_key_changes_with_preview_context_prompt_hash():
+    first_key = build_preview_cache_key(
+        avatar_image_sha256="a" * 64,
+        product_image_sha256="b" * 64,
+        preview_context_prompt_sha256=preview_context_prompt_hash(
+            "Use the first image as a personalized avatar mannequin."
+        ),
+        preview_model_id="flux-kontext-apps/multi-image-kontext-pro",
+        preview_prompt_version="flux-kontext-outfit-preview-v1",
+        input_mapping="flux_kontext_multi_image",
+        seed=42,
+    )
+    second_key = build_preview_cache_key(
+        avatar_image_sha256="a" * 64,
+        product_image_sha256="b" * 64,
+        preview_context_prompt_sha256=preview_context_prompt_hash(
+            "Use the first image as a different personalized avatar mannequin."
+        ),
         preview_model_id="flux-kontext-apps/multi-image-kontext-pro",
         preview_prompt_version="flux-kontext-outfit-preview-v1",
         input_mapping="flux_kontext_multi_image",

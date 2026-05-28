@@ -54,11 +54,11 @@ def _write_matrix(tmp_path: Path) -> Path:
             {
                 "preview_models": [
                     {
-                        "run_id": "qwen-current",
-                        "model": "qwen/qwen-image-edit-2511",
+                        "run_id": "flux-avatar-current",
+                        "model": "flux-kontext-apps/multi-image-kontext-pro",
                         "model_version": None,
-                        "input_mapping": "multi_image_edit",
-                        "prompt_variant": "preview-garment-swap-v1",
+                        "input_mapping": "flux_kontext_multi_image",
+                        "prompt_variant": "flux-kontext-outfit-preview-v1",
                         "enabled": True,
                     }
                 ]
@@ -103,7 +103,7 @@ def test_main_dry_run_prints_plan_and_does_not_instantiate_preview_generators(
     )
     monkeypatch.setattr(
         run_avatar_preview_eval,
-        "build_preview_generator_from_config",
+        "build_avatar_preview_generator_from_config",
         generator_builder,
     )
 
@@ -138,10 +138,10 @@ def test_main_dry_run_prints_plan_and_does_not_instantiate_preview_generators(
                     "shoulder_width": "broad",
                     "skin_tone": "medium",
                 },
-                "run_id": "qwen-current",
-                "model": "qwen/qwen-image-edit-2511",
-                "input_mapping": "multi_image_edit",
-                "prompt_variant": "preview-garment-swap-v1",
+                "run_id": "flux-avatar-current",
+                "model": "flux-kontext-apps/multi-image-kontext-pro",
+                "input_mapping": "flux_kontext_multi_image",
+                "prompt_variant": "flux-kontext-outfit-preview-v1",
                 "avatar_prompt_variant": "avatar-garment-preview-context-v1",
             }
         ],
@@ -160,3 +160,62 @@ def test_main_dry_run_requires_model_matrix(tmp_path):
                 "--dry-run",
             ]
         )
+
+
+def test_main_non_dry_run_uses_avatar_factory_and_runner(tmp_path, monkeypatch):
+    manifest_path = _write_manifest(tmp_path)
+    matrix_path = _write_matrix(tmp_path)
+    report_path = tmp_path / "report.json"
+    image_generator = object()
+    generator_builder = Mock(return_value=image_generator)
+    captured = {}
+
+    class FakeAvatarEvalRunner:
+        def run_cases_with_preview_generators(
+            self,
+            *,
+            cases,
+            preview_generators,
+            report_path,
+        ):
+            captured["cases"] = cases
+            captured["preview_generators"] = preview_generators
+            captured["report_path"] = report_path
+            return {
+                "summary": {
+                    "total_cases": len(cases),
+                    "preview_runs_per_case": len(preview_generators),
+                    "total_preview_runs": len(preview_generators),
+                    "succeeded": 0,
+                    "failed": 1,
+                }
+            }
+
+    monkeypatch.setattr(
+        run_avatar_preview_eval,
+        "build_avatar_preview_generator_from_config",
+        generator_builder,
+    )
+    monkeypatch.setattr(
+        run_avatar_preview_eval,
+        "AvatarEvalRunner",
+        FakeAvatarEvalRunner,
+    )
+
+    return_code = run_avatar_preview_eval.main(
+        [
+            "--manifest",
+            str(manifest_path),
+            "--model-matrix",
+            str(matrix_path),
+            "--report-path",
+            str(report_path),
+        ]
+    )
+
+    assert return_code == 1
+    generator_builder.assert_called_once()
+    assert captured["preview_generators"] == [
+        ("flux-avatar-current", image_generator)
+    ]
+    assert captured["report_path"] == report_path

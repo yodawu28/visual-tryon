@@ -6,9 +6,7 @@ from src.modules.image_generator.replicate_avatar_preview_generator import (
 
 
 def _generator() -> ReplicateAvatarPreviewGenerator:
-    generator = ReplicateAvatarPreviewGenerator.__new__(
-        ReplicateAvatarPreviewGenerator
-    )
+    generator = ReplicateAvatarPreviewGenerator.__new__(ReplicateAvatarPreviewGenerator)
     generator.model = "flux-kontext-apps/multi-image-kontext-pro"
     generator.model_version = None
     generator.input_mapping = "flux_kontext_multi_image"

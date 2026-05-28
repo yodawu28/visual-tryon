@@ -215,7 +215,5 @@ def test_main_non_dry_run_uses_avatar_factory_and_runner(tmp_path, monkeypatch):
 
     assert return_code == 1
     generator_builder.assert_called_once()
-    assert captured["preview_generators"] == [
-        ("flux-avatar-current", image_generator)
-    ]
+    assert captured["preview_generators"] == [("flux-avatar-current", image_generator)]
     assert captured["report_path"] == report_path

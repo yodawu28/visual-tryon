@@ -81,7 +81,8 @@ def validate_avatar_preview_model_configs(
         {
             preview_config.input_mapping
             for preview_config in preview_model_configs
-            if preview_config.input_mapping not in SUPPORTED_AVATAR_PREVIEW_INPUT_MAPPINGS
+            if preview_config.input_mapping
+            not in SUPPORTED_AVATAR_PREVIEW_INPUT_MAPPINGS
         }
     )
     if unsupported_input_mappings:

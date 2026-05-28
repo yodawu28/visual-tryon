@@ -188,8 +188,7 @@ def test_main_dry_run_defaults_avatar_prompt_variant(tmp_path, capsys):
 
     assert return_code == 0
     assert (
-        payload["planned_runs"][0]["prompt_variant"]
-        == "flux-kontext-outfit-preview-v1"
+        payload["planned_runs"][0]["prompt_variant"] == "flux-kontext-outfit-preview-v1"
     )
 
 

@@ -130,7 +130,8 @@ def _with_avatar_prompt_default(
     preview_config: PreviewModelConfig,
 ) -> PreviewModelConfig:
     if (
-        preview_config.input_mapping == ReplicateAvatarPreviewGenerator.DEFAULT_INPUT_MAPPING
+        preview_config.input_mapping
+        == ReplicateAvatarPreviewGenerator.DEFAULT_INPUT_MAPPING
         and preview_config.prompt_variant == "preview-garment-swap-v1"
     ):
         return PreviewModelConfig(

@@ -19,6 +19,19 @@ from src.modules.evaluation.harness import (
     load_eval_cases,
     load_preview_model_configs,
 )
+from src.modules.evaluation.output_safety import PreviewOutputSafetyPostprocessor
+from src.modules.image_generator.replicate_idm_vton_generator import (
+    ReplicateIdmVtonGenerator,
+)
+from src.modules.image_generator.replicate_oot_diffusion_generator import (
+    ReplicateOotDiffusionGenerator,
+)
+from src.modules.image_generator.replicate_flux_kontext_generator import (
+    ReplicateFluxKontextGenerator,
+)
+from src.modules.image_generator.replicate_flux_vton_generator import (
+    ReplicateFluxVtonGenerator,
+)
 from src.modules.image_generator.replicate_preview_generator import (
     ReplicatePreviewGenerator,
 )
@@ -27,9 +40,17 @@ from src.modules.semantic_parser.openai_client import SemanticParserClient
 SUPPORTED_PREVIEW_INPUT_MAPPINGS = {
     "multi_image_edit",
     "google_nano_banana",
+    "replicate_idm_vton",
+    "replicate_flux_vton",
+    "flux_kontext_multi_image",
+    "replicate_oot_diffusion",
 }
-SUPPORTED_PREVIEW_PROMPT_VARIANTS = set(
-    ReplicatePreviewGenerator.PREVIEW_PROMPT_VARIANTS
+SUPPORTED_PREVIEW_PROMPT_VARIANTS = (
+    set(ReplicatePreviewGenerator.PREVIEW_PROMPT_VARIANTS)
+    | ReplicateIdmVtonGenerator.PROMPT_VARIANTS
+    | ReplicateOotDiffusionGenerator.PROMPT_VARIANTS
+    | ReplicateFluxKontextGenerator.PROMPT_VARIANTS
+    | ReplicateFluxVtonGenerator.PROMPT_VARIANTS
 )
 
 
@@ -75,6 +96,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Print planned eval runs without calling model providers",
     )
+    parser.add_argument(
+        "--apply-mask-postprocess",
+        action="store_true",
+        help=(
+            "Apply manifest-mask compositing after preview generation. "
+            "Disabled by default because coarse masks can create visible paste seams."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -113,12 +142,37 @@ def build_dry_run_plan(
 def build_preview_generator_from_config(
     preview_config: PreviewModelConfig,
     *,
-    generator_factory: Callable[
-        [],
-        ReplicatePreviewGenerator,
-    ] = ReplicatePreviewGenerator,
-) -> ReplicatePreviewGenerator:
-    generator = generator_factory()
+    generator_factory: (
+        Callable[
+            [],
+            Any,
+        ]
+        | None
+    ) = None,
+) -> Any:
+    if generator_factory is not None:
+        generator = generator_factory()
+    elif (
+        preview_config.input_mapping == ReplicateIdmVtonGenerator.DEFAULT_INPUT_MAPPING
+    ):
+        generator = ReplicateIdmVtonGenerator()
+    elif (
+        preview_config.input_mapping == ReplicateFluxVtonGenerator.DEFAULT_INPUT_MAPPING
+    ):
+        generator = ReplicateFluxVtonGenerator()
+    elif (
+        preview_config.input_mapping
+        == ReplicateFluxKontextGenerator.DEFAULT_INPUT_MAPPING
+    ):
+        generator = ReplicateFluxKontextGenerator()
+    elif (
+        preview_config.input_mapping
+        == ReplicateOotDiffusionGenerator.DEFAULT_INPUT_MAPPING
+    ):
+        generator = ReplicateOotDiffusionGenerator()
+    else:
+        generator = ReplicatePreviewGenerator()
+
     generator.model = preview_config.model
     generator.model_version = preview_config.model_version
     generator.input_mapping = preview_config.input_mapping
@@ -195,6 +249,9 @@ def main(argv: list[str] | None = None) -> int:
         runner = EvalRunner(
             semantic_parser=SemanticParserClient(),
             image_generator=preview_generators[0][1],
+            preview_postprocessor=PreviewOutputSafetyPostprocessor(
+                apply_mask=args.apply_mask_postprocess,
+            ),
         )
         report = runner.run_cases_with_preview_generators(
             cases=cases,

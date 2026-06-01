@@ -168,6 +168,53 @@ class TestReplicatePreviewGenerator:
 
         assert generator.get_model_identifier() == "owner/model-name"
 
+    def test_generate_tryon_accepts_string_output_url(self, monkeypatch):
+        generator = ReplicatePreviewGenerator.__new__(ReplicatePreviewGenerator)
+        generator.model = "google/nano-banana"
+        generator.model_version = None
+        generator.input_mapping = "google_nano_banana"
+        generator.go_fast = True
+
+        class FakePrediction:
+            id = "prediction-001"
+            status = "succeeded"
+            output = "https://replicate.delivery/example/output.png"
+
+        class FakePredictionsClient:
+            def create(self, *, model, input):
+                assert model == "google/nano-banana"
+                assert input["image_input"][0].read() == b"user-image"
+                assert input["image_input"][1].read() == b"garment-image"
+                return FakePrediction()
+
+        class FakeClient:
+            predictions = FakePredictionsClient()
+
+        class FakeResponse:
+            content = b"generated-image"
+
+            def raise_for_status(self):
+                return None
+
+        def fake_get(url, *, timeout):
+            assert url == "https://replicate.delivery/example/output.png"
+            assert timeout == 30.0
+            return FakeResponse()
+
+        generator.client = FakeClient()
+        monkeypatch.setattr(
+            "src.modules.image_generator.replicate_preview_generator.httpx.get",
+            fake_get,
+        )
+
+        result = generator.generate_tryon(
+            base_image=b"user-image",
+            garment_image=b"garment-image",
+            inpainting_prompt="A short sleeve jersey",
+        )
+
+        assert result == b"generated-image"
+
 
 def test_replicate_preview_prompt_variant_defaults_to_current_version():
     generator = ReplicatePreviewGenerator.__new__(ReplicatePreviewGenerator)
@@ -192,6 +239,32 @@ def test_replicate_preview_prompt_variant_v2_emphasizes_garment_preservation():
     assert "Preserve the exact garment color palette" in prompt
     assert "logos, patches, text, stripes" in prompt
     assert "preview-garment-preserve-v2" == generator.get_preview_prompt_version()
+
+
+def test_replicate_preview_qwen_controlled_v3_limits_hallucinated_details():
+    generator = ReplicatePreviewGenerator.__new__(ReplicatePreviewGenerator)
+    generator.prompt_variant = "preview-qwen-controlled-v3"
+
+    prompt = generator._build_configured_preview_prompt(
+        "A black t-shirt with red and white event text"
+    )
+
+    assert "Do not add any logos, text, graphics, stripes, or patterns" in prompt
+    assert "Keep hands, arms, fingers, skin, and body outline unchanged" in prompt
+    assert "preview-qwen-controlled-v3" == generator.get_preview_prompt_version()
+
+
+def test_replicate_preview_nano_full_replace_v3_removes_old_garment():
+    generator = ReplicatePreviewGenerator.__new__(ReplicatePreviewGenerator)
+    generator.prompt_variant = "preview-nano-full-replace-v3"
+
+    prompt = generator._build_configured_preview_prompt(
+        "A mint green short sleeve jersey"
+    )
+
+    assert "Remove the entire existing upper garment" in prompt
+    assert "do not keep the old long sleeves" in prompt
+    assert "preview-nano-full-replace-v3" == generator.get_preview_prompt_version()
 
 
 def test_replicate_preview_rejects_unknown_prompt_variant():

@@ -13,6 +13,10 @@ from src.modules.evaluation.harness import (
     load_eval_cases,
     load_preview_model_configs,
 )
+from src.modules.evaluation.output_safety import (
+    PreviewOutputSafetyPostprocessor,
+    PreviewPostprocessResult,
+)
 from src.schemas.responses import ClothingAnalysis
 
 
@@ -313,6 +317,216 @@ def test_eval_runner_writes_multi_preview_report_grouped_by_case(tmp_path):
         Path(case_result["preview_results"][1]["generated_image_path"]).read_bytes()
         == b"nano-image"
     )
+
+
+def test_eval_runner_applies_preview_postprocessor_to_multi_preview_outputs(tmp_path):
+    user_path = tmp_path / "user.png"
+    product_path = tmp_path / "product.png"
+    mask_path = tmp_path / "mask.png"
+    report_path = tmp_path / "report.json"
+    user_path.write_bytes(b"user-image")
+    product_path.write_bytes(b"product-image")
+    mask_path.write_bytes(b"mask-image")
+
+    semantic_parser = Mock()
+    semantic_parser.get_runtime_metadata.return_value = {
+        "provider": "ollama",
+        "model": "vto-brain",
+        "semantic_prompt_version": "semantic-edit-safe-v1",
+    }
+    semantic_parser.analyze_vto_context.return_value = ClothingAnalysis(
+        clothing_description="Blue jersey",
+        body_pose="Standing upright",
+        inpainting_prompt="Use IMAGE 1 as base and IMAGE 2 as garment reference.",
+        confidence_score=0.91,
+        additional_notes="",
+    )
+
+    image_generator = Mock()
+    image_generator.get_runtime_metadata.return_value = {
+        "preview_model": "qwen/qwen-image-edit-2511",
+        "preview_input_mapping": "multi_image_edit",
+        "preview_prompt_version": "preview-garment-swap-v1",
+    }
+    image_generator.generate_tryon_from_b64.return_value = base64.b64encode(
+        b"raw-image"
+    ).decode("utf-8")
+
+    postprocessor = Mock(
+        return_value=PreviewPostprocessResult(
+            image_b64=base64.b64encode(b"safe-image").decode("utf-8"),
+            mask_applied=True,
+            mask_source="manifest",
+            face_preserve_applied=True,
+            face_preserve_source="anonymized base image",
+        )
+    )
+    runner = EvalRunner(
+        semantic_parser=semantic_parser,
+        image_generator=image_generator,
+        preview_postprocessor=postprocessor,
+    )
+
+    result = runner.run_cases_with_preview_generators(
+        cases=[
+            EvalCase(
+                case_id="upper-body-001",
+                anonymized_user_image_path=user_path,
+                product_image_path=product_path,
+                mask_path=mask_path,
+                manual_quality_notes={"overall": ""},
+            )
+        ],
+        preview_generators=[("qwen_current", image_generator)],
+        report_path=report_path,
+    )
+
+    assert result["summary"]["succeeded"] == 1
+    postprocessor.assert_called_once_with(
+        base_image_b64=base64.b64encode(b"user-image").decode("utf-8"),
+        generated_image_b64=base64.b64encode(b"raw-image").decode("utf-8"),
+        mask_b64=base64.b64encode(b"mask-image").decode("utf-8"),
+        preview_metadata={
+            "model": "qwen/qwen-image-edit-2511",
+            "input_mapping": "multi_image_edit",
+            "prompt_version": "preview-garment-swap-v1",
+        },
+    )
+    payload = json.loads(report_path.read_text(encoding="utf-8"))
+    preview_result = payload["cases"][0]["preview_results"][0]
+    assert Path(preview_result["generated_image_path"]).read_bytes() == b"safe-image"
+    assert preview_result["postprocessing"] == {
+        "mask_applied": True,
+        "mask_source": "manifest",
+        "face_preserve_applied": True,
+        "face_preserve_source": "anonymized base image",
+    }
+
+
+def test_eval_runner_uses_clothing_description_for_idm_vton_garment_description(
+    tmp_path,
+):
+    user_path = tmp_path / "user.png"
+    product_path = tmp_path / "product.png"
+    report_path = tmp_path / "report.json"
+    user_path.write_bytes(b"user-image")
+    product_path.write_bytes(b"product-image")
+
+    semantic_parser = Mock()
+    semantic_parser.get_runtime_metadata.return_value = {
+        "provider": "ollama",
+        "model": "vto-brain",
+        "semantic_prompt_version": "semantic-edit-safe-v1",
+    }
+    semantic_parser.analyze_vto_context.return_value = ClothingAnalysis(
+        clothing_description="Mint green short sleeve jersey with navy trim",
+        body_pose="Standing with arms crossed",
+        inpainting_prompt="Edit only the first image and preserve the body pose.",
+        confidence_score=0.91,
+        additional_notes="",
+    )
+
+    image_generator = Mock()
+    image_generator.get_runtime_metadata.return_value = {
+        "preview_model": "0513734",
+        "preview_input_mapping": "replicate_idm_vton",
+        "preview_prompt_version": "idm-vton-v1",
+    }
+    image_generator.generate_tryon_from_b64.return_value = base64.b64encode(
+        b"idm-image"
+    ).decode("utf-8")
+
+    runner = EvalRunner(
+        semantic_parser=semantic_parser,
+        image_generator=image_generator,
+    )
+
+    result = runner.run_cases_with_preview_generators(
+        cases=[
+            EvalCase(
+                case_id="upper-body-001",
+                anonymized_user_image_path=user_path,
+                product_image_path=product_path,
+                mask_path=None,
+                manual_quality_notes={},
+            )
+        ],
+        preview_generators=[("idm_vton_upper_body", image_generator)],
+        report_path=report_path,
+    )
+
+    assert result["summary"]["succeeded"] == 1
+    image_generator.generate_tryon_from_b64.assert_called_once()
+    assert (
+        image_generator.generate_tryon_from_b64.call_args.kwargs["inpainting_prompt"]
+        == "Mint green short sleeve jersey with navy trim"
+    )
+
+
+def test_eval_runner_skips_semantic_analysis_for_promptless_oot_diffusion(tmp_path):
+    user_path = tmp_path / "user.png"
+    product_path = tmp_path / "product.png"
+    report_path = tmp_path / "report.json"
+    user_path.write_bytes(b"user-image")
+    product_path.write_bytes(b"product-image")
+
+    semantic_parser = Mock()
+    semantic_parser.get_runtime_metadata.return_value = {
+        "provider": "ollama",
+        "model": "vto-brain",
+        "semantic_prompt_version": "semantic-edit-safe-v1",
+    }
+    semantic_parser.analyze_vto_context.side_effect = RuntimeError(
+        "semantic should be skipped"
+    )
+
+    image_generator = Mock()
+    image_generator.get_runtime_metadata.return_value = {
+        "preview_model": "9f8fa495",
+        "preview_input_mapping": "replicate_oot_diffusion",
+        "preview_prompt_version": "oot-diffusion-v1",
+    }
+    image_generator.generate_tryon_from_b64.return_value = base64.b64encode(
+        b"oot-image"
+    ).decode("utf-8")
+
+    runner = EvalRunner(
+        semantic_parser=semantic_parser,
+        image_generator=image_generator,
+    )
+
+    result = runner.run_cases_with_preview_generators(
+        cases=[
+            EvalCase(
+                case_id="upper-body-002",
+                anonymized_user_image_path=user_path,
+                product_image_path=product_path,
+                mask_path=None,
+                manual_quality_notes={},
+            )
+        ],
+        preview_generators=[("oot_diffusion_upper_body", image_generator)],
+        report_path=report_path,
+    )
+
+    assert result["summary"]["succeeded"] == 1
+    semantic_parser.analyze_vto_context.assert_not_called()
+    image_generator.generate_tryon_from_b64.assert_called_once()
+    assert (
+        image_generator.generate_tryon_from_b64.call_args.kwargs["inpainting_prompt"]
+        == ""
+    )
+    payload = json.loads(report_path.read_text(encoding="utf-8"))
+    assert payload["cases"][0]["semantic"] == {
+        "provider": "skipped",
+        "model": "not-required",
+        "prompt_version": "not-required",
+        "latency_seconds": 0.0,
+        "confidence_score": 0.0,
+        "clothing_description": "",
+        "body_pose": "",
+        "additional_notes": "Semantic analysis skipped for promptless preview generator.",
+    }
 
 
 def test_eval_runner_records_failed_preview_run_and_continues(tmp_path):
@@ -620,6 +834,7 @@ def test_run_vto_eval_parse_args_defaults(tmp_path):
     assert args.model_matrix is None
     assert args.limit_cases is None
     assert args.dry_run is False
+    assert args.apply_mask_postprocess is False
 
 
 def test_run_vto_eval_parse_args_supports_cost_controls(tmp_path):
@@ -640,6 +855,7 @@ def test_run_vto_eval_parse_args_supports_cost_controls(tmp_path):
             "--limit-cases",
             "2",
             "--dry-run",
+            "--apply-mask-postprocess",
         ]
     )
 
@@ -648,6 +864,7 @@ def test_run_vto_eval_parse_args_supports_cost_controls(tmp_path):
     assert args.report_path == report_path
     assert args.limit_cases == 2
     assert args.dry_run is True
+    assert args.apply_mask_postprocess is True
 
 
 @pytest.mark.parametrize("limit_cases", ["0", "-1"])
@@ -738,6 +955,104 @@ def test_build_preview_generator_from_config_sets_eval_fields():
     assert result.prompt_variant == "preview-garment-preserve-v2"
 
 
+def test_build_preview_generator_from_config_supports_replicate_idm_vton():
+    from scripts.run_vto_eval import build_preview_generator_from_config
+    from src.modules.image_generator.replicate_idm_vton_generator import (
+        ReplicateIdmVtonGenerator,
+    )
+
+    config = PreviewModelConfig(
+        run_id="idm_vton_upper_body",
+        model="cuuupid/idm-vton",
+        model_version="0513734a452173b8173e907e3a59d19a36266e55b48528559432bd21c7d7e985",
+        input_mapping="replicate_idm_vton",
+        prompt_variant="idm-vton-v1",
+    )
+
+    generator = build_preview_generator_from_config(config)
+
+    assert isinstance(generator, ReplicateIdmVtonGenerator)
+    assert generator.model == "cuuupid/idm-vton"
+    assert generator.model_version == (
+        "0513734a452173b8173e907e3a59d19a36266e55b48528559432bd21c7d7e985"
+    )
+    assert generator.input_mapping == "replicate_idm_vton"
+    assert generator.prompt_variant == "idm-vton-v1"
+
+
+def test_build_preview_generator_from_config_supports_replicate_flux_vton():
+    from scripts.run_vto_eval import build_preview_generator_from_config
+    from src.modules.image_generator.replicate_flux_vton_generator import (
+        ReplicateFluxVtonGenerator,
+    )
+
+    config = PreviewModelConfig(
+        run_id="flux_vton_upper_body",
+        model="subhash25rawat/flux-vton",
+        model_version="a02643ce418c0e12bad371c4adbfaec0dd1cb34b034ef37650ef205f92ad6199",
+        input_mapping="replicate_flux_vton",
+        prompt_variant="flux-vton-v1",
+    )
+
+    generator = build_preview_generator_from_config(config)
+
+    assert isinstance(generator, ReplicateFluxVtonGenerator)
+    assert generator.model == "subhash25rawat/flux-vton"
+    assert generator.model_version == (
+        "a02643ce418c0e12bad371c4adbfaec0dd1cb34b034ef37650ef205f92ad6199"
+    )
+    assert generator.input_mapping == "replicate_flux_vton"
+    assert generator.prompt_variant == "flux-vton-v1"
+
+
+def test_build_preview_generator_from_config_supports_flux_kontext():
+    from scripts.run_vto_eval import build_preview_generator_from_config
+    from src.modules.image_generator.replicate_flux_kontext_generator import (
+        ReplicateFluxKontextGenerator,
+    )
+
+    config = PreviewModelConfig(
+        run_id="flux_kontext_outfit_preview",
+        model="flux-kontext-apps/multi-image-kontext-pro",
+        model_version=None,
+        input_mapping="flux_kontext_multi_image",
+        prompt_variant="flux-kontext-outfit-preview-v1",
+    )
+
+    generator = build_preview_generator_from_config(config)
+
+    assert isinstance(generator, ReplicateFluxKontextGenerator)
+    assert generator.model == "flux-kontext-apps/multi-image-kontext-pro"
+    assert generator.model_version is None
+    assert generator.input_mapping == "flux_kontext_multi_image"
+    assert generator.prompt_variant == "flux-kontext-outfit-preview-v1"
+
+
+def test_build_preview_generator_from_config_supports_oot_diffusion():
+    from scripts.run_vto_eval import build_preview_generator_from_config
+    from src.modules.image_generator.replicate_oot_diffusion_generator import (
+        ReplicateOotDiffusionGenerator,
+    )
+
+    config = PreviewModelConfig(
+        run_id="oot_diffusion_upper_body",
+        model="viktorfa/oot_diffusion",
+        model_version="9f8fa4956970dde99689af7488157a30aa152e23953526a605df1d77598343d7",
+        input_mapping="replicate_oot_diffusion",
+        prompt_variant="oot-diffusion-v1",
+    )
+
+    generator = build_preview_generator_from_config(config)
+
+    assert isinstance(generator, ReplicateOotDiffusionGenerator)
+    assert generator.model == "viktorfa/oot_diffusion"
+    assert generator.model_version == (
+        "9f8fa4956970dde99689af7488157a30aa152e23953526a605df1d77598343d7"
+    )
+    assert generator.input_mapping == "replicate_oot_diffusion"
+    assert generator.prompt_variant == "oot-diffusion-v1"
+
+
 def test_run_vto_eval_main_model_matrix_dry_run_does_not_instantiate_providers(
     tmp_path,
     monkeypatch,
@@ -820,6 +1135,402 @@ def test_run_vto_eval_main_model_matrix_dry_run_does_not_instantiate_providers(
     }
     semantic_client.assert_not_called()
     preview_generator.assert_not_called()
+
+
+def test_run_vto_eval_main_model_matrix_dry_run_accepts_idm_vton(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    import scripts.run_vto_eval as run_vto_eval
+
+    user_path = tmp_path / "user.png"
+    product_path = tmp_path / "product.png"
+    user_path.write_bytes(b"user-image")
+    product_path.write_bytes(b"product-image")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "case_id": "case-001",
+                        "anonymized_user_image_path": "user.png",
+                        "product_image_path": "product.png",
+                        "mask_path": None,
+                        "manual_quality_notes": {},
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    matrix_path = tmp_path / "model_matrix.json"
+    matrix_path.write_text(
+        json.dumps(
+            {
+                "preview_models": [
+                    {
+                        "run_id": "idm_vton_upper_body",
+                        "model": "cuuupid/idm-vton",
+                        "model_version": "0513734a452173b8173e907e3a59d19a36266e55b48528559432bd21c7d7e985",
+                        "input_mapping": "replicate_idm_vton",
+                        "prompt_variant": "idm-vton-v1",
+                        "enabled": True,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    semantic_client = Mock(side_effect=AssertionError("semantic client instantiated"))
+    preview_generator = Mock(
+        side_effect=AssertionError("preview generator instantiated")
+    )
+    idm_generator = Mock(side_effect=AssertionError("idm generator instantiated"))
+    monkeypatch.setattr(run_vto_eval, "SemanticParserClient", semantic_client)
+    monkeypatch.setattr(run_vto_eval, "ReplicatePreviewGenerator", preview_generator)
+    monkeypatch.setattr(run_vto_eval, "ReplicateIdmVtonGenerator", idm_generator)
+
+    return_code = run_vto_eval.main(
+        [
+            "--manifest",
+            str(manifest_path),
+            "--model-matrix",
+            str(matrix_path),
+            "--dry-run",
+        ]
+    )
+
+    assert return_code == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "summary": {
+            "total_cases": 1,
+            "preview_runs_per_case": 1,
+            "total_preview_runs": 1,
+        },
+        "planned_runs": [
+            {
+                "case_id": "case-001",
+                "run_id": "idm_vton_upper_body",
+                "model": "cuuupid/idm-vton",
+                "input_mapping": "replicate_idm_vton",
+                "prompt_variant": "idm-vton-v1",
+            }
+        ],
+    }
+    semantic_client.assert_not_called()
+    preview_generator.assert_not_called()
+    idm_generator.assert_not_called()
+
+
+def test_run_vto_eval_main_model_matrix_dry_run_accepts_flux_vton(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    import scripts.run_vto_eval as run_vto_eval
+
+    user_path = tmp_path / "user.png"
+    product_path = tmp_path / "product.png"
+    user_path.write_bytes(b"user-image")
+    product_path.write_bytes(b"product-image")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "case_id": "case-001",
+                        "anonymized_user_image_path": "user.png",
+                        "product_image_path": "product.png",
+                        "mask_path": None,
+                        "manual_quality_notes": {},
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    matrix_path = tmp_path / "model_matrix.json"
+    matrix_path.write_text(
+        json.dumps(
+            {
+                "preview_models": [
+                    {
+                        "run_id": "flux_vton_upper_body",
+                        "model": "subhash25rawat/flux-vton",
+                        "model_version": "a02643ce418c0e12bad371c4adbfaec0dd1cb34b034ef37650ef205f92ad6199",
+                        "input_mapping": "replicate_flux_vton",
+                        "prompt_variant": "flux-vton-v1",
+                        "enabled": True,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    semantic_client = Mock(side_effect=AssertionError("semantic client instantiated"))
+    preview_generator = Mock(
+        side_effect=AssertionError("preview generator instantiated")
+    )
+    idm_generator = Mock(side_effect=AssertionError("idm generator instantiated"))
+    flux_generator = Mock(side_effect=AssertionError("flux generator instantiated"))
+    monkeypatch.setattr(run_vto_eval, "SemanticParserClient", semantic_client)
+    monkeypatch.setattr(run_vto_eval, "ReplicatePreviewGenerator", preview_generator)
+    monkeypatch.setattr(run_vto_eval, "ReplicateIdmVtonGenerator", idm_generator)
+    monkeypatch.setattr(run_vto_eval, "ReplicateFluxVtonGenerator", flux_generator)
+
+    return_code = run_vto_eval.main(
+        [
+            "--manifest",
+            str(manifest_path),
+            "--model-matrix",
+            str(matrix_path),
+            "--dry-run",
+        ]
+    )
+
+    assert return_code == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "summary": {
+            "total_cases": 1,
+            "preview_runs_per_case": 1,
+            "total_preview_runs": 1,
+        },
+        "planned_runs": [
+            {
+                "case_id": "case-001",
+                "run_id": "flux_vton_upper_body",
+                "model": "subhash25rawat/flux-vton",
+                "input_mapping": "replicate_flux_vton",
+                "prompt_variant": "flux-vton-v1",
+            }
+        ],
+    }
+    semantic_client.assert_not_called()
+    preview_generator.assert_not_called()
+    idm_generator.assert_not_called()
+    flux_generator.assert_not_called()
+
+
+def test_run_vto_eval_main_model_matrix_dry_run_accepts_flux_kontext(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    import scripts.run_vto_eval as run_vto_eval
+
+    user_path = tmp_path / "user.png"
+    product_path = tmp_path / "product.png"
+    user_path.write_bytes(b"user-image")
+    product_path.write_bytes(b"product-image")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "case_id": "case-001",
+                        "anonymized_user_image_path": "user.png",
+                        "product_image_path": "product.png",
+                        "mask_path": None,
+                        "manual_quality_notes": {},
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    matrix_path = tmp_path / "model_matrix.json"
+    matrix_path.write_text(
+        json.dumps(
+            {
+                "preview_models": [
+                    {
+                        "run_id": "flux_kontext_outfit_preview",
+                        "model": "flux-kontext-apps/multi-image-kontext-pro",
+                        "model_version": None,
+                        "input_mapping": "flux_kontext_multi_image",
+                        "prompt_variant": "flux-kontext-outfit-preview-v1",
+                        "enabled": True,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    semantic_client = Mock(side_effect=AssertionError("semantic client instantiated"))
+    preview_generator = Mock(
+        side_effect=AssertionError("preview generator instantiated")
+    )
+    idm_generator = Mock(side_effect=AssertionError("idm generator instantiated"))
+    flux_vton_generator = Mock(
+        side_effect=AssertionError("flux vton generator instantiated")
+    )
+    flux_kontext_generator = Mock(
+        side_effect=AssertionError("flux kontext generator instantiated")
+    )
+    monkeypatch.setattr(run_vto_eval, "SemanticParserClient", semantic_client)
+    monkeypatch.setattr(run_vto_eval, "ReplicatePreviewGenerator", preview_generator)
+    monkeypatch.setattr(run_vto_eval, "ReplicateIdmVtonGenerator", idm_generator)
+    monkeypatch.setattr(
+        run_vto_eval,
+        "ReplicateFluxVtonGenerator",
+        flux_vton_generator,
+    )
+    monkeypatch.setattr(
+        run_vto_eval,
+        "ReplicateFluxKontextGenerator",
+        flux_kontext_generator,
+    )
+
+    return_code = run_vto_eval.main(
+        [
+            "--manifest",
+            str(manifest_path),
+            "--model-matrix",
+            str(matrix_path),
+            "--dry-run",
+        ]
+    )
+
+    assert return_code == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "summary": {
+            "total_cases": 1,
+            "preview_runs_per_case": 1,
+            "total_preview_runs": 1,
+        },
+        "planned_runs": [
+            {
+                "case_id": "case-001",
+                "run_id": "flux_kontext_outfit_preview",
+                "model": "flux-kontext-apps/multi-image-kontext-pro",
+                "input_mapping": "flux_kontext_multi_image",
+                "prompt_variant": "flux-kontext-outfit-preview-v1",
+            }
+        ],
+    }
+    semantic_client.assert_not_called()
+    preview_generator.assert_not_called()
+    idm_generator.assert_not_called()
+    flux_vton_generator.assert_not_called()
+    flux_kontext_generator.assert_not_called()
+
+
+def test_run_vto_eval_main_model_matrix_dry_run_accepts_oot_diffusion(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    import scripts.run_vto_eval as run_vto_eval
+
+    user_path = tmp_path / "user.png"
+    product_path = tmp_path / "product.png"
+    user_path.write_bytes(b"user-image")
+    product_path.write_bytes(b"product-image")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "case_id": "case-001",
+                        "anonymized_user_image_path": "user.png",
+                        "product_image_path": "product.png",
+                        "mask_path": None,
+                        "manual_quality_notes": {},
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    matrix_path = tmp_path / "model_matrix.json"
+    matrix_path.write_text(
+        json.dumps(
+            {
+                "preview_models": [
+                    {
+                        "run_id": "oot_diffusion_upper_body",
+                        "model": "viktorfa/oot_diffusion",
+                        "model_version": "9f8fa4956970dde99689af7488157a30aa152e23953526a605df1d77598343d7",
+                        "input_mapping": "replicate_oot_diffusion",
+                        "prompt_variant": "oot-diffusion-v1",
+                        "enabled": True,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    semantic_client = Mock(side_effect=AssertionError("semantic client instantiated"))
+    preview_generator = Mock(
+        side_effect=AssertionError("preview generator instantiated")
+    )
+    idm_generator = Mock(side_effect=AssertionError("idm generator instantiated"))
+    flux_vton_generator = Mock(
+        side_effect=AssertionError("flux vton generator instantiated")
+    )
+    flux_kontext_generator = Mock(
+        side_effect=AssertionError("flux kontext generator instantiated")
+    )
+    oot_diffusion_generator = Mock(
+        side_effect=AssertionError("oot diffusion generator instantiated")
+    )
+    monkeypatch.setattr(run_vto_eval, "SemanticParserClient", semantic_client)
+    monkeypatch.setattr(run_vto_eval, "ReplicatePreviewGenerator", preview_generator)
+    monkeypatch.setattr(run_vto_eval, "ReplicateIdmVtonGenerator", idm_generator)
+    monkeypatch.setattr(
+        run_vto_eval,
+        "ReplicateFluxVtonGenerator",
+        flux_vton_generator,
+    )
+    monkeypatch.setattr(
+        run_vto_eval,
+        "ReplicateFluxKontextGenerator",
+        flux_kontext_generator,
+    )
+    monkeypatch.setattr(
+        run_vto_eval,
+        "ReplicateOotDiffusionGenerator",
+        oot_diffusion_generator,
+    )
+
+    return_code = run_vto_eval.main(
+        [
+            "--manifest",
+            str(manifest_path),
+            "--model-matrix",
+            str(matrix_path),
+            "--dry-run",
+        ]
+    )
+
+    assert return_code == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "summary": {
+            "total_cases": 1,
+            "preview_runs_per_case": 1,
+            "total_preview_runs": 1,
+        },
+        "planned_runs": [
+            {
+                "case_id": "case-001",
+                "run_id": "oot_diffusion_upper_body",
+                "model": "viktorfa/oot_diffusion",
+                "input_mapping": "replicate_oot_diffusion",
+                "prompt_variant": "oot-diffusion-v1",
+            }
+        ],
+    }
+    semantic_client.assert_not_called()
+    preview_generator.assert_not_called()
+    idm_generator.assert_not_called()
+    flux_vton_generator.assert_not_called()
+    flux_kontext_generator.assert_not_called()
+    oot_diffusion_generator.assert_not_called()
 
 
 @pytest.mark.parametrize("dry_run_args", [[], ["--dry-run"]])
@@ -905,7 +1616,7 @@ def test_run_vto_eval_main_model_matrix_rejects_no_enabled_preview_configs(
     [
         (
             "input_mapping",
-            "flux_kontext_multi_image",
+            "missing_mapping",
             "Unsupported preview input_mapping",
         ),
         (
@@ -1060,6 +1771,103 @@ def test_run_vto_eval_main_default_dry_run_does_not_instantiate_providers_or_set
     semantic_client.assert_not_called()
     preview_generator.assert_not_called()
     settings_loader.assert_not_called()
+
+
+def test_run_vto_eval_main_model_matrix_actual_enables_output_safety(
+    tmp_path,
+    monkeypatch,
+):
+    import scripts.run_vto_eval as run_vto_eval
+
+    user_path = tmp_path / "user.png"
+    product_path = tmp_path / "product.png"
+    user_path.write_bytes(b"user-image")
+    product_path.write_bytes(b"product-image")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "case_id": "case-001",
+                        "anonymized_user_image_path": "user.png",
+                        "product_image_path": "product.png",
+                        "mask_path": None,
+                        "manual_quality_notes": {},
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    matrix_path = tmp_path / "model_matrix.json"
+    matrix_path.write_text(
+        json.dumps(
+            {
+                "preview_models": [
+                    {
+                        "run_id": "qwen_current",
+                        "model": "qwen/qwen-image-edit-2511",
+                        "model_version": None,
+                        "input_mapping": "multi_image_edit",
+                        "prompt_variant": "preview-garment-swap-v1",
+                        "enabled": True,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    report_path = tmp_path / "report.json"
+    semantic_parser = object()
+    image_generator = object()
+    semantic_client = Mock(return_value=semantic_parser)
+    generator_builder = Mock(return_value=image_generator)
+    runner = Mock()
+    runner.run_cases_with_preview_generators.return_value = {
+        "summary": {
+            "total_cases": 1,
+            "preview_runs_per_case": 1,
+            "total_preview_runs": 1,
+            "succeeded": 1,
+            "failed": 0,
+        }
+    }
+    runner_class = Mock(return_value=runner)
+    monkeypatch.setattr(run_vto_eval, "SemanticParserClient", semantic_client)
+    monkeypatch.setattr(
+        run_vto_eval,
+        "build_preview_generator_from_config",
+        generator_builder,
+    )
+    monkeypatch.setattr(run_vto_eval, "EvalRunner", runner_class)
+
+    return_code = run_vto_eval.main(
+        [
+            "--manifest",
+            str(manifest_path),
+            "--model-matrix",
+            str(matrix_path),
+            "--report-path",
+            str(report_path),
+        ]
+    )
+
+    assert return_code == 0
+    runner_class.assert_called_once()
+    kwargs = runner_class.call_args.kwargs
+    assert kwargs["semantic_parser"] is semantic_parser
+    assert kwargs["image_generator"] is image_generator
+    generator_builder.assert_called_once()
+    assert isinstance(
+        kwargs["preview_postprocessor"],
+        PreviewOutputSafetyPostprocessor,
+    )
+    assert kwargs["preview_postprocessor"].apply_mask is False
+    runner.run_cases_with_preview_generators.assert_called_once()
+    assert runner.run_cases_with_preview_generators.call_args.kwargs[
+        "preview_generators"
+    ] == [("qwen_current", image_generator)]
 
 
 @pytest.mark.parametrize(
@@ -1383,12 +2191,9 @@ def test_load_preview_model_configs_rejects_whitespace_model_version(tmp_path):
 def test_eval_example_model_matrix_loads():
     configs = load_preview_model_configs(Path("docs/eval/model_matrix.example.json"))
 
-    assert [config.run_id for config in configs] == [
-        "qwen_current",
-        "nano_banana_current",
-    ]
+    assert [config.run_id for config in configs] == ["qwen_current"]
     assert configs[0].prompt_variant == "preview-garment-swap-v1"
-    assert configs[1].input_mapping == "google_nano_banana"
+    assert configs[0].input_mapping == "multi_image_edit"
 
 
 def test_eval_real_manifest_example_loads_paths():

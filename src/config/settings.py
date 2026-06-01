@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     )
     ollama_model: str = Field(default="vto-brain", env="OLLAMA_MODEL")
     ollama_timeout: int = Field(default=300, env="OLLAMA_TIMEOUT")
+    tryon_analyzer_ollama_model: str = Field(
+        default="qwen2.5vl:7b",
+        env="TRYON_ANALYZER_OLLAMA_MODEL",
+    )
+    tryon_analyzer_timeout: int = Field(
+        default=300,
+        env="TRYON_ANALYZER_TIMEOUT",
+    )
 
     # Replicate
     replicate_api_token: str = Field(..., env="REPLICATE_API_TOKEN")
@@ -66,6 +74,25 @@ class Settings(BaseSettings):
     )
     replicate_preview_model_warning: Optional[str] = Field(
         default=None, env="REPLICATE_PREVIEW_MODEL_WARNING"
+    )
+
+    # Avatar generation
+    avatar_generator_mode: str = Field(
+        default="replicate",
+        env="AVATAR_GENERATOR_MODE",
+    )  # "replicate" or "local_command"
+    local_avatar_command: str = Field(default="", env="LOCAL_AVATAR_COMMAND")
+    local_avatar_model_id: str = Field(
+        default="local-command-avatar",
+        env="LOCAL_AVATAR_MODEL_ID",
+    )
+    local_avatar_timeout: int = Field(default=1200, env="LOCAL_AVATAR_TIMEOUT")
+    local_avatar_output_dir: Path = Field(
+        default=Path(__file__).parent.parent.parent
+        / "data"
+        / "avatar_cache"
+        / "local_outputs",
+        env="LOCAL_AVATAR_OUTPUT_DIR",
     )
 
     # Image Generation Mode
@@ -125,7 +152,12 @@ class Settings(BaseSettings):
             return v
         return ["http://localhost:3000", "http://127.0.0.1:3000"]
 
-    @field_validator("temp_storage_dir", "playwright_profile_dir", "eval_report_dir")
+    @field_validator(
+        "temp_storage_dir",
+        "playwright_profile_dir",
+        "eval_report_dir",
+        "local_avatar_output_dir",
+    )
     @classmethod
     def create_temp_dir(cls, v):
         v = Path(v)

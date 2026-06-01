@@ -8,7 +8,13 @@ import hashlib
 import json
 from typing import Any
 
-from src.modules.avatar_preview.profile import DerivedAvatarProfile
+from src.modules.avatar_preview.profile import (
+    AvatarFraming,
+    DerivedAvatarProfile,
+    GarmentRegion,
+    GarmentSleeveLength,
+    GarmentType,
+)
 from src.modules.avatar_preview.prompt_builder import (
     AVATAR_PROMPT_VERSION,
     PREVIEW_CONTEXT_PROMPT_VERSION,
@@ -29,6 +35,10 @@ def build_avatar_cache_key(
     derived_profile: DerivedAvatarProfile,
     avatar_model_id: str,
     avatar_catalog_version: str,
+    avatar_framing: AvatarFraming = AvatarFraming.UPPER_BODY,
+    garment_region: GarmentRegion | None = None,
+    garment_type: GarmentType | None = None,
+    garment_sleeve_length: GarmentSleeveLength | None = None,
 ) -> str:
     payload = {
         "namespace": "avatar",
@@ -37,8 +47,15 @@ def build_avatar_cache_key(
         "derived_profile_hash": derived_profile_hash(derived_profile),
         "avatar_model_id": avatar_model_id,
         "avatar_catalog_version": avatar_catalog_version,
+        "avatar_framing": avatar_framing.value,
         "pose": derived_profile.pose,
     }
+    if garment_region is not None:
+        payload["garment_region"] = garment_region.value
+    if garment_type is not None:
+        payload["garment_type"] = garment_type.value
+    if garment_sleeve_length is not None:
+        payload["garment_sleeve_length"] = garment_sleeve_length.value
     return f"avatar:v1:{_sha256_stable_payload(payload)}"
 
 

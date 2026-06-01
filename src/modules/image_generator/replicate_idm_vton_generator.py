@@ -1,9 +1,5 @@
 """
-Replicate avatar preview generator for personalized mannequin outfit previews.
-
-This adapter is for avatar/mannequin creative preview. It intentionally passes
-the avatar context prompt through to the provider instead of rebuilding a
-user-photo virtual try-on prompt.
+Replicate IDM-VTON generator for eval runs.
 """
 
 from __future__ import annotations
@@ -20,20 +16,24 @@ from replicate import Client
 
 from src.config.settings import get_settings
 from src.modules.image_generator.base import ImageGeneratorBase
-from src.modules.image_generator.replicate_rate_limit import (
-    create_prediction_with_rate_limit_retry,
-)
 
 logger = logging.getLogger(__name__)
 
 
-class ReplicateAvatarPreviewGenerator(ImageGeneratorBase):
-    """Dedicated Replicate adapter for avatar/mannequin outfit previews."""
+class ReplicateIdmVtonGenerator(ImageGeneratorBase):
+    """
+    Dedicated Replicate adapter for cuuupid/idm-vton.
 
-    DEFAULT_MODEL = "qwen/qwen-image-edit-2511"
-    DEFAULT_MODEL_VERSION = None
-    DEFAULT_INPUT_MAPPING = "multi_image_edit"
-    DEFAULT_PROMPT_VERSION = "avatar-qwen-multimodal-preview-v1"
+    This uses the model's VTON-specific input schema instead of the generic
+    multi-image edit schema used by Qwen/Nano preview models.
+    """
+
+    DEFAULT_MODEL = "cuuupid/idm-vton"
+    DEFAULT_MODEL_VERSION = (
+        "0513734a452173b8173e907e3a59d19a36266e55b48528559432bd21c7d7e985"
+    )
+    DEFAULT_INPUT_MAPPING = "replicate_idm_vton"
+    DEFAULT_PROMPT_VERSION = "idm-vton-v1"
     PROMPT_VARIANTS = {DEFAULT_PROMPT_VERSION}
 
     def __init__(self):
@@ -42,9 +42,11 @@ class ReplicateAvatarPreviewGenerator(ImageGeneratorBase):
         self.model_version = self.DEFAULT_MODEL_VERSION
         self.input_mapping = self.DEFAULT_INPUT_MAPPING
         self.prompt_variant = self.DEFAULT_PROMPT_VERSION
-        self.go_fast = settings.replicate_preview_go_fast
-        self.output_format = "png"
+        self.category = "upper_body"
+        self.crop = True
+        self.steps = 30
         self.seed = 42
+        self.use_mask = False
         self.client = Client(
             api_token=settings.replicate_api_token,
             timeout=httpx.Timeout(
@@ -85,10 +87,25 @@ class ReplicateAvatarPreviewGenerator(ImageGeneratorBase):
         image_io.name = filename
         return image_io
 
+    @staticmethod
+    def _detect_category(inpainting_prompt: str) -> str:
+        prompt_lower = inpainting_prompt.lower()
+        if any(
+            keyword in prompt_lower
+            for keyword in ["dress", "gown", "one-piece", "one piece"]
+        ):
+            return "dresses"
+        if any(
+            keyword in prompt_lower
+            for keyword in ["pants", "jeans", "trousers", "shorts", "lower body"]
+        ):
+            return "lower_body"
+        return "upper_body"
+
     def get_prompt_version(self) -> str:
         if self.prompt_variant not in self.PROMPT_VARIANTS:
             raise ValueError(
-                f"Unsupported avatar preview prompt variant: {self.prompt_variant}"
+                f"Unsupported IDM-VTON prompt variant: {self.prompt_variant}"
             )
         return self.prompt_variant
 
@@ -102,13 +119,6 @@ class ReplicateAvatarPreviewGenerator(ImageGeneratorBase):
             "preview_prompt_version": self.get_prompt_version(),
         }
 
-    def _build_prompt(self, inpainting_prompt: str) -> str:
-        self.get_prompt_version()
-        prompt = inpainting_prompt.strip()
-        if not prompt:
-            raise ValueError("Avatar preview context prompt is empty")
-        return prompt
-
     def _build_inputs(
         self,
         *,
@@ -117,23 +127,23 @@ class ReplicateAvatarPreviewGenerator(ImageGeneratorBase):
         inpainting_prompt: str,
         mask: bytes | None,
     ) -> dict:
-        if self.input_mapping != self.DEFAULT_INPUT_MAPPING:
-            raise ValueError(
-                "Avatar preview supports only multi_image_edit for "
-                "qwen/qwen-image-edit-2511"
-            )
-        return {
-            "image": [
-                self._named_image_io(base_image, "avatar.png"),
-                self._named_image_io(garment_image, "garment.png"),
-            ],
-            "prompt": self._build_prompt(inpainting_prompt),
-            "aspect_ratio": "match_input_image",
-            "go_fast": self.go_fast,
-            "output_format": self.output_format,
-            "output_quality": 95,
+        category = (
+            self._detect_category(inpainting_prompt)
+            if self.category == "auto"
+            else self.category
+        )
+        inputs = {
+            "human_img": self._named_image_io(base_image, "human.png"),
+            "garm_img": self._named_image_io(garment_image, "garment.png"),
+            "garment_des": inpainting_prompt,
+            "category": category,
+            "crop": self.crop,
             "seed": self.seed,
+            "steps": self.steps,
         }
+        if self.use_mask and mask is not None:
+            inputs["mask_img"] = self._named_image_io(mask, "mask.png")
+        return inputs
 
     def generate_tryon(
         self,
@@ -145,7 +155,7 @@ class ReplicateAvatarPreviewGenerator(ImageGeneratorBase):
     ) -> bytes:
         try:
             logger.info(
-                "Running Replicate avatar preview generator (model=%s, version=%s)...",
+                "Running Replicate IDM-VTON generator (model=%s, version=%s)...",
                 self.model,
                 self.model_version,
             )
@@ -157,24 +167,20 @@ class ReplicateAvatarPreviewGenerator(ImageGeneratorBase):
             )
 
             if self.model_version:
-                prediction = create_prediction_with_rate_limit_retry(
-                    lambda: self.client.predictions.create(
-                        version=self.model_version,
-                        input=inputs,
-                    )
+                prediction = self.client.predictions.create(
+                    version=self.model_version,
+                    input=inputs,
                 )
             else:
-                prediction = create_prediction_with_rate_limit_retry(
-                    lambda: self.client.predictions.create(
-                        model=self.model,
-                        input=inputs,
-                    )
+                prediction = self.client.predictions.create(
+                    model=self.model,
+                    input=inputs,
                 )
             logger.info("Prediction created: %s", prediction.id)
 
-            max_wait = 180
+            max_wait = 420
             start_time = time.time()
-            poll_interval = 2
+            poll_interval = 3
 
             while prediction.status not in ["succeeded", "failed", "canceled"]:
                 elapsed = time.time() - start_time
@@ -182,7 +188,7 @@ class ReplicateAvatarPreviewGenerator(ImageGeneratorBase):
                     raise TimeoutError(
                         f"Prediction timeout after {elapsed:.0f}s for {self.model}"
                     )
-                if elapsed % 10 < poll_interval:
+                if elapsed % 15 < poll_interval:
                     logger.info(
                         "Status: %s (elapsed: %.0fs)",
                         prediction.status,
@@ -197,7 +203,7 @@ class ReplicateAvatarPreviewGenerator(ImageGeneratorBase):
 
             return self._read_output(prediction.output)
         except Exception as exc:
-            logger.error("Replicate avatar preview generation failed: %s", str(exc))
+            logger.error("Replicate IDM-VTON generation failed: %s", str(exc))
             raise ValueError(f"Image generation failed: {str(exc)}") from exc
 
     @staticmethod
@@ -206,16 +212,10 @@ class ReplicateAvatarPreviewGenerator(ImageGeneratorBase):
             return output.read()
 
         if hasattr(output, "url"):
-            output_url = getattr(output, "url")
-            output = output_url() if callable(output_url) else output_url
+            output = getattr(output, "url")
 
         if isinstance(output, list) and output:
             output = output[0]
-            if hasattr(output, "read"):
-                return output.read()
-            if hasattr(output, "url"):
-                output_url = getattr(output, "url")
-                output = output_url() if callable(output_url) else output_url
 
         if isinstance(output, str):
             response = httpx.get(output, timeout=30.0)

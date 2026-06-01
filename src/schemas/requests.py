@@ -5,6 +5,15 @@ Request schemas cho API endpoints.
 from pydantic import BaseModel, Field
 from typing import Optional
 
+from src.modules.avatar_preview.profile import (
+    AvatarFraming,
+    AvatarPreviewQualityMode,
+    AvatarProfileInput,
+    GarmentRegion,
+    GarmentSleeveLength,
+    GarmentType,
+)
+
 
 class VTOAnalysisRequest(BaseModel):
     """
@@ -212,5 +221,110 @@ class ManualProductTryOnRequest(BaseModel):
                 "image_url": None,
                 "mask": None,
                 "size": "1024x1024",
+            }
+        }
+
+
+class AvatarPreviewAvatarRequest(BaseModel):
+    """
+    Request model for generating a privacy-safe synthetic avatar before try-on.
+    """
+
+    body_profile: AvatarProfileInput = Field(
+        ...,
+        description="Body-only profile used to generate a synthetic avatar",
+    )
+    garment_type: Optional[GarmentType] = Field(
+        default=None,
+        description="Optional garment type; when provided it determines the edit region",
+    )
+    garment_region: Optional[GarmentRegion] = Field(
+        default=None,
+        description="Optional fallback garment region when garment_type is absent or unknown",
+    )
+    garment_sleeve_length: Optional[GarmentSleeveLength] = Field(
+        default=None,
+        description="Optional sleeve context for upper-body avatar generation",
+    )
+    avatar_framing: Optional[AvatarFraming] = Field(
+        default=None,
+        description="Optional avatar framing override; use full_body for full-body shirt previews",
+    )
+    force_regenerate: bool = Field(
+        default=False,
+        description="Regenerate the avatar instead of reusing the cache entry",
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "body_profile": {
+                    "input_mode": "basic",
+                    "basic": {
+                        "gender_presentation": "male",
+                        "body_build": "athletic",
+                        "height_range": "tall",
+                        "shoulder_width": "broad",
+                        "fit_preference": "regular",
+                        "pose": "front_relaxed",
+                        "skin_tone": "not_specified",
+                        "age_band": "adult",
+                    },
+                },
+                "garment_type": "jersey",
+                "garment_sleeve_length": "short_sleeve",
+                "garment_region": "upper_body",
+                "avatar_framing": "full_body",
+                "force_regenerate": False,
+            }
+        }
+
+
+class AvatarPreviewTryOnRequest(BaseModel):
+    """
+    Request model for applying a garment to a cached synthetic avatar.
+    """
+
+    avatar_cache_key: str = Field(
+        ...,
+        description="Cache key returned by /api/v1/avatar-preview/avatars",
+    )
+    product_image: Optional[str] = Field(
+        default=None,
+        description="Optional base64-encoded normalized garment image",
+    )
+    image_url: Optional[str] = Field(
+        default=None,
+        description="Optional direct HTTP(S) garment image URL when product_image is absent",
+    )
+    size: str = Field(
+        default="1024x1024",
+        description="Output image size requested from the preview generator",
+    )
+    quality_mode: AvatarPreviewQualityMode = Field(
+        default=AvatarPreviewQualityMode.CREATIVE_PREVIEW,
+        description=(
+            "Avatar preview currently only supports creative_preview. "
+            "garment_fidelity is reserved for non-avatar/provider-specific "
+            "experiments and is rejected by this endpoint."
+        ),
+    )
+    use_multimodal_analysis: bool = Field(
+        default=False,
+        description=(
+            "When true, analyze avatar and garment with the configured multimodal "
+            "analyzer before prompt building and provider routing"
+        ),
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "avatar_cache_key": "avatar:v1:...",
+                "product_image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ...",
+                "image_url": None,
+                "size": "1024x1024",
+                "quality_mode": "creative_preview",
+                "use_multimodal_analysis": True,
             }
         }

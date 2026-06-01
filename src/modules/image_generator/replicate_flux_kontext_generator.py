@@ -1,9 +1,5 @@
 """
-Replicate avatar preview generator for personalized mannequin outfit previews.
-
-This adapter is for avatar/mannequin creative preview. It intentionally passes
-the avatar context prompt through to the provider instead of rebuilding a
-user-photo virtual try-on prompt.
+Replicate Flux Kontext multi-image generator for creative outfit previews.
 """
 
 from __future__ import annotations
@@ -20,20 +16,23 @@ from replicate import Client
 
 from src.config.settings import get_settings
 from src.modules.image_generator.base import ImageGeneratorBase
-from src.modules.image_generator.replicate_rate_limit import (
-    create_prediction_with_rate_limit_retry,
-)
 
 logger = logging.getLogger(__name__)
 
 
-class ReplicateAvatarPreviewGenerator(ImageGeneratorBase):
-    """Dedicated Replicate adapter for avatar/mannequin outfit previews."""
+class ReplicateFluxKontextGenerator(ImageGeneratorBase):
+    """
+    Dedicated Replicate adapter for flux-kontext-apps/multi-image-kontext-pro.
 
-    DEFAULT_MODEL = "qwen/qwen-image-edit-2511"
+    This is not a true VTO model. It is used only for the pivoted "creative
+    outfit preview" path where latency/warm availability matters more than
+    strict garment transfer.
+    """
+
+    DEFAULT_MODEL = "flux-kontext-apps/multi-image-kontext-pro"
     DEFAULT_MODEL_VERSION = None
-    DEFAULT_INPUT_MAPPING = "multi_image_edit"
-    DEFAULT_PROMPT_VERSION = "avatar-qwen-multimodal-preview-v1"
+    DEFAULT_INPUT_MAPPING = "flux_kontext_multi_image"
+    DEFAULT_PROMPT_VERSION = "flux-kontext-outfit-preview-v1"
     PROMPT_VARIANTS = {DEFAULT_PROMPT_VERSION}
 
     def __init__(self):
@@ -42,8 +41,9 @@ class ReplicateAvatarPreviewGenerator(ImageGeneratorBase):
         self.model_version = self.DEFAULT_MODEL_VERSION
         self.input_mapping = self.DEFAULT_INPUT_MAPPING
         self.prompt_variant = self.DEFAULT_PROMPT_VERSION
-        self.go_fast = settings.replicate_preview_go_fast
+        self.aspect_ratio = "match_input_image"
         self.output_format = "png"
+        self.safety_tolerance = 2
         self.seed = 42
         self.client = Client(
             api_token=settings.replicate_api_token,
@@ -88,7 +88,7 @@ class ReplicateAvatarPreviewGenerator(ImageGeneratorBase):
     def get_prompt_version(self) -> str:
         if self.prompt_variant not in self.PROMPT_VARIANTS:
             raise ValueError(
-                f"Unsupported avatar preview prompt variant: {self.prompt_variant}"
+                f"Unsupported Flux Kontext prompt variant: {self.prompt_variant}"
             )
         return self.prompt_variant
 
@@ -104,10 +104,21 @@ class ReplicateAvatarPreviewGenerator(ImageGeneratorBase):
 
     def _build_prompt(self, inpainting_prompt: str) -> str:
         self.get_prompt_version()
-        prompt = inpainting_prompt.strip()
-        if not prompt:
-            raise ValueError("Avatar preview context prompt is empty")
-        return prompt
+        return (
+            "Create a creative outfit preview. "
+            "Use image 1 as the base person photo and image 2 as the garment reference. "
+            "Make the anonymized person in image 1 wear the garment from image 2. "
+            "Preserve the person, anonymized face area, body pose, camera framing, "
+            "background, lighting, and overall photo texture as much as possible. "
+            "Prioritize a plausible editorial outfit preview over a strict technical "
+            "virtual try-on. "
+            "Preserve the garment color palette, silhouette, sleeve length, collar, "
+            "logos, text, stripes, panels, trims, and visible design details as much "
+            "as the model can. "
+            "Do not create a new person, do not change the background, and do not "
+            "remove the anonymized face blur. "
+            f"Garment/context details: {inpainting_prompt}"
+        )
 
     def _build_inputs(
         self,
@@ -117,21 +128,13 @@ class ReplicateAvatarPreviewGenerator(ImageGeneratorBase):
         inpainting_prompt: str,
         mask: bytes | None,
     ) -> dict:
-        if self.input_mapping != self.DEFAULT_INPUT_MAPPING:
-            raise ValueError(
-                "Avatar preview supports only multi_image_edit for "
-                "qwen/qwen-image-edit-2511"
-            )
         return {
-            "image": [
-                self._named_image_io(base_image, "avatar.png"),
-                self._named_image_io(garment_image, "garment.png"),
-            ],
+            "input_image_1": self._named_image_io(base_image, "user.png"),
+            "input_image_2": self._named_image_io(garment_image, "garment.png"),
             "prompt": self._build_prompt(inpainting_prompt),
-            "aspect_ratio": "match_input_image",
-            "go_fast": self.go_fast,
+            "aspect_ratio": self.aspect_ratio,
             "output_format": self.output_format,
-            "output_quality": 95,
+            "safety_tolerance": self.safety_tolerance,
             "seed": self.seed,
         }
 
@@ -145,7 +148,7 @@ class ReplicateAvatarPreviewGenerator(ImageGeneratorBase):
     ) -> bytes:
         try:
             logger.info(
-                "Running Replicate avatar preview generator (model=%s, version=%s)...",
+                "Running Replicate Flux Kontext generator (model=%s, version=%s)...",
                 self.model,
                 self.model_version,
             )
@@ -157,18 +160,14 @@ class ReplicateAvatarPreviewGenerator(ImageGeneratorBase):
             )
 
             if self.model_version:
-                prediction = create_prediction_with_rate_limit_retry(
-                    lambda: self.client.predictions.create(
-                        version=self.model_version,
-                        input=inputs,
-                    )
+                prediction = self.client.predictions.create(
+                    version=self.model_version,
+                    input=inputs,
                 )
             else:
-                prediction = create_prediction_with_rate_limit_retry(
-                    lambda: self.client.predictions.create(
-                        model=self.model,
-                        input=inputs,
-                    )
+                prediction = self.client.predictions.create(
+                    model=self.model,
+                    input=inputs,
                 )
             logger.info("Prediction created: %s", prediction.id)
 
@@ -197,7 +196,7 @@ class ReplicateAvatarPreviewGenerator(ImageGeneratorBase):
 
             return self._read_output(prediction.output)
         except Exception as exc:
-            logger.error("Replicate avatar preview generation failed: %s", str(exc))
+            logger.error("Replicate Flux Kontext generation failed: %s", str(exc))
             raise ValueError(f"Image generation failed: {str(exc)}") from exc
 
     @staticmethod

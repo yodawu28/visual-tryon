@@ -11,6 +11,7 @@ FitPreference = Literal["fitted", "regular", "oversized"]
 AvatarPose = Literal["front_relaxed"]
 SkinTone = Literal["light", "medium", "tan", "dark", "not_specified"]
 AgeBand = Literal["adult", "middle_aged"]
+AvatarStyle = Literal["synthetic_person_photo"]
 
 
 class BodyInputMode(StrEnum):
@@ -18,9 +19,54 @@ class BodyInputMode(StrEnum):
     DETAILED = "detailed"
 
 
+class GarmentRegion(StrEnum):
+    UPPER_BODY = "upper_body"
+    LOWER_BODY = "lower_body"
+    FULL_BODY = "full_body"
+
+
+class GarmentType(StrEnum):
+    SHIRT = "shirt"
+    T_SHIRT = "t_shirt"
+    JERSEY = "jersey"
+    JACKET = "jacket"
+    HOODIE = "hoodie"
+    PANTS = "pants"
+    SHORTS = "shorts"
+    SKIRT = "skirt"
+    DRESS = "dress"
+    SET = "set"
+    FULL_OUTFIT = "full_outfit"
+    UNKNOWN = "unknown"
+
+
+class FashnVtonCategory(StrEnum):
+    TOPS = "tops"
+    BOTTOMS = "bottoms"
+    ONE_PIECES = "one-pieces"
+
+
+class GarmentSleeveLength(StrEnum):
+    SLEEVELESS = "sleeveless"
+    SHORT_SLEEVE = "short_sleeve"
+    LONG_SLEEVE = "long_sleeve"
+    UNKNOWN = "unknown"
+
+
+class AvatarFraming(StrEnum):
+    UPPER_BODY = "upper_body"
+    FULL_BODY = "full_body"
+
+
+class AvatarPreviewQualityMode(StrEnum):
+    CREATIVE_PREVIEW = "creative_preview"
+    GARMENT_FIDELITY = "garment_fidelity"
+
+
 class BasicBodyProfile(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    avatar_style: AvatarStyle = "synthetic_person_photo"
     gender_presentation: GenderPresentation
     body_build: BodyBuild
     height_range: HeightRange
@@ -34,6 +80,7 @@ class BasicBodyProfile(BaseModel):
 class DetailedBodyProfile(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    avatar_style: AvatarStyle = "synthetic_person_photo"
     gender_presentation: GenderPresentation
     height_cm: int = Field(ge=120, le=230, strict=True)
     weight_kg: int = Field(ge=30, le=250, strict=True)
@@ -52,6 +99,7 @@ class DetailedBodyProfile(BaseModel):
 class DerivedAvatarProfile(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    avatar_style: AvatarStyle
     gender_presentation: GenderPresentation
     body_build: BodyBuild
     height_range: HeightRange
@@ -101,6 +149,7 @@ def derive_avatar_profile(profile: AvatarProfileInput) -> DerivedAvatarProfile:
 
     detailed = profile.detailed
     return DerivedAvatarProfile(
+        avatar_style=detailed.avatar_style,
         gender_presentation=detailed.gender_presentation,
         body_build=_derive_body_build(detailed),
         height_range=_derive_height_range(detailed.height_cm),
@@ -118,6 +167,86 @@ def report_safe_profile(profile: AvatarProfileInput) -> dict[str, Any]:
         "input_mode": profile.input_mode.value,
         "derived_profile": derived_profile.model_dump(mode="json"),
     }
+
+
+def avatar_framing_for_garment_region(
+    garment_region: GarmentRegion,
+) -> AvatarFraming:
+    if garment_region == GarmentRegion.UPPER_BODY:
+        return AvatarFraming.UPPER_BODY
+    return AvatarFraming.FULL_BODY
+
+
+def garment_region_for_garment_type(garment_type: GarmentType) -> GarmentRegion:
+    if garment_type in {
+        GarmentType.SHIRT,
+        GarmentType.T_SHIRT,
+        GarmentType.JERSEY,
+        GarmentType.JACKET,
+        GarmentType.HOODIE,
+    }:
+        return GarmentRegion.UPPER_BODY
+    if garment_type in {
+        GarmentType.PANTS,
+        GarmentType.SHORTS,
+        GarmentType.SKIRT,
+    }:
+        return GarmentRegion.LOWER_BODY
+    if garment_type in {
+        GarmentType.DRESS,
+        GarmentType.SET,
+        GarmentType.FULL_OUTFIT,
+    }:
+        return GarmentRegion.FULL_BODY
+    return GarmentRegion.UPPER_BODY
+
+
+def resolve_garment_region(
+    *,
+    garment_type: GarmentType | None,
+    garment_region: GarmentRegion | None,
+) -> GarmentRegion:
+    if garment_type is not None and garment_type != GarmentType.UNKNOWN:
+        return garment_region_for_garment_type(garment_type)
+    return garment_region or GarmentRegion.UPPER_BODY
+
+
+def idm_vton_category_for_garment(
+    *,
+    garment_type: GarmentType | None,
+    garment_region: GarmentRegion,
+) -> str:
+    if garment_type == GarmentType.DRESS:
+        return "dresses"
+    if garment_region == GarmentRegion.LOWER_BODY:
+        return "lower_body"
+    if garment_region == GarmentRegion.FULL_BODY:
+        return "dresses"
+    return "upper_body"
+
+
+def fashn_vton_category_for_garment(
+    *,
+    garment_type: GarmentType | None,
+    garment_region: GarmentRegion,
+) -> FashnVtonCategory:
+    if garment_type in {GarmentType.DRESS, GarmentType.SET, GarmentType.FULL_OUTFIT}:
+        return FashnVtonCategory.ONE_PIECES
+    if garment_region == GarmentRegion.LOWER_BODY:
+        return FashnVtonCategory.BOTTOMS
+    if garment_region == GarmentRegion.FULL_BODY:
+        return FashnVtonCategory.ONE_PIECES
+    return FashnVtonCategory.TOPS
+
+
+def default_sleeve_length_for_garment_type(
+    garment_type: GarmentType | None,
+) -> GarmentSleeveLength:
+    if garment_type in {GarmentType.T_SHIRT, GarmentType.JERSEY, GarmentType.SHIRT}:
+        return GarmentSleeveLength.SHORT_SLEEVE
+    if garment_type in {GarmentType.HOODIE, GarmentType.JACKET}:
+        return GarmentSleeveLength.LONG_SLEEVE
+    return GarmentSleeveLength.UNKNOWN
 
 
 def _derive_height_range(height_cm: int) -> HeightRange:

@@ -39,6 +39,8 @@ class ReplicatePreviewGenerator(ImageGeneratorBase):
     PREVIEW_PROMPT_VARIANTS = {
         "preview-garment-swap-v1",
         "preview-garment-preserve-v2",
+        "preview-qwen-controlled-v3",
+        "preview-nano-full-replace-v3",
     }
 
     def __init__(self):
@@ -162,6 +164,57 @@ class ReplicatePreviewGenerator(ImageGeneratorBase):
         )
 
     @classmethod
+    def _build_preview_prompt_qwen_v3(cls, inpainting_prompt: str) -> str:
+        """Build a controlled Qwen prompt to reduce redraws and hallucinated details."""
+        target_region = cls._detect_target_region(inpainting_prompt)
+        return (
+            "Edit only the first image. "
+            "Use the second image only as the exact garment reference. "
+            "Keep the first image as the base photo with the same anonymized person, "
+            "same body shape, same pose, same hands and arms, same background, "
+            "same camera angle, same crop, same lighting, and same anonymized face area. "
+            f"Change only the {target_region} in the first image. "
+            "Replace the current garment with the garment from the second image. "
+            "Preserve only the garment details that are visible in the second image: "
+            "color palette, silhouette, neckline or collar, sleeve length, logos, text, "
+            "stripes, panels, trims, seams, and fabric texture. "
+            "Do not add any logos, text, graphics, stripes, or patterns that are not "
+            "visible in the second image. "
+            "Do not invent decorative details. "
+            "Keep hands, arms, fingers, skin, and body outline unchanged. "
+            "Do not redraw or reshape hands, arms, shoulders, neck, face, hair, or body. "
+            "Keep the original camera texture, compression, blur, shadows, and color tone. "
+            "If a garment detail is unclear, keep that area simple rather than inventing it."
+        )
+
+    @classmethod
+    def _build_preview_prompt_nano_v3(cls, inpainting_prompt: str) -> str:
+        """Build a Nano prompt that prioritizes full replacement of the old garment."""
+        target_region = cls._detect_target_region(inpainting_prompt)
+        return (
+            "Edit only the first image. "
+            "Use the second image only as the garment reference. "
+            "Keep the first image as the base photo with the same anonymized person, "
+            "same body shape, same pose, same hands and arms, same background, "
+            "same camera framing, same lighting, same crop, and same anonymized face area. "
+            f"Change only the {target_region} in the first image. "
+            "Remove the entire existing upper garment from the first image, including "
+            "the old collar, neckline, sleeves, cuffs, hem, fabric, color, and wrinkles. "
+            "Replace it fully with the garment from the second image. "
+            "If the reference garment is short-sleeve, do not keep the old long sleeves. "
+            "If the reference garment has a different collar, hem, or silhouette, use the "
+            "reference garment shape and do not preserve the old garment shape. "
+            "The final clothing must look like the second image garment being worn by "
+            "the person in the first image. "
+            "Preserve the garment color, logos, text, stripes, trims, panels, and visible "
+            "design details from the second image. "
+            "Do not keep any visible part of the original garment unless it also appears "
+            "in the second image. "
+            "Do not change the face, hands, arms, pose, body shape, background, camera "
+            "angle, or lighting."
+        )
+
+    @classmethod
     def _build_preview_prompt(cls, inpainting_prompt: str) -> str:
         return cls._build_preview_prompt_v1(inpainting_prompt)
 
@@ -171,6 +224,10 @@ class ReplicatePreviewGenerator(ImageGeneratorBase):
             return self._build_preview_prompt_v1(inpainting_prompt)
         if prompt_variant == "preview-garment-preserve-v2":
             return self._build_preview_prompt_v2(inpainting_prompt)
+        if prompt_variant == "preview-qwen-controlled-v3":
+            return self._build_preview_prompt_qwen_v3(inpainting_prompt)
+        if prompt_variant == "preview-nano-full-replace-v3":
+            return self._build_preview_prompt_nano_v3(inpainting_prompt)
         raise ValueError(f"Unsupported preview prompt variant: {prompt_variant}")
 
     @staticmethod
@@ -336,10 +393,14 @@ class ReplicatePreviewGenerator(ImageGeneratorBase):
                 raise ValueError(f"Prediction failed: {error_msg}")
 
             output = prediction.output
-            if not output or not isinstance(output, list):
+            if isinstance(output, str):
+                output_url = output
+            elif isinstance(output, list) and output:
+                output_url = output[0]
+            else:
                 raise ValueError(f"Unexpected output format: {type(output)} - {output}")
 
-            response = httpx.get(output[0], timeout=30.0)
+            response = httpx.get(output_url, timeout=30.0)
             response.raise_for_status()
             return response.content
 

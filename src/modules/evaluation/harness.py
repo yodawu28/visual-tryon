@@ -13,6 +13,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from src.schemas.responses import ClothingAnalysis
+
+
+PROMPTLESS_PREVIEW_INPUT_MAPPINGS = {
+    "replicate_oot_diffusion",
+    "replicate_flux_vton",
+}
+
 
 @dataclass(frozen=True)
 class EvalCase:
@@ -170,9 +178,16 @@ def _require_non_empty_string(
 
 
 class EvalRunner:
-    def __init__(self, *, semantic_parser: Any, image_generator: Any):
+    def __init__(
+        self,
+        *,
+        semantic_parser: Any,
+        image_generator: Any,
+        preview_postprocessor: Any | None = None,
+    ):
         self.semantic_parser = semantic_parser
         self.image_generator = image_generator
+        self.preview_postprocessor = preview_postprocessor
 
     def run_cases(self, *, cases: list[EvalCase], report_path: Path) -> dict[str, Any]:
         started_at = datetime.now(timezone.utc).isoformat()
@@ -264,7 +279,18 @@ class EvalRunner:
         preview_generators: list[tuple[str, Any]],
         output_dir: Path,
     ) -> dict[str, Any]:
-        semantic_metadata = self.semantic_parser.get_runtime_metadata()
+        skip_semantic_analysis = self._uses_only_promptless_preview_generators(
+            preview_generators
+        )
+        semantic_metadata = (
+            {
+                "provider": "skipped",
+                "model": "not-required",
+                "semantic_prompt_version": "not-required",
+            }
+            if skip_semantic_analysis
+            else self.semantic_parser.get_runtime_metadata()
+        )
         input_hashes = {
             "user_image_sha256": file_sha256(eval_case.anonymized_user_image_path),
             "product_image_sha256": file_sha256(eval_case.product_image_path),
@@ -277,28 +303,40 @@ class EvalRunner:
         product_image_b64 = _file_to_base64(eval_case.product_image_path)
         mask_b64 = _file_to_base64(eval_case.mask_path) if eval_case.mask_path else None
 
-        try:
-            analysis_started = time.perf_counter()
-            analysis = self.semantic_parser.analyze_vto_context(
-                user_image_b64=user_image_b64,
-                product_image_b64=product_image_b64,
+        if skip_semantic_analysis:
+            analysis_latency = 0.0
+            analysis = ClothingAnalysis(
+                clothing_description="",
+                body_pose="",
+                inpainting_prompt="",
+                confidence_score=0.0,
+                additional_notes=(
+                    "Semantic analysis skipped for promptless preview generator."
+                ),
             )
-            analysis_latency = time.perf_counter() - analysis_started
-        except Exception as exc:
-            return {
-                "case_id": eval_case.case_id,
-                "status": "failed",
-                "error": str(exc),
-                "input_hashes": input_hashes,
-                "semantic": {
-                    "provider": semantic_metadata["provider"],
-                    "model": semantic_metadata["model"],
-                    "prompt_version": semantic_metadata["semantic_prompt_version"],
-                },
-                "preview_results": [],
-                "total_latency_seconds": time.perf_counter() - case_started,
-                "manual_quality_notes": eval_case.manual_quality_notes,
-            }
+        else:
+            try:
+                analysis_started = time.perf_counter()
+                analysis = self.semantic_parser.analyze_vto_context(
+                    user_image_b64=user_image_b64,
+                    product_image_b64=product_image_b64,
+                )
+                analysis_latency = time.perf_counter() - analysis_started
+            except Exception as exc:
+                return {
+                    "case_id": eval_case.case_id,
+                    "status": "failed",
+                    "error": str(exc),
+                    "input_hashes": input_hashes,
+                    "semantic": {
+                        "provider": semantic_metadata["provider"],
+                        "model": semantic_metadata["model"],
+                        "prompt_version": semantic_metadata["semantic_prompt_version"],
+                    },
+                    "preview_results": [],
+                    "total_latency_seconds": time.perf_counter() - case_started,
+                    "manual_quality_notes": eval_case.manual_quality_notes,
+                }
 
         preview_results = [
             self._run_preview_generator(
@@ -308,7 +346,7 @@ class EvalRunner:
                 user_image_b64=user_image_b64,
                 product_image_b64=product_image_b64,
                 mask_b64=mask_b64,
-                inpainting_prompt=analysis.inpainting_prompt,
+                analysis=analysis,
                 output_dir=output_dir,
             )
             for run_id, image_generator in preview_generators
@@ -338,6 +376,26 @@ class EvalRunner:
             "manual_quality_notes": eval_case.manual_quality_notes,
         }
 
+    @staticmethod
+    def _uses_only_promptless_preview_generators(
+        preview_generators: list[tuple[str, Any]],
+    ) -> bool:
+        if not preview_generators:
+            return False
+
+        try:
+            input_mappings = [
+                image_generator.get_runtime_metadata().get("preview_input_mapping")
+                for _, image_generator in preview_generators
+            ]
+        except Exception:
+            return False
+
+        return all(
+            input_mapping in PROMPTLESS_PREVIEW_INPUT_MAPPINGS
+            for input_mapping in input_mappings
+        )
+
     def _run_preview_generator(
         self,
         *,
@@ -347,7 +405,7 @@ class EvalRunner:
         user_image_b64: str,
         product_image_b64: str,
         mask_b64: str | None,
-        inpainting_prompt: str,
+        analysis: Any,
         output_dir: Path,
     ) -> dict[str, Any]:
         preview_metadata: dict[str, Any | None] = {
@@ -378,13 +436,37 @@ class EvalRunner:
                     f"Missing preview metadata fields: {', '.join(missing_fields)}"
                 )
 
+            generator_prompt = self._prompt_for_preview_generator(
+                preview_metadata=preview_metadata,
+                analysis=analysis,
+            )
             generated_image_b64 = image_generator.generate_tryon_from_b64(
                 base_image_b64=user_image_b64,
                 garment_image_b64=product_image_b64,
-                inpainting_prompt=inpainting_prompt,
+                inpainting_prompt=generator_prompt,
                 mask_b64=mask_b64,
                 size="1024x1024",
             )
+            postprocessing = {
+                "mask_applied": False,
+                "mask_source": None,
+                "face_preserve_applied": False,
+                "face_preserve_source": None,
+            }
+            if self.preview_postprocessor is not None:
+                postprocess_result = self.preview_postprocessor(
+                    base_image_b64=user_image_b64,
+                    generated_image_b64=generated_image_b64,
+                    mask_b64=mask_b64,
+                    preview_metadata=preview_metadata,
+                )
+                generated_image_b64 = postprocess_result.image_b64
+                postprocessing = {
+                    "mask_applied": postprocess_result.mask_applied,
+                    "mask_source": postprocess_result.mask_source,
+                    "face_preserve_applied": postprocess_result.face_preserve_applied,
+                    "face_preserve_source": postprocess_result.face_preserve_source,
+                }
             generated_image_bytes = base64.b64decode(generated_image_b64)
             output_dir.mkdir(parents=True, exist_ok=True)
             generated_image_path = (
@@ -403,6 +485,7 @@ class EvalRunner:
                 "latency_seconds": time.perf_counter() - preview_started,
                 "generated_image_bytes": len(generated_image_bytes),
                 "generated_image_path": str(generated_image_path),
+                "postprocessing": postprocessing,
             }
         except Exception as exc:
             return {
@@ -415,7 +498,18 @@ class EvalRunner:
                 "latency_seconds": time.perf_counter() - preview_started,
                 "generated_image_bytes": None,
                 "generated_image_path": None,
+                "postprocessing": None,
             }
+
+    @staticmethod
+    def _prompt_for_preview_generator(
+        *,
+        preview_metadata: dict[str, Any | None],
+        analysis: Any,
+    ) -> str:
+        if preview_metadata["input_mapping"] == "replicate_idm_vton":
+            return analysis.clothing_description
+        return analysis.inpainting_prompt
 
     def _run_case(self, eval_case: EvalCase, *, output_dir: Path) -> dict[str, Any]:
         semantic_metadata = self.semantic_parser.get_runtime_metadata()

@@ -8,7 +8,14 @@ from fastapi.responses import JSONResponse
 import time
 import logging
 
-from src.api.routes import health, privacy, analysis, generation, products
+from src.api.routes import (
+    health,
+    privacy,
+    analysis,
+    generation,
+    products,
+    avatar_preview,
+)
 from src.config.settings import get_settings
 
 # Configure logging
@@ -68,6 +75,7 @@ app.include_router(analysis.router)
 app.include_router(generation.router)
 app.include_router(generation.manual_router)
 app.include_router(products.router)
+app.include_router(avatar_preview.router)
 
 
 @app.on_event("startup")

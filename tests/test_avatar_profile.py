@@ -6,8 +6,17 @@ from src.modules.avatar_preview.profile import (
     BasicBodyProfile,
     BodyInputMode,
     DetailedBodyProfile,
+    FashnVtonCategory,
+    GarmentRegion,
+    GarmentSleeveLength,
+    GarmentType,
+    default_sleeve_length_for_garment_type,
     derive_avatar_profile,
+    fashn_vton_category_for_garment,
+    garment_region_for_garment_type,
+    idm_vton_category_for_garment,
     report_safe_profile,
+    resolve_garment_region,
 )
 
 
@@ -49,6 +58,7 @@ def test_basic_body_profile_derives_report_safe_profile():
     derived = derive_avatar_profile(profile)
 
     assert derived.model_dump(mode="json") == {
+        "avatar_style": "synthetic_person_photo",
         "gender_presentation": "male",
         "body_build": "athletic",
         "height_range": "tall",
@@ -74,6 +84,7 @@ def test_detailed_measurements_are_not_returned_in_report_safe_profile():
     serialized = str(report_payload)
 
     assert report_payload["input_mode"] == "detailed"
+    assert report_payload["derived_profile"]["avatar_style"] == "synthetic_person_photo"
     assert report_payload["derived_profile"]["height_range"] == "tall"
     assert report_payload["derived_profile"]["shoulder_width"] == "broad"
     assert "182" not in serialized
@@ -142,3 +153,93 @@ def test_detailed_measurements_do_not_coerce_strings():
             fit_preference="regular",
             pose="front_relaxed",
         )
+
+
+def test_garment_type_maps_to_region():
+    assert (
+        garment_region_for_garment_type(GarmentType.JERSEY) == GarmentRegion.UPPER_BODY
+    )
+    assert (
+        garment_region_for_garment_type(GarmentType.PANTS) == GarmentRegion.LOWER_BODY
+    )
+    assert garment_region_for_garment_type(GarmentType.DRESS) == GarmentRegion.FULL_BODY
+
+
+def test_garment_type_overrides_fallback_region():
+    assert (
+        resolve_garment_region(
+            garment_type=GarmentType.SHORTS,
+            garment_region=GarmentRegion.UPPER_BODY,
+        )
+        == GarmentRegion.LOWER_BODY
+    )
+    assert (
+        resolve_garment_region(
+            garment_type=GarmentType.UNKNOWN,
+            garment_region=GarmentRegion.FULL_BODY,
+        )
+        == GarmentRegion.FULL_BODY
+    )
+
+
+def test_idm_vton_category_maps_supported_garments():
+    assert (
+        idm_vton_category_for_garment(
+            garment_type=GarmentType.JERSEY,
+            garment_region=GarmentRegion.UPPER_BODY,
+        )
+        == "upper_body"
+    )
+    assert (
+        idm_vton_category_for_garment(
+            garment_type=GarmentType.SHORTS,
+            garment_region=GarmentRegion.LOWER_BODY,
+        )
+        == "lower_body"
+    )
+    assert (
+        idm_vton_category_for_garment(
+            garment_type=GarmentType.DRESS,
+            garment_region=GarmentRegion.FULL_BODY,
+        )
+        == "dresses"
+    )
+
+
+def test_fashn_vton_category_maps_supported_garments():
+    assert (
+        fashn_vton_category_for_garment(
+            garment_type=GarmentType.JERSEY,
+            garment_region=GarmentRegion.UPPER_BODY,
+        )
+        == FashnVtonCategory.TOPS
+    )
+    assert (
+        fashn_vton_category_for_garment(
+            garment_type=GarmentType.SHORTS,
+            garment_region=GarmentRegion.LOWER_BODY,
+        )
+        == FashnVtonCategory.BOTTOMS
+    )
+    assert (
+        fashn_vton_category_for_garment(
+            garment_type=GarmentType.DRESS,
+            garment_region=GarmentRegion.FULL_BODY,
+        )
+        == FashnVtonCategory.ONE_PIECES
+    )
+
+
+def test_default_sleeve_length_maps_upper_body_garments():
+    assert (
+        default_sleeve_length_for_garment_type(GarmentType.JERSEY)
+        == GarmentSleeveLength.SHORT_SLEEVE
+    )
+    assert (
+        default_sleeve_length_for_garment_type(GarmentType.JACKET)
+        == GarmentSleeveLength.LONG_SLEEVE
+    )
+    assert (
+        default_sleeve_length_for_garment_type(GarmentType.SHORTS)
+        == GarmentSleeveLength.UNKNOWN
+    )

@@ -3,7 +3,7 @@ Response schemas cho API endpoints.
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Any, Optional
 
 
 class ClothingAnalysis(BaseModel):
@@ -200,6 +200,61 @@ class ManualProductTryOnResponse(BaseModel):
     model_warning: Optional[str] = None
     product_source_mode: str
     product_source_url: Optional[str] = None
+
+
+class AvatarPreviewAvatarResponse(BaseModel):
+    """
+    Response for synthetic avatar generation/reuse.
+    """
+
+    success: bool
+    avatar_image: Optional[str] = Field(
+        None,
+        description="Base64-encoded generated synthetic avatar image",
+    )
+    avatar_cache_key: str
+    avatar_framing: str
+    garment_region: str
+    garment_type: Optional[str] = None
+    garment_sleeve_length: Optional[str] = None
+    cache_hit: bool
+    avatar_prompt_version: str
+    avatar_path: str
+    metadata_path: str
+    message: str
+
+
+class AvatarPreviewTryOnResponse(BaseModel):
+    """
+    Response for garment preview on a cached synthetic avatar.
+    """
+
+    success: bool
+    generated_image: Optional[str] = Field(
+        None,
+        description="Base64-encoded generated avatar preview image",
+    )
+    avatar_cache_key: str
+    avatar_framing: str
+    garment_region: str
+    garment_type: Optional[str] = None
+    is_preview: bool = True
+    quality_mode: str
+    preview_model: str
+    preview_prompt_version: str
+    model_warning: str
+    generation_time_seconds: Optional[float] = None
+    preview_cache_key: Optional[str] = None
+    preview_cache_hit: bool = False
+    preview_path: Optional[str] = None
+    preview_metadata_path: Optional[str] = None
+    product_scope: str = "avatar_creative_preview"
+    baseline_scope: str = "upper_body"
+    multimodal_analysis_applied: bool = False
+    tryon_intent: Optional[dict[str, Any]] = None
+    analyzer_model: Optional[str] = None
+    analyzer_prompt_version: Optional[str] = None
+    message: str
 
 
 class FullFlowTryOnResponse(BaseModel):

@@ -22,6 +22,9 @@ from src.modules.evaluation.harness import (
 from src.modules.image_generator.replicate_avatar_preview_generator import (
     ReplicateAvatarPreviewGenerator,
 )
+from src.modules.image_generator.replicate_synthetic_avatar_generator import (
+    ReplicateSyntheticAvatarGenerator,
+)
 
 SUPPORTED_AVATAR_PREVIEW_INPUT_MAPPINGS = {
     ReplicateAvatarPreviewGenerator.DEFAULT_INPUT_MAPPING,
@@ -74,6 +77,32 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--dry-run",
         action="store_true",
         help="Print planned avatar eval runs without calling model providers",
+    )
+    parser.add_argument(
+        "--generate-avatars-only",
+        action="store_true",
+        help="Generate/cache avatar images only; does not require --model-matrix or run try-on preview",
+    )
+    parser.add_argument(
+        "--generate-missing-avatars",
+        action="store_true",
+        help="Generate and cache synthetic avatar images when manifest omits avatar_image_path",
+    )
+    parser.add_argument(
+        "--avatar-cache-dir",
+        type=Path,
+        default=None,
+        help="Directory for generated synthetic avatar cache files",
+    )
+    parser.add_argument(
+        "--avatar-model",
+        default=ReplicateSyntheticAvatarGenerator.DEFAULT_MODEL,
+        help="Replicate model id for generated synthetic avatars",
+    )
+    parser.add_argument(
+        "--avatar-model-version",
+        default=ReplicateSyntheticAvatarGenerator.DEFAULT_MODEL_VERSION,
+        help="Optional Replicate model version for generated synthetic avatars",
     )
     return parser.parse_args(argv)
 
@@ -155,14 +184,44 @@ def build_avatar_preview_generator_from_config(
     return generator
 
 
+def build_synthetic_avatar_generator(
+    *,
+    model: str,
+    model_version: str | None,
+) -> ReplicateSyntheticAvatarGenerator:
+    generator = ReplicateSyntheticAvatarGenerator()
+    generator.model = model
+    generator.model_version = model_version
+    return generator
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    if args.model_matrix is None:
-        raise ValueError("--model-matrix is required for avatar preview eval")
-
     cases = load_avatar_eval_cases(args.manifest)
     if args.limit_cases is not None:
         cases = cases[: args.limit_cases]
+
+    if args.generate_avatars_only:
+        avatar_generator = build_synthetic_avatar_generator(
+            model=args.avatar_model,
+            model_version=args.avatar_model_version,
+        )
+        avatar_cache_dir = (
+            args.avatar_cache_dir or args.manifest.parent / "avatar_cache"
+        )
+        report_path = args.report_path or _default_report_path()
+        report = AvatarEvalRunner().generate_avatar_images_for_cases(
+            cases=cases,
+            avatar_generator=avatar_generator,
+            avatar_cache_dir=avatar_cache_dir,
+            report_path=report_path,
+        )
+        print(json.dumps(report["summary"], indent=2, sort_keys=True))
+        print(f"Report written to {report_path}")
+        return 0 if report["summary"]["failed"] == 0 else 1
+
+    if args.model_matrix is None:
+        raise ValueError("--model-matrix is required for avatar preview eval")
 
     preview_model_configs = load_avatar_preview_model_configs(args.model_matrix)
     if not preview_model_configs:
@@ -175,6 +234,23 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(plan, indent=2, sort_keys=True))
         return 0
 
+    avatar_generator = None
+    avatar_cache_dir = None
+    missing_avatar_images = [case for case in cases if case.avatar_image_path is None]
+    if missing_avatar_images:
+        if not args.generate_missing_avatars:
+            raise ValueError(
+                "One or more cases omit avatar_image_path; rerun with "
+                "--generate-missing-avatars to create cached synthetic avatars"
+            )
+        avatar_generator = build_synthetic_avatar_generator(
+            model=args.avatar_model,
+            model_version=args.avatar_model_version,
+        )
+        avatar_cache_dir = (
+            args.avatar_cache_dir or args.manifest.parent / "avatar_cache"
+        )
+
     report_path = args.report_path or _default_report_path()
     preview_generators = [
         (
@@ -183,11 +259,16 @@ def main(argv: list[str] | None = None) -> int:
         )
         for preview_config in preview_model_configs
     ]
-    report = AvatarEvalRunner().run_cases_with_preview_generators(
-        cases=cases,
-        preview_generators=preview_generators,
-        report_path=report_path,
-    )
+    runner_kwargs = {
+        "cases": cases,
+        "preview_generators": preview_generators,
+        "report_path": report_path,
+    }
+    if avatar_generator is not None:
+        runner_kwargs["avatar_generator"] = avatar_generator
+        runner_kwargs["avatar_cache_dir"] = avatar_cache_dir
+
+    report = AvatarEvalRunner().run_cases_with_preview_generators(**runner_kwargs)
 
     print(json.dumps(report["summary"], indent=2, sort_keys=True))
     print(f"Report written to {report_path}")

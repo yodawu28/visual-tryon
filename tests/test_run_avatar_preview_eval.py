@@ -47,6 +47,77 @@ def _write_manifest(tmp_path: Path) -> Path:
     return manifest_path
 
 
+def _write_generated_manifest(tmp_path: Path) -> Path:
+    product_path = tmp_path / "product.png"
+    product_path.write_bytes(b"product-image")
+    manifest_path = tmp_path / "avatar_generated_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "case_id": "avatar-upper-generated-001",
+                        "avatar_image_source": "generated_synthetic_person_photo",
+                        "product_image_path": "product.png",
+                        "body_profile": {
+                            "input_mode": "basic",
+                            "basic": {
+                                "gender_presentation": "male",
+                                "body_build": "athletic",
+                                "height_range": "tall",
+                                "shoulder_width": "broad",
+                                "fit_preference": "regular",
+                                "pose": "front_relaxed",
+                                "skin_tone": "not_specified",
+                                "age_band": "adult",
+                            },
+                        },
+                        "manual_quality_notes": {"overall": ""},
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return manifest_path
+
+
+def _write_lower_body_generated_manifest(tmp_path: Path) -> Path:
+    product_path = tmp_path / "pants.png"
+    product_path.write_bytes(b"pants-image")
+    manifest_path = tmp_path / "avatar_lower_body_generated_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "case_id": "avatar-lower-generated-001",
+                        "avatar_image_source": "generated_synthetic_person_photo",
+                        "garment_region": "lower_body",
+                        "product_image_path": "pants.png",
+                        "body_profile": {
+                            "input_mode": "basic",
+                            "basic": {
+                                "gender_presentation": "male",
+                                "body_build": "athletic",
+                                "height_range": "tall",
+                                "shoulder_width": "broad",
+                                "fit_preference": "regular",
+                                "pose": "front_relaxed",
+                                "skin_tone": "not_specified",
+                                "age_band": "adult",
+                            },
+                        },
+                        "manual_quality_notes": {"overall": ""},
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return manifest_path
+
+
 def _write_matrix(tmp_path: Path) -> Path:
     matrix_path = tmp_path / "model_matrix.json"
     matrix_path.write_text(
@@ -54,11 +125,11 @@ def _write_matrix(tmp_path: Path) -> Path:
             {
                 "preview_models": [
                     {
-                        "run_id": "flux-avatar-current",
-                        "model": "flux-kontext-apps/multi-image-kontext-pro",
+                        "run_id": "qwen-avatar-current",
+                        "model": "qwen/qwen-image-edit-2511",
                         "model_version": None,
-                        "input_mapping": "flux_kontext_multi_image",
-                        "prompt_variant": "flux-kontext-outfit-preview-v1",
+                        "input_mapping": "multi_image_edit",
+                        "prompt_variant": "avatar-qwen-multimodal-preview-v1",
                         "enabled": True,
                     }
                 ]
@@ -76,10 +147,10 @@ def _write_matrix_without_prompt_variant(tmp_path: Path) -> Path:
             {
                 "preview_models": [
                     {
-                        "run_id": "flux-avatar-current",
-                        "model": "flux-kontext-apps/multi-image-kontext-pro",
+                        "run_id": "qwen-avatar-current",
+                        "model": "qwen/qwen-image-edit-2511",
                         "model_version": None,
-                        "input_mapping": "flux_kontext_multi_image",
+                        "input_mapping": "multi_image_edit",
                         "enabled": True,
                     }
                 ]
@@ -151,6 +222,7 @@ def test_main_dry_run_prints_plan_and_does_not_instantiate_preview_generators(
                 "input_mode": "detailed",
                 "derived_profile": {
                     "age_band": "adult",
+                    "avatar_style": "synthetic_person_photo",
                     "body_build": "athletic",
                     "fit_preference": "regular",
                     "gender_presentation": "male",
@@ -159,11 +231,17 @@ def test_main_dry_run_prints_plan_and_does_not_instantiate_preview_generators(
                     "shoulder_width": "broad",
                     "skin_tone": "medium",
                 },
-                "run_id": "flux-avatar-current",
-                "model": "flux-kontext-apps/multi-image-kontext-pro",
-                "input_mapping": "flux_kontext_multi_image",
-                "prompt_variant": "flux-kontext-outfit-preview-v1",
-                "avatar_prompt_variant": "avatar-garment-preview-context-v1",
+                "run_id": "qwen-avatar-current",
+                "model": "qwen/qwen-image-edit-2511",
+                "input_mapping": "multi_image_edit",
+                "prompt_variant": "avatar-qwen-multimodal-preview-v1",
+                "avatar_prompt_variant": "avatar-garment-preview-context-v4",
+                "avatar_image_source": "provided_image",
+                "garment_type": None,
+                "garment_region": "upper_body",
+                "garment_sleeve_length": "unknown",
+                "fashn_category": "tops",
+                "avatar_framing": "upper_body",
             }
         ],
     }
@@ -188,8 +266,32 @@ def test_main_dry_run_defaults_avatar_prompt_variant(tmp_path, capsys):
 
     assert return_code == 0
     assert (
-        payload["planned_runs"][0]["prompt_variant"] == "flux-kontext-outfit-preview-v1"
+        payload["planned_runs"][0]["prompt_variant"]
+        == "avatar-qwen-multimodal-preview-v1"
     )
+
+
+def test_main_dry_run_maps_lower_body_to_full_body_avatar(tmp_path, capsys):
+    manifest_path = _write_lower_body_generated_manifest(tmp_path)
+    matrix_path = _write_matrix(tmp_path)
+
+    return_code = run_avatar_preview_eval.main(
+        [
+            "--manifest",
+            str(manifest_path),
+            "--model-matrix",
+            str(matrix_path),
+            "--dry-run",
+        ]
+    )
+
+    planned_run = json.loads(capsys.readouterr().out)["planned_runs"][0]
+
+    assert return_code == 0
+    assert planned_run["garment_region"] == "lower_body"
+    assert planned_run["garment_sleeve_length"] == "unknown"
+    assert planned_run["fashn_category"] == "bottoms"
+    assert planned_run["avatar_framing"] == "full_body"
 
 
 def test_main_dry_run_requires_model_matrix(tmp_path):
@@ -258,5 +360,149 @@ def test_main_non_dry_run_uses_avatar_factory_and_runner(tmp_path, monkeypatch):
 
     assert return_code == 1
     generator_builder.assert_called_once()
-    assert captured["preview_generators"] == [("flux-avatar-current", image_generator)]
+    assert captured["preview_generators"] == [("qwen-avatar-current", image_generator)]
+    assert captured["report_path"] == report_path
+
+
+def test_main_non_dry_run_can_generate_missing_avatars(tmp_path, monkeypatch):
+    manifest_path = _write_generated_manifest(tmp_path)
+    matrix_path = _write_matrix(tmp_path)
+    report_path = tmp_path / "report.json"
+    avatar_cache_dir = tmp_path / "avatar-cache"
+    image_generator = object()
+    avatar_generator = object()
+    generator_builder = Mock(return_value=image_generator)
+    avatar_builder = Mock(return_value=avatar_generator)
+    captured = {}
+
+    class FakeAvatarEvalRunner:
+        def run_cases_with_preview_generators(
+            self,
+            *,
+            cases,
+            preview_generators,
+            report_path,
+            avatar_generator,
+            avatar_cache_dir,
+        ):
+            captured["cases"] = cases
+            captured["preview_generators"] = preview_generators
+            captured["report_path"] = report_path
+            captured["avatar_generator"] = avatar_generator
+            captured["avatar_cache_dir"] = avatar_cache_dir
+            return {
+                "summary": {
+                    "total_cases": len(cases),
+                    "preview_runs_per_case": len(preview_generators),
+                    "total_preview_runs": len(preview_generators),
+                    "succeeded": 1,
+                    "failed": 0,
+                }
+            }
+
+    monkeypatch.setattr(
+        run_avatar_preview_eval,
+        "build_avatar_preview_generator_from_config",
+        generator_builder,
+    )
+    monkeypatch.setattr(
+        run_avatar_preview_eval,
+        "build_synthetic_avatar_generator",
+        avatar_builder,
+    )
+    monkeypatch.setattr(
+        run_avatar_preview_eval,
+        "AvatarEvalRunner",
+        FakeAvatarEvalRunner,
+    )
+
+    return_code = run_avatar_preview_eval.main(
+        [
+            "--manifest",
+            str(manifest_path),
+            "--model-matrix",
+            str(matrix_path),
+            "--report-path",
+            str(report_path),
+            "--generate-missing-avatars",
+            "--avatar-cache-dir",
+            str(avatar_cache_dir),
+        ]
+    )
+
+    assert return_code == 0
+    generator_builder.assert_called_once()
+    avatar_builder.assert_called_once()
+    assert captured["preview_generators"] == [("qwen-avatar-current", image_generator)]
+    assert captured["avatar_generator"] is avatar_generator
+    assert captured["avatar_cache_dir"] == avatar_cache_dir
+
+
+def test_main_generate_avatars_only_does_not_require_model_matrix_or_preview(
+    tmp_path,
+    monkeypatch,
+):
+    manifest_path = _write_generated_manifest(tmp_path)
+    report_path = tmp_path / "avatar-only-report.json"
+    avatar_cache_dir = tmp_path / "avatar-cache"
+    avatar_generator = object()
+    avatar_builder = Mock(return_value=avatar_generator)
+    preview_builder = Mock(side_effect=AssertionError("preview should not run"))
+    captured = {}
+
+    class FakeAvatarEvalRunner:
+        def generate_avatar_images_for_cases(
+            self,
+            *,
+            cases,
+            avatar_generator,
+            avatar_cache_dir,
+            report_path,
+        ):
+            captured["cases"] = cases
+            captured["avatar_generator"] = avatar_generator
+            captured["avatar_cache_dir"] = avatar_cache_dir
+            captured["report_path"] = report_path
+            return {
+                "summary": {
+                    "total_cases": len(cases),
+                    "generated": 1,
+                    "cache_hits": 0,
+                    "failed": 0,
+                }
+            }
+
+    monkeypatch.setattr(
+        run_avatar_preview_eval,
+        "build_synthetic_avatar_generator",
+        avatar_builder,
+    )
+    monkeypatch.setattr(
+        run_avatar_preview_eval,
+        "build_avatar_preview_generator_from_config",
+        preview_builder,
+    )
+    monkeypatch.setattr(
+        run_avatar_preview_eval,
+        "AvatarEvalRunner",
+        FakeAvatarEvalRunner,
+    )
+
+    return_code = run_avatar_preview_eval.main(
+        [
+            "--manifest",
+            str(manifest_path),
+            "--generate-avatars-only",
+            "--avatar-cache-dir",
+            str(avatar_cache_dir),
+            "--report-path",
+            str(report_path),
+        ]
+    )
+
+    assert return_code == 0
+    avatar_builder.assert_called_once()
+    preview_builder.assert_not_called()
+    assert captured["avatar_generator"] is avatar_generator
+    assert captured["avatar_cache_dir"] == avatar_cache_dir
     assert captured["report_path"] == report_path

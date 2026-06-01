@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     debug: bool = Field(default=True, env="DEBUG")
     host: str = Field(default="127.0.0.1", env="HOST")
     port: int = Field(default=8000, env="PORT")
+    api_profile: str = Field(default="kiosk", env="API_PROFILE")
 
     # CORS
     cors_origins: Union[str, List[str]] = Field(

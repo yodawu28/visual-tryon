@@ -8,15 +8,7 @@ from fastapi.responses import JSONResponse
 import time
 import logging
 
-from src.api.routes import (
-    health,
-    privacy,
-    analysis,
-    generation,
-    products,
-    avatar_preview,
-    kiosk_tryon,
-)
+from src.api.router_registry import include_routers_for_profile
 from src.config.settings import get_settings
 
 # Configure logging
@@ -70,14 +62,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # Include routers
-app.include_router(health.router)
-app.include_router(privacy.router)
-app.include_router(analysis.router)
-app.include_router(generation.router)
-app.include_router(generation.manual_router)
-app.include_router(products.router)
-app.include_router(avatar_preview.router)
-app.include_router(kiosk_tryon.router)
+include_routers_for_profile(app, settings.api_profile)
 
 
 @app.on_event("startup")

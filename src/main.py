@@ -15,6 +15,7 @@ from src.api.routes import (
     generation,
     products,
     avatar_preview,
+    kiosk_tryon,
 )
 from src.config.settings import get_settings
 
@@ -76,6 +77,7 @@ app.include_router(generation.router)
 app.include_router(generation.manual_router)
 app.include_router(products.router)
 app.include_router(avatar_preview.router)
+app.include_router(kiosk_tryon.router)
 
 
 @app.on_event("startup")

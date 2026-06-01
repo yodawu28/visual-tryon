@@ -328,3 +328,54 @@ class AvatarPreviewTryOnRequest(BaseModel):
                 "use_multimodal_analysis": True,
             }
         }
+
+
+class KioskSessionCreateRequest(BaseModel):
+    """
+    Request model for creating a kiosk session after avatar preview approval.
+    """
+
+    garment_id: Optional[str] = Field(
+        default=None,
+        description="Optional product/garment identifier from the upstream catalog",
+    )
+    avatar_cache_key: str = Field(
+        ...,
+        description="Cache key returned by /api/v1/avatar-preview/avatars",
+    )
+    avatar_preview_cache_key: str = Field(
+        ...,
+        description="Cache key returned by /api/v1/avatar-preview/try-on",
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "garment_id": "garment-001",
+                "avatar_cache_key": "avatar:v1:...",
+                "avatar_preview_cache_key": "avatar-preview:v1:...",
+            }
+        }
+
+
+class KioskUserCaptureRequest(BaseModel):
+    """
+    Request model for adding webcam captures to a kiosk session.
+    """
+
+    front_image: str = Field(
+        ...,
+        description="Base64-encoded front-facing user capture from the kiosk webcam",
+    )
+    side_image: Optional[str] = Field(
+        default=None,
+        description="Optional base64-encoded side-facing user capture",
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "front_image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ...",
+                "side_image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ...",
+            }
+        }

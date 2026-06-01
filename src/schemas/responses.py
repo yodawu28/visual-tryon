@@ -257,6 +257,25 @@ class AvatarPreviewTryOnResponse(BaseModel):
     message: str
 
 
+class KioskSessionResponse(BaseModel):
+    """
+    Response for kiosk session state.
+    """
+
+    success: bool
+    session_id: str
+    status: str
+    garment_id: Optional[str] = None
+    avatar_cache_key: str
+    avatar_preview_cache_key: str
+    capture_keys: list[str] = Field(default_factory=list)
+    captures: dict[str, Any] = Field(default_factory=dict)
+    personalized_tryon_key: Optional[str] = None
+    created_at: str
+    updated_at: str
+    message: str
+
+
 class FullFlowTryOnResponse(BaseModel):
     """
     Response for the full-flow try-on endpoint starting from a raw user image.

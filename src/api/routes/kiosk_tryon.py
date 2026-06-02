@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.config.settings import get_settings
+from src.modules.kiosk_tryon.capture_analyzer import MediaPipeKioskCaptureAnalyzer
 from src.modules.kiosk_tryon.service import KioskTryOnService
 from src.schemas.requests import KioskSessionCreateRequest, KioskUserCaptureRequest
 from src.schemas.responses import KioskSessionResponse
@@ -21,7 +22,10 @@ router = APIRouter(prefix="/api/v1/kiosk", tags=["kiosk-tryon"])
 @lru_cache
 def get_kiosk_tryon_service() -> KioskTryOnService:
     settings = get_settings()
-    return KioskTryOnService(session_dir=settings.temp_storage_dir / "kiosk_sessions")
+    return KioskTryOnService(
+        session_dir=settings.temp_storage_dir / "kiosk_sessions",
+        capture_analyzer=MediaPipeKioskCaptureAnalyzer(),
+    )
 
 
 @router.post("/sessions", response_model=KioskSessionResponse)
@@ -72,6 +76,26 @@ async def add_kiosk_user_capture(
     return _session_response(result, message="Kiosk user capture stored")
 
 
+@router.post(
+    "/sessions/{session_id}/captures/analyze",
+    response_model=KioskSessionResponse,
+)
+async def analyze_kiosk_user_capture(
+    session_id: str,
+    service: KioskTryOnService = Depends(get_kiosk_tryon_service),
+) -> KioskSessionResponse:
+    try:
+        result = service.analyze_user_capture(session_id=session_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return _session_response(result, message="Kiosk user capture analyzed")
+
+
 def _session_response(result: Any, *, message: str) -> KioskSessionResponse:
     payload = _result_to_dict(result)
     return KioskSessionResponse(
@@ -83,6 +107,7 @@ def _session_response(result: Any, *, message: str) -> KioskSessionResponse:
         avatar_preview_cache_key=str(payload["avatar_preview_cache_key"]),
         capture_keys=list(payload.get("capture_keys", [])),
         captures=dict(payload.get("captures", {})),
+        capture_analysis=payload.get("capture_analysis"),
         personalized_tryon_key=payload.get("personalized_tryon_key"),
         created_at=str(payload["created_at"]),
         updated_at=str(payload["updated_at"]),

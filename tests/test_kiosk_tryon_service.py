@@ -5,6 +5,16 @@ import pytest
 from src.modules.kiosk_tryon.service import KioskTryOnService
 
 
+class FakeCaptureAnalyzer:
+    def __init__(self, result):
+        self.result = result
+        self.calls = []
+
+    def analyze_front_capture(self, image_bytes: bytes):
+        self.calls.append(image_bytes)
+        return self.result
+
+
 def _image_b64(value: bytes = b"image-bytes") -> str:
     return base64.b64encode(value).decode("utf-8")
 
@@ -57,6 +67,92 @@ def test_add_user_capture_stores_images_and_updates_session_status(tmp_path):
     loaded = service.get_session(session.session_id)
     assert loaded.status == "user_captured"
     assert loaded.capture_keys == ["front", "side"]
+
+
+def test_analyze_user_capture_marks_session_ready_when_capture_passes(tmp_path):
+    analyzer = FakeCaptureAnalyzer(
+        {
+            "passed": True,
+            "score": 0.91,
+            "issues": [],
+            "guidance": [],
+            "checks": {"full_body_visible": True},
+        }
+    )
+    service = KioskTryOnService(session_dir=tmp_path, capture_analyzer=analyzer)
+    session = service.create_session(
+        garment_id=None,
+        avatar_cache_key="avatar:v1:abc",
+        avatar_preview_cache_key="avatar-preview:v1:def",
+    )
+    service.add_user_capture(
+        session_id=session.session_id,
+        front_image=_image_b64(b"front-image"),
+    )
+
+    updated = service.analyze_user_capture(session_id=session.session_id)
+
+    assert analyzer.calls == [b"front-image"]
+    assert updated.status == "capture_analysis_passed"
+    assert updated.capture_analysis == {
+        "passed": True,
+        "score": 0.91,
+        "issues": [],
+        "guidance": [],
+        "checks": {"full_body_visible": True},
+    }
+
+
+def test_analyze_user_capture_marks_session_for_recapture_when_capture_fails(tmp_path):
+    analyzer = FakeCaptureAnalyzer(
+        {
+            "passed": False,
+            "score": 0.42,
+            "issues": ["feet_not_visible", "arms_covering_torso"],
+            "guidance": [
+                "Step back so full body and feet are visible",
+                "Keep arms relaxed and slightly away from torso",
+            ],
+            "checks": {
+                "full_body_visible": False,
+                "arms_not_blocking_torso": False,
+            },
+        }
+    )
+    service = KioskTryOnService(session_dir=tmp_path, capture_analyzer=analyzer)
+    session = service.create_session(
+        garment_id=None,
+        avatar_cache_key="avatar:v1:abc",
+        avatar_preview_cache_key="avatar-preview:v1:def",
+    )
+    service.add_user_capture(
+        session_id=session.session_id,
+        front_image=_image_b64(b"front-image"),
+    )
+
+    updated = service.analyze_user_capture(session_id=session.session_id)
+
+    assert updated.status == "needs_recapture"
+    assert updated.capture_analysis["passed"] is False
+    assert updated.capture_analysis["issues"] == [
+        "feet_not_visible",
+        "arms_covering_torso",
+    ]
+
+
+def test_analyze_user_capture_requires_front_capture(tmp_path):
+    service = KioskTryOnService(
+        session_dir=tmp_path,
+        capture_analyzer=FakeCaptureAnalyzer({"passed": True}),
+    )
+    session = service.create_session(
+        garment_id=None,
+        avatar_cache_key="avatar:v1:abc",
+        avatar_preview_cache_key="avatar-preview:v1:def",
+    )
+
+    with pytest.raises(ValueError, match="front capture is required"):
+        service.analyze_user_capture(session_id=session.session_id)
 
 
 def test_get_session_rejects_unknown_session_id(tmp_path):

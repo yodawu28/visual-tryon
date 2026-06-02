@@ -270,6 +270,7 @@ class KioskSessionResponse(BaseModel):
     avatar_preview_cache_key: str
     capture_keys: list[str] = Field(default_factory=list)
     captures: dict[str, Any] = Field(default_factory=dict)
+    capture_analysis: Optional[dict[str, Any]] = None
     personalized_tryon_key: Optional[str] = None
     created_at: str
     updated_at: str

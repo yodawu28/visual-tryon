@@ -14,6 +14,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 
@@ -26,6 +27,7 @@ class KioskTryOnSession:
     avatar_preview_cache_key: str
     capture_keys: list[str] = field(default_factory=list)
     captures: dict[str, dict[str, str]] = field(default_factory=dict)
+    capture_analysis: dict[str, Any] | None = None
     personalized_tryon_key: str | None = None
     created_at: str = ""
     updated_at: str = ""
@@ -41,10 +43,15 @@ class KioskTryOnService:
 
     SESSION_PREFIX = "kiosk-session:v1:"
 
-    def __init__(self, session_dir: str | Path) -> None:
+    def __init__(
+        self,
+        session_dir: str | Path,
+        capture_analyzer: Any | None = None,
+    ) -> None:
         self.session_dir = Path(session_dir)
         self.sessions_dir = self.session_dir / "sessions"
         self.captures_dir = self.session_dir / "captures"
+        self.capture_analyzer = capture_analyzer
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
         self.captures_dir.mkdir(parents=True, exist_ok=True)
 
@@ -112,6 +119,43 @@ class KioskTryOnService:
             avatar_preview_cache_key=session.avatar_preview_cache_key,
             capture_keys=capture_keys,
             captures=captures,
+            capture_analysis=session.capture_analysis,
+            personalized_tryon_key=session.personalized_tryon_key,
+            created_at=session.created_at,
+            updated_at=_utc_now(),
+        )
+        self._write_session(updated)
+        return updated
+
+    def analyze_user_capture(self, *, session_id: str) -> KioskTryOnSession:
+        if self.capture_analyzer is None:
+            raise RuntimeError("Kiosk capture analyzer is not configured")
+
+        session = self.get_session(session_id)
+        front_capture = session.captures.get("front")
+        if not front_capture or not front_capture.get("path"):
+            raise ValueError("front capture is required before analysis")
+
+        front_path = self.session_dir / front_capture["path"]
+        image_bytes = front_path.read_bytes()
+        analysis = _normalize_analysis_result(
+            self.capture_analyzer.analyze_front_capture(image_bytes)
+        )
+        status = (
+            "capture_analysis_passed"
+            if bool(analysis.get("passed"))
+            else "needs_recapture"
+        )
+
+        updated = KioskTryOnSession(
+            session_id=session.session_id,
+            status=status,
+            garment_id=session.garment_id,
+            avatar_cache_key=session.avatar_cache_key,
+            avatar_preview_cache_key=session.avatar_preview_cache_key,
+            capture_keys=session.capture_keys,
+            captures=session.captures,
+            capture_analysis=analysis,
             personalized_tryon_key=session.personalized_tryon_key,
             created_at=session.created_at,
             updated_at=_utc_now(),
@@ -152,6 +196,7 @@ class KioskTryOnService:
             avatar_preview_cache_key=str(payload["avatar_preview_cache_key"]),
             capture_keys=list(payload.get("capture_keys", [])),
             captures=dict(payload.get("captures", {})),
+            capture_analysis=payload.get("capture_analysis"),
             personalized_tryon_key=payload.get("personalized_tryon_key"),
             created_at=str(payload["created_at"]),
             updated_at=str(payload["updated_at"]),
@@ -166,6 +211,20 @@ class KioskTryOnService:
 
 def _safe_filename(value: str) -> str:
     return "".join(char if char.isalnum() or char in "-_." else "-" for char in value)
+
+
+def _normalize_analysis_result(result: Any) -> dict[str, Any]:
+    if isinstance(result, dict):
+        return result
+    if hasattr(result, "model_dump"):
+        return dict(result.model_dump(mode="json"))
+    if is_dataclass_instance(result):
+        return dict(asdict(result))
+    raise TypeError(f"Unsupported capture analysis result type: {type(result)}")
+
+
+def is_dataclass_instance(value: Any) -> bool:
+    return hasattr(value, "__dataclass_fields__") and not isinstance(value, type)
 
 
 def _utc_now() -> str:

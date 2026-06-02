@@ -18,6 +18,7 @@ class FakeKioskTryOnService:
             avatar_preview_cache_key="avatar-preview:v1:test",
             capture_keys=[],
             captures={},
+            capture_analysis=None,
             personalized_tryon_key=None,
             created_at="2026-06-01T00:00:00+00:00",
             updated_at="2026-06-01T00:00:00+00:00",
@@ -35,6 +36,24 @@ class FakeKioskTryOnService:
             garment_id=garment_id,
             avatar_cache_key=avatar_cache_key,
             avatar_preview_cache_key=avatar_preview_cache_key,
+        )
+        return self.session
+
+    def analyze_user_capture(self, *, session_id):
+        self.session = replace(
+            self.session,
+            status="capture_analysis_passed",
+            capture_analysis={
+                "passed": True,
+                "score": 0.94,
+                "issues": [],
+                "guidance": [],
+                "checks": {
+                    "full_body_visible": True,
+                    "arms_not_blocking_torso": True,
+                },
+            },
+            updated_at="2026-06-01T00:02:00+00:00",
         )
         return self.session
 
@@ -131,6 +150,29 @@ def test_add_user_capture_endpoint_updates_session_status():
     assert payload["capture_keys"] == ["front", "side"]
     assert payload["captures"]["front"]["path"].endswith("-front.png")
     assert payload["captures"]["side"]["path"].endswith("-side.png")
+
+
+def test_analyze_user_capture_endpoint_returns_capture_analysis():
+    client = _client()
+
+    response = client.post(
+        "/api/v1/kiosk/sessions/kiosk-session:v1:test/captures/analyze"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["status"] == "capture_analysis_passed"
+    assert payload["capture_analysis"] == {
+        "passed": True,
+        "score": 0.94,
+        "issues": [],
+        "guidance": [],
+        "checks": {
+            "full_body_visible": True,
+            "arms_not_blocking_torso": True,
+        },
+    }
 
 
 def test_get_kiosk_session_endpoint_returns_404_for_missing_session():

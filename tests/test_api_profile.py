@@ -24,6 +24,7 @@ def test_kiosk_api_profile_exposes_only_kiosk_relevant_routes():
     assert "/api/v1/avatar-preview/try-on" in paths
     assert "/api/v1/kiosk/sessions" in paths
     assert "/api/v1/kiosk/sessions/{session_id}/captures" in paths
+    assert "/api/v1/kiosk/sessions/{session_id}/captures/analyze" in paths
 
     assert not any(path.startswith("/api/v1/privacy") for path in paths)
     assert not any(path.startswith("/api/v1/analysis") for path in paths)

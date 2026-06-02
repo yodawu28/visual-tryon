@@ -2,8 +2,8 @@
 Persistent session state for the kiosk try-on flow.
 
 The kiosk flow is intentionally staged:
-1. preview a garment on a synthetic avatar;
-2. create a kiosk session from that approved avatar preview;
+1. optionally preview a garment on a synthetic avatar;
+2. create a kiosk session from either that approved preview or direct garment selection;
 3. capture user photos for the later personalized try-on step.
 """
 
@@ -23,8 +23,8 @@ class KioskTryOnSession:
     session_id: str
     status: str
     garment_id: str | None
-    avatar_cache_key: str
-    avatar_preview_cache_key: str
+    avatar_cache_key: str | None = None
+    avatar_preview_cache_key: str | None = None
     capture_keys: list[str] = field(default_factory=list)
     captures: dict[str, dict[str, str]] = field(default_factory=dict)
     capture_analysis: dict[str, Any] | None = None
@@ -59,13 +59,17 @@ class KioskTryOnService:
         self,
         *,
         garment_id: str | None,
-        avatar_cache_key: str,
-        avatar_preview_cache_key: str,
+        avatar_cache_key: str | None = None,
+        avatar_preview_cache_key: str | None = None,
     ) -> KioskTryOnSession:
         now = _utc_now()
         session = KioskTryOnSession(
             session_id=f"{self.SESSION_PREFIX}{uuid4().hex}",
-            status="avatar_preview_ready",
+            status=(
+                "avatar_preview_ready"
+                if avatar_preview_cache_key
+                else "awaiting_user_capture"
+            ),
             garment_id=garment_id,
             avatar_cache_key=avatar_cache_key,
             avatar_preview_cache_key=avatar_preview_cache_key,
@@ -192,8 +196,8 @@ class KioskTryOnService:
             session_id=str(payload["session_id"]),
             status=str(payload["status"]),
             garment_id=payload.get("garment_id"),
-            avatar_cache_key=str(payload["avatar_cache_key"]),
-            avatar_preview_cache_key=str(payload["avatar_preview_cache_key"]),
+            avatar_cache_key=payload.get("avatar_cache_key"),
+            avatar_preview_cache_key=payload.get("avatar_preview_cache_key"),
             capture_keys=list(payload.get("capture_keys", [])),
             captures=dict(payload.get("captures", {})),
             capture_analysis=payload.get("capture_analysis"),

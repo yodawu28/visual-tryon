@@ -40,6 +40,24 @@ def test_create_session_persists_avatar_preview_context(tmp_path):
     assert loaded == session
 
 
+def test_create_session_allows_direct_user_capture_flow_without_avatar_preview(
+    tmp_path,
+):
+    service = KioskTryOnService(session_dir=tmp_path)
+
+    session = service.create_session(
+        garment_id="garment-001",
+    )
+
+    assert session.status == "awaiting_user_capture"
+    assert session.garment_id == "garment-001"
+    assert session.avatar_cache_key is None
+    assert session.avatar_preview_cache_key is None
+
+    loaded = service.get_session(session.session_id)
+    assert loaded == session
+
+
 def test_add_user_capture_stores_images_and_updates_session_status(tmp_path):
     service = KioskTryOnService(session_dir=tmp_path)
     session = service.create_session(

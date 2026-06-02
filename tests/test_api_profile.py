@@ -47,6 +47,17 @@ def test_kiosk_api_profile_openapi_tags_stay_focused():
     assert tags == {"health", "avatar-preview", "kiosk-tryon"}
 
 
+def test_kiosk_session_create_request_does_not_require_avatar_preview_keys():
+    app = FastAPI()
+
+    include_routers_for_profile(app, "kiosk")
+
+    schema = app.openapi()["components"]["schemas"]["KioskSessionCreateRequest"]
+    required = set(schema.get("required", []))
+    assert "avatar_cache_key" not in required
+    assert "avatar_preview_cache_key" not in required
+
+
 def test_full_api_profile_keeps_legacy_router_specs_available():
     specs = get_router_specs_for_profile("full")
 

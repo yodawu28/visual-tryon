@@ -266,8 +266,8 @@ class KioskSessionResponse(BaseModel):
     session_id: str
     status: str
     garment_id: Optional[str] = None
-    avatar_cache_key: str
-    avatar_preview_cache_key: str
+    avatar_cache_key: Optional[str] = None
+    avatar_preview_cache_key: Optional[str] = None
     capture_keys: list[str] = Field(default_factory=list)
     captures: dict[str, Any] = Field(default_factory=dict)
     capture_analysis: Optional[dict[str, Any]] = None

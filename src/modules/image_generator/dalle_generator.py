@@ -145,14 +145,13 @@ class DALLEGenerator(ImageGeneratorBase):
             Dict với dominant_colors, brightness, patterns
         """
         try:
-            img = Image.open(io.BytesIO(garment_image))
-            img = img.convert("RGB")
+            image = Image.open(io.BytesIO(garment_image)).convert("RGB")
 
             # Resize for faster processing
-            img.thumbnail((200, 200))
+            image.thumbnail((200, 200))
 
             # Get dominant colors (top 3)
-            pixels = list(img.getdata())
+            pixels = list(image.getdata())
             from collections import Counter
 
             color_counts = Counter(pixels)

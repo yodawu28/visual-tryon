@@ -33,6 +33,11 @@ class FakeKioskTryOnService:
     ):
         self.session = replace(
             self.session,
+            status=(
+                "avatar_preview_ready"
+                if avatar_preview_cache_key
+                else "awaiting_user_capture"
+            ),
             garment_id=garment_id,
             avatar_cache_key=avatar_cache_key,
             avatar_preview_cache_key=avatar_preview_cache_key,
@@ -118,6 +123,25 @@ def test_create_kiosk_session_endpoint_returns_avatar_preview_context():
     assert payload["capture_keys"] == []
     assert payload["captures"] == {}
     assert payload["personalized_tryon_key"] is None
+
+
+def test_create_kiosk_session_endpoint_allows_direct_user_capture_flow():
+    client = _client()
+
+    response = client.post(
+        "/api/v1/kiosk/sessions",
+        json={
+            "garment_id": "garment-001",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["status"] == "awaiting_user_capture"
+    assert payload["garment_id"] == "garment-001"
+    assert payload["avatar_cache_key"] is None
+    assert payload["avatar_preview_cache_key"] is None
 
 
 def test_get_kiosk_session_endpoint_returns_existing_session():

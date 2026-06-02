@@ -332,28 +332,31 @@ class AvatarPreviewTryOnRequest(BaseModel):
 
 class KioskSessionCreateRequest(BaseModel):
     """
-    Request model for creating a kiosk session after avatar preview approval.
+    Request model for creating a kiosk session.
+
+    Avatar fields are optional because the kiosk can either start after an
+    approved avatar preview or skip avatar preview and capture the user directly.
     """
 
     garment_id: Optional[str] = Field(
         default=None,
         description="Optional product/garment identifier from the upstream catalog",
     )
-    avatar_cache_key: str = Field(
-        ...,
-        description="Cache key returned by /api/v1/avatar-preview/avatars",
+    avatar_cache_key: Optional[str] = Field(
+        default=None,
+        description="Optional cache key returned by /api/v1/avatar-preview/avatars",
     )
-    avatar_preview_cache_key: str = Field(
-        ...,
-        description="Cache key returned by /api/v1/avatar-preview/try-on",
+    avatar_preview_cache_key: Optional[str] = Field(
+        default=None,
+        description="Optional cache key returned by /api/v1/avatar-preview/try-on",
     )
 
     class Config:
         json_schema_extra = {
             "example": {
                 "garment_id": "garment-001",
-                "avatar_cache_key": "avatar:v1:...",
-                "avatar_preview_cache_key": "avatar-preview:v1:...",
+                "avatar_cache_key": None,
+                "avatar_preview_cache_key": None,
             }
         }
 

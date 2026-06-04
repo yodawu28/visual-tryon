@@ -54,6 +54,10 @@ def test_capture_analyzer_passes_clear_full_body_front_capture():
     assert result.issues == []
     assert result.checks["full_body_visible"] is True
     assert result.checks["arms_not_blocking_torso"] is True
+    assert result.metrics["body_height_ratio"] == 0.8
+    assert result.metrics["shoulder_width_ratio"] == 0.24
+    assert result.metrics["hip_width_ratio"] == 0.16
+    assert result.metrics["shoulder_to_hip_ratio"] == 1.5
 
 
 def test_capture_analyzer_fails_when_pose_is_missing():
@@ -66,7 +70,9 @@ def test_capture_analyzer_fails_when_pose_is_missing():
 
     assert result.passed is False
     assert "person_not_detected" in result.issues
-    assert "Stand in front of the camera so your full body is visible" in result.guidance
+    assert (
+        "Stand in front of the camera so your full body is visible" in result.guidance
+    )
 
 
 def test_capture_analyzer_fails_when_feet_are_missing_and_arms_cover_torso():

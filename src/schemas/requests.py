@@ -361,24 +361,88 @@ class KioskSessionCreateRequest(BaseModel):
         }
 
 
-class KioskUserCaptureRequest(BaseModel):
+class KioskSizeChartItem(BaseModel):
     """
-    Request model for adding webcam captures to a kiosk session.
+    One garment size row for future fit recommendation.
     """
 
-    front_image: str = Field(
-        ...,
-        description="Base64-encoded front-facing user capture from the kiosk webcam",
+    size: str = Field(..., description="Display size such as S, M, L, XL")
+    chest_cm: Optional[float] = Field(default=None, gt=0)
+    waist_cm: Optional[float] = Field(default=None, gt=0)
+    hip_cm: Optional[float] = Field(default=None, gt=0)
+    shoulder_cm: Optional[float] = Field(default=None, gt=0)
+    length_cm: Optional[float] = Field(default=None, gt=0)
+    inseam_cm: Optional[float] = Field(default=None, gt=0)
+
+
+class KioskBodyMeasurements(BaseModel):
+    """
+    Optional user-provided or upstream-estimated body measurements.
+    """
+
+    height_cm: Optional[float] = Field(default=None, gt=0)
+    weight_kg: Optional[float] = Field(default=None, gt=0)
+    chest_cm: Optional[float] = Field(default=None, gt=0)
+    waist_cm: Optional[float] = Field(default=None, gt=0)
+    hip_cm: Optional[float] = Field(default=None, gt=0)
+    shoulder_cm: Optional[float] = Field(default=None, gt=0)
+    inseam_cm: Optional[float] = Field(default=None, gt=0)
+
+
+class KioskFitAnalysisRequest(BaseModel):
+    """
+    Request model for kiosk Fit Intelligence.
+    """
+
+    preferred_fit: str = Field(
+        default="regular",
+        description="User preferred fit such as slim, regular, relaxed, or loose",
+        max_length=40,
     )
-    side_image: Optional[str] = Field(
+    size_chart: list[KioskSizeChartItem] = Field(
+        default_factory=list,
+        description="Optional garment size chart. A future recommender will score these sizes.",
+    )
+    body_measurements: Optional[KioskBodyMeasurements] = Field(
         default=None,
-        description="Optional base64-encoded side-facing user capture",
+        description=(
+            "Optional body measurements from user input or an upstream measurement "
+            "model. When omitted, Fit Intelligence will not invent measurements."
+        ),
+    )
+    use_ai_analysis: bool = Field(
+        default=True,
+        description=(
+            "Use the configured AI fit analyzer for advisory notes only. The final "
+            "size recommendation remains deterministic."
+        ),
     )
 
     class Config:
         json_schema_extra = {
             "example": {
-                "front_image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ...",
-                "side_image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ...",
+                "preferred_fit": "regular",
+                "body_measurements": {
+                    "chest_cm": 96,
+                    "waist_cm": 82,
+                    "shoulder_cm": 46,
+                },
+                "use_ai_analysis": True,
+                "size_chart": [
+                    {
+                        "size": "M",
+                        "chest_cm": 96,
+                        "waist_cm": 82,
+                        "shoulder_cm": 46,
+                        "length_cm": 70,
+                    },
+                    {
+                        "size": "L",
+                        "chest_cm": 102,
+                        "waist_cm": 88,
+                        "shoulder_cm": 48,
+                        "length_cm": 72,
+                    },
+                ],
             }
         }

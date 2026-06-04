@@ -129,6 +129,7 @@ class KioskCaptureAnalyzer:
         metrics = {
             "front_facing_score": round(front_facing_score, 4),
         }
+        metrics.update(self._pose_ratio_metrics(landmarks))
         return checks, metrics
 
     def _visible(self, landmarks: dict[str, LandmarkPoint], name: str) -> bool:
@@ -147,7 +148,9 @@ class KioskCaptureAnalyzer:
 
     def _body_centered(self, landmarks: dict[str, LandmarkPoint]) -> bool:
         visible_points = [
-            point for point in landmarks.values() if point.visibility >= self.min_visibility
+            point
+            for point in landmarks.values()
+            if point.visibility >= self.min_visibility
         ]
         if not visible_points:
             return False
@@ -190,6 +193,49 @@ class KioskCaptureAnalyzer:
             if left_x <= wrist.x <= right_x and top_y <= wrist.y <= bottom_y:
                 return False
         return True
+
+    def _pose_ratio_metrics(
+        self,
+        landmarks: dict[str, LandmarkPoint],
+    ) -> dict[str, float]:
+        required = [
+            "nose",
+            "left_shoulder",
+            "right_shoulder",
+            "left_hip",
+            "right_hip",
+            "left_ankle",
+            "right_ankle",
+        ]
+        if not all(self._visible(landmarks, name) for name in required):
+            return {}
+
+        nose = landmarks["nose"]
+        left_shoulder = landmarks["left_shoulder"]
+        right_shoulder = landmarks["right_shoulder"]
+        left_hip = landmarks["left_hip"]
+        right_hip = landmarks["right_hip"]
+        left_ankle = landmarks["left_ankle"]
+        right_ankle = landmarks["right_ankle"]
+
+        shoulder_mid_y = (left_shoulder.y + right_shoulder.y) / 2
+        hip_mid_y = (left_hip.y + right_hip.y) / 2
+        ankle_mid_y = (left_ankle.y + right_ankle.y) / 2
+        body_height_ratio = max(0.0, ankle_mid_y - nose.y)
+        shoulder_width_ratio = abs(left_shoulder.x - right_shoulder.x)
+        hip_width_ratio = abs(left_hip.x - right_hip.x)
+        torso_height_ratio = max(0.0, hip_mid_y - shoulder_mid_y)
+
+        metrics = {
+            "body_height_ratio": body_height_ratio,
+            "shoulder_width_ratio": shoulder_width_ratio,
+            "hip_width_ratio": hip_width_ratio,
+            "torso_height_ratio": torso_height_ratio,
+        }
+        if hip_width_ratio > 0:
+            metrics["shoulder_to_hip_ratio"] = shoulder_width_ratio / hip_width_ratio
+
+        return {key: round(value, 4) for key, value in metrics.items()}
 
     def _result(
         self,
@@ -321,7 +367,7 @@ def _guidance_for_issues(issues: list[str]) -> list[str]:
 
 def _load_mediapipe() -> Any:
     try:
-        import mediapipe as mp  # type: ignore[import-not-found]
+        import mediapipe as mp  # type: ignore[import-untyped]
     except ImportError as exc:
         raise RuntimeError(
             "mediapipe is required for kiosk capture analysis; install requirements.txt"

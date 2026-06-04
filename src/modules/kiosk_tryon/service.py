@@ -9,7 +9,6 @@ The kiosk flow is intentionally staged:
 
 from __future__ import annotations
 
-import base64
 import json
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -29,6 +28,7 @@ class KioskTryOnSession:
     captures: dict[str, dict[str, str]] = field(default_factory=dict)
     capture_analysis: dict[str, Any] | None = None
     personalized_tryon_key: str | None = None
+    fit_analysis_key: str | None = None
     created_at: str = ""
     updated_at: str = ""
 
@@ -47,11 +47,13 @@ class KioskTryOnService:
         self,
         session_dir: str | Path,
         capture_analyzer: Any | None = None,
+        garment_registry: Any | None = None,
     ) -> None:
         self.session_dir = Path(session_dir)
         self.sessions_dir = self.session_dir / "sessions"
         self.captures_dir = self.session_dir / "captures"
         self.capture_analyzer = capture_analyzer
+        self.garment_registry = garment_registry
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
         self.captures_dir.mkdir(parents=True, exist_ok=True)
 
@@ -62,6 +64,10 @@ class KioskTryOnService:
         avatar_cache_key: str | None = None,
         avatar_preview_cache_key: str | None = None,
     ) -> KioskTryOnSession:
+        if garment_id and self.garment_registry is not None:
+            if not self.garment_registry.exists(garment_id):
+                raise FileNotFoundError(f"Garment not found: {garment_id}")
+
         now = _utc_now()
         session = KioskTryOnSession(
             session_id=f"{self.SESSION_PREFIX}{uuid4().hex}",
@@ -89,8 +95,8 @@ class KioskTryOnService:
         self,
         *,
         session_id: str,
-        front_image: str,
-        side_image: str | None = None,
+        front_image: bytes,
+        side_image: bytes | None = None,
     ) -> KioskTryOnSession:
         session = self.get_session(session_id)
         safe_session_id = _safe_filename(session.session_id)
@@ -100,7 +106,7 @@ class KioskTryOnService:
 
         front_path = self._write_capture(
             filename=f"{safe_session_id}-front.png",
-            image_b64=front_image,
+            image_bytes=front_image,
             field_name="front_image",
         )
         captures["front"] = {"path": self._relative_path(front_path)}
@@ -109,7 +115,7 @@ class KioskTryOnService:
         if side_image is not None:
             side_path = self._write_capture(
                 filename=f"{safe_session_id}-side.png",
-                image_b64=side_image,
+                image_bytes=side_image,
                 field_name="side_image",
             )
             captures["side"] = {"path": self._relative_path(side_path)}
@@ -125,6 +131,7 @@ class KioskTryOnService:
             captures=captures,
             capture_analysis=session.capture_analysis,
             personalized_tryon_key=session.personalized_tryon_key,
+            fit_analysis_key=session.fit_analysis_key,
             created_at=session.created_at,
             updated_at=_utc_now(),
         )
@@ -161,6 +168,72 @@ class KioskTryOnService:
             captures=session.captures,
             capture_analysis=analysis,
             personalized_tryon_key=session.personalized_tryon_key,
+            fit_analysis_key=session.fit_analysis_key,
+            created_at=session.created_at,
+            updated_at=_utc_now(),
+        )
+        self._write_session(updated)
+        return updated
+
+    def read_capture_image(self, *, session_id: str, capture_key: str) -> bytes:
+        session = self.get_session(session_id)
+        capture = session.captures.get(capture_key)
+        if not capture or not capture.get("path"):
+            raise ValueError(f"{capture_key} capture is not available")
+
+        path = self.session_dir / capture["path"]
+        if not path.exists():
+            raise FileNotFoundError(f"Kiosk capture file not found: {capture_key}")
+        return path.read_bytes()
+
+    def mark_personalized_tryon_ready(
+        self,
+        *,
+        session_id: str,
+        personalized_tryon_key: str,
+    ) -> KioskTryOnSession:
+        session = self.get_session(session_id)
+        if not personalized_tryon_key.strip():
+            raise ValueError("personalized_tryon_key must not be empty")
+
+        updated = KioskTryOnSession(
+            session_id=session.session_id,
+            status="personalized_tryon_ready",
+            garment_id=session.garment_id,
+            avatar_cache_key=session.avatar_cache_key,
+            avatar_preview_cache_key=session.avatar_preview_cache_key,
+            capture_keys=session.capture_keys,
+            captures=session.captures,
+            capture_analysis=session.capture_analysis,
+            personalized_tryon_key=personalized_tryon_key,
+            fit_analysis_key=session.fit_analysis_key,
+            created_at=session.created_at,
+            updated_at=_utc_now(),
+        )
+        self._write_session(updated)
+        return updated
+
+    def mark_fit_analysis_ready(
+        self,
+        *,
+        session_id: str,
+        fit_analysis_key: str,
+    ) -> KioskTryOnSession:
+        session = self.get_session(session_id)
+        if not fit_analysis_key.strip():
+            raise ValueError("fit_analysis_key must not be empty")
+
+        updated = KioskTryOnSession(
+            session_id=session.session_id,
+            status="fit_analysis_ready",
+            garment_id=session.garment_id,
+            avatar_cache_key=session.avatar_cache_key,
+            avatar_preview_cache_key=session.avatar_preview_cache_key,
+            capture_keys=session.capture_keys,
+            captures=session.captures,
+            capture_analysis=session.capture_analysis,
+            personalized_tryon_key=session.personalized_tryon_key,
+            fit_analysis_key=fit_analysis_key,
             created_at=session.created_at,
             updated_at=_utc_now(),
         )
@@ -171,13 +244,11 @@ class KioskTryOnService:
         self,
         *,
         filename: str,
-        image_b64: str,
+        image_bytes: bytes,
         field_name: str,
     ) -> Path:
-        try:
-            image_bytes = base64.b64decode(image_b64, validate=True)
-        except Exception as exc:
-            raise ValueError(f"{field_name} must be valid base64") from exc
+        if not image_bytes:
+            raise ValueError(f"{field_name} must not be empty")
 
         path = self.captures_dir / filename
         path.write_bytes(image_bytes)
@@ -202,6 +273,7 @@ class KioskTryOnService:
             captures=dict(payload.get("captures", {})),
             capture_analysis=payload.get("capture_analysis"),
             personalized_tryon_key=payload.get("personalized_tryon_key"),
+            fit_analysis_key=payload.get("fit_analysis_key"),
             created_at=str(payload["created_at"]),
             updated_at=str(payload["updated_at"]),
         )

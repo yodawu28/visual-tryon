@@ -272,8 +272,98 @@ class KioskSessionResponse(BaseModel):
     captures: dict[str, Any] = Field(default_factory=dict)
     capture_analysis: Optional[dict[str, Any]] = None
     personalized_tryon_key: Optional[str] = None
+    fit_analysis_key: Optional[str] = None
     created_at: str
     updated_at: str
+    message: str
+
+
+class KioskPersonalizedTryOnResponse(BaseModel):
+    """
+    Response for a personalized kiosk visual try-on generation.
+    """
+
+    success: bool
+    session: KioskSessionResponse
+    generated_image: Optional[str] = Field(
+        None,
+        description="Base64-encoded personalized visual try-on image",
+    )
+    personalized_tryon_key: str
+    personalized_tryon_path: str
+    metadata_path: str
+    cache_hit: bool = False
+    model: str
+    prompt_version: str
+    input_mapping: Optional[str] = None
+    generation_time_seconds: Optional[float] = None
+    multimodal_analysis_applied: bool = False
+    tryon_intent: Optional[dict[str, Any]] = None
+    analyzer_model: Optional[str] = None
+    analyzer_prompt_version: Optional[str] = None
+    warnings: list[str] = Field(default_factory=list)
+    message: str
+
+
+class KioskFitAnalysisResponse(BaseModel):
+    """
+    Response for kiosk Fit Intelligence analysis.
+    """
+
+    success: bool
+    session: KioskSessionResponse
+    fit_analysis_key: str
+    fit_analysis_path: str
+    cache_hit: bool = False
+    engine_version: str
+    measurement_estimate: dict[str, Any]
+    ai_fit_analysis: dict[str, Any]
+    fit_assessment: dict[str, Any]
+    size_scores: list[dict[str, Any]] = Field(default_factory=list)
+    size_recommendation: dict[str, Any]
+    fit_report: dict[str, Any] = Field(default_factory=dict)
+    confidence_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    warnings: list[str] = Field(default_factory=list)
+    message: str
+
+
+class KioskGarmentRecordResponse(BaseModel):
+    """
+    Stored kiosk garment asset metadata.
+    """
+
+    garment_id: str
+    name: Optional[str] = None
+    category: str
+    garment_type: Optional[str] = None
+    storage_provider: str
+    storage_uri: str
+    image_sha256: str
+    mime_type: str
+    size_bytes: int
+    original_filename: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class KioskGarmentResponse(BaseModel):
+    """
+    Response for a stored kiosk garment asset.
+    """
+
+    success: bool
+    garment: KioskGarmentRecordResponse
+    message: str
+
+
+class KioskGarmentListResponse(BaseModel):
+    """
+    Response for listing stored kiosk garment assets.
+    """
+
+    success: bool
+    garments: list[KioskGarmentRecordResponse] = Field(default_factory=list)
+    count: int
     message: str
 
 

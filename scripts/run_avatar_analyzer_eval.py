@@ -131,7 +131,9 @@ def run_cases(
         for analyzer_result in case_result["analyzer_results"]
     ]
     succeeded = sum(
-        1 for analyzer_result in analyzer_results if analyzer_result["status"] == "succeeded"
+        1
+        for analyzer_result in analyzer_results
+        if analyzer_result["status"] == "succeeded"
     )
     report = {
         "started_at": started_at,
@@ -265,7 +267,9 @@ def _normalize_expected(raw_expected: dict[str, Any]) -> dict[str, str]:
             str(raw_expected["garment_region"])
         ).value
     if "garment_type" in raw_expected:
-        normalized["garment_type"] = GarmentType(str(raw_expected["garment_type"])).value
+        normalized["garment_type"] = GarmentType(
+            str(raw_expected["garment_type"])
+        ).value
     if "sleeve_length" in raw_expected:
         normalized["sleeve_length"] = GarmentSleeveLength(
             str(raw_expected["sleeve_length"])

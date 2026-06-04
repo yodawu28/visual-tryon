@@ -67,7 +67,9 @@ def test_generate_image_saves_pipeline_output(tmp_path, monkeypatch):
         "load_pipeline",
         Mock(return_value=pipeline),
     )
-    monkeypatch.setattr(local_avatar_generate, "resolve_device", Mock(return_value="cpu"))
+    monkeypatch.setattr(
+        local_avatar_generate, "resolve_device", Mock(return_value="cpu")
+    )
 
     local_avatar_generate.generate_image(
         prompt="synthetic avatar",
@@ -106,7 +108,9 @@ def test_generate_image_prints_progress_messages(tmp_path, monkeypatch, capsys):
         "load_pipeline",
         Mock(return_value=pipeline),
     )
-    monkeypatch.setattr(local_avatar_generate, "resolve_device", Mock(return_value="cpu"))
+    monkeypatch.setattr(
+        local_avatar_generate, "resolve_device", Mock(return_value="cpu")
+    )
 
     local_avatar_generate.generate_image(
         prompt="synthetic avatar",

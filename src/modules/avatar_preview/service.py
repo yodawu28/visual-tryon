@@ -682,7 +682,9 @@ def _require_metadata_string(raw_metadata: dict[str, Any], field_name: str) -> s
     return value
 
 
-def _optional_metadata_string(raw_metadata: dict[str, Any], field_name: str) -> str | None:
+def _optional_metadata_string(
+    raw_metadata: dict[str, Any], field_name: str
+) -> str | None:
     value = raw_metadata.get(field_name)
     if isinstance(value, str) and value.strip():
         return value

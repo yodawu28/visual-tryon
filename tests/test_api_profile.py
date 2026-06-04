@@ -22,9 +22,14 @@ def test_kiosk_api_profile_exposes_only_kiosk_relevant_routes():
     assert "/api/v1/health" in paths
     assert "/api/v1/avatar-preview/avatars" in paths
     assert "/api/v1/avatar-preview/try-on" in paths
+    assert "/api/v1/kiosk/garments" in paths
+    assert "/api/v1/kiosk/garments/{garment_id}" in paths
     assert "/api/v1/kiosk/sessions" in paths
     assert "/api/v1/kiosk/sessions/{session_id}/captures" in paths
     assert "/api/v1/kiosk/sessions/{session_id}/captures/analyze" in paths
+    assert "/api/v1/kiosk/sessions/{session_id}/visual-preview" in paths
+    assert "/api/v1/kiosk/sessions/{session_id}/try-on" in paths
+    assert "/api/v1/kiosk/sessions/{session_id}/fit/analyze" in paths
 
     assert not any(path.startswith("/api/v1/privacy") for path in paths)
     assert not any(path.startswith("/api/v1/analysis") for path in paths)
@@ -56,6 +61,32 @@ def test_kiosk_session_create_request_does_not_require_avatar_preview_keys():
     required = set(schema.get("required", []))
     assert "avatar_cache_key" not in required
     assert "avatar_preview_cache_key" not in required
+
+
+def test_kiosk_capture_request_uses_multipart_uploads():
+    app = FastAPI()
+
+    include_routers_for_profile(app, "kiosk")
+
+    operation = app.openapi()["paths"]["/api/v1/kiosk/sessions/{session_id}/captures"][
+        "post"
+    ]
+    content = operation["requestBody"]["content"]
+    assert "multipart/form-data" in content
+    assert "application/json" not in content
+
+
+def test_kiosk_visual_preview_is_primary_qwen_generation_endpoint():
+    app = FastAPI()
+
+    include_routers_for_profile(app, "kiosk")
+
+    paths = app.openapi()["paths"]
+    visual_preview = paths["/api/v1/kiosk/sessions/{session_id}/visual-preview"]["post"]
+    legacy_tryon = paths["/api/v1/kiosk/sessions/{session_id}/try-on"]["post"]
+
+    assert visual_preview.get("deprecated", False) is False
+    assert legacy_tryon["deprecated"] is True
 
 
 def test_full_api_profile_keeps_legacy_router_specs_available():

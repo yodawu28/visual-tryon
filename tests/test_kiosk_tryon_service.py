@@ -1,5 +1,3 @@
-import base64
-
 import pytest
 
 from src.modules.kiosk_tryon.service import KioskTryOnService
@@ -15,8 +13,12 @@ class FakeCaptureAnalyzer:
         return self.result
 
 
-def _image_b64(value: bytes = b"image-bytes") -> str:
-    return base64.b64encode(value).decode("utf-8")
+class FakeGarmentRegistry:
+    def __init__(self, existing_ids):
+        self.existing_ids = set(existing_ids)
+
+    def exists(self, garment_id: str) -> bool:
+        return garment_id in self.existing_ids
 
 
 def test_create_session_persists_avatar_preview_context(tmp_path):
@@ -58,6 +60,16 @@ def test_create_session_allows_direct_user_capture_flow_without_avatar_preview(
     assert loaded == session
 
 
+def test_create_session_rejects_missing_registered_garment(tmp_path):
+    service = KioskTryOnService(
+        session_dir=tmp_path,
+        garment_registry=FakeGarmentRegistry(existing_ids={"garment:v1:known"}),
+    )
+
+    with pytest.raises(FileNotFoundError, match="Garment not found"):
+        service.create_session(garment_id="garment:v1:missing")
+
+
 def test_add_user_capture_stores_images_and_updates_session_status(tmp_path):
     service = KioskTryOnService(session_dir=tmp_path)
     session = service.create_session(
@@ -68,8 +80,8 @@ def test_add_user_capture_stores_images_and_updates_session_status(tmp_path):
 
     updated = service.add_user_capture(
         session_id=session.session_id,
-        front_image=_image_b64(b"front-image"),
-        side_image=_image_b64(b"side-image"),
+        front_image=b"front-image",
+        side_image=b"side-image",
     )
 
     assert updated.status == "user_captured"
@@ -105,7 +117,7 @@ def test_analyze_user_capture_marks_session_ready_when_capture_passes(tmp_path):
     )
     service.add_user_capture(
         session_id=session.session_id,
-        front_image=_image_b64(b"front-image"),
+        front_image=b"front-image",
     )
 
     updated = service.analyze_user_capture(session_id=session.session_id)
@@ -119,6 +131,27 @@ def test_analyze_user_capture_marks_session_ready_when_capture_passes(tmp_path):
         "guidance": [],
         "checks": {"full_body_visible": True},
     }
+
+    front_bytes = service.read_capture_image(
+        session_id=session.session_id,
+        capture_key="front",
+    )
+    assert front_bytes == b"front-image"
+
+    tryon_ready = service.mark_personalized_tryon_ready(
+        session_id=session.session_id,
+        personalized_tryon_key="kiosk-tryon:v1:abc",
+    )
+    assert tryon_ready.status == "personalized_tryon_ready"
+    assert tryon_ready.personalized_tryon_key == "kiosk-tryon:v1:abc"
+
+    fit_ready = service.mark_fit_analysis_ready(
+        session_id=session.session_id,
+        fit_analysis_key="kiosk-fit:v1:abc",
+    )
+    assert fit_ready.status == "fit_analysis_ready"
+    assert fit_ready.personalized_tryon_key == "kiosk-tryon:v1:abc"
+    assert fit_ready.fit_analysis_key == "kiosk-fit:v1:abc"
 
 
 def test_analyze_user_capture_marks_session_for_recapture_when_capture_fails(tmp_path):
@@ -145,7 +178,7 @@ def test_analyze_user_capture_marks_session_for_recapture_when_capture_fails(tmp
     )
     service.add_user_capture(
         session_id=session.session_id,
-        front_image=_image_b64(b"front-image"),
+        front_image=b"front-image",
     )
 
     updated = service.analyze_user_capture(session_id=session.session_id)
@@ -173,14 +206,7 @@ def test_analyze_user_capture_requires_front_capture(tmp_path):
         service.analyze_user_capture(session_id=session.session_id)
 
 
-def test_get_session_rejects_unknown_session_id(tmp_path):
-    service = KioskTryOnService(session_dir=tmp_path)
-
-    with pytest.raises(FileNotFoundError, match="Kiosk session not found"):
-        service.get_session("kiosk-session:v1:missing")
-
-
-def test_add_user_capture_rejects_invalid_image_payload(tmp_path):
+def test_read_capture_image_requires_existing_capture(tmp_path):
     service = KioskTryOnService(session_dir=tmp_path)
     session = service.create_session(
         garment_id=None,
@@ -188,8 +214,27 @@ def test_add_user_capture_rejects_invalid_image_payload(tmp_path):
         avatar_preview_cache_key="avatar-preview:v1:def",
     )
 
-    with pytest.raises(ValueError, match="front_image must be valid base64"):
+    with pytest.raises(ValueError, match="side capture is not available"):
+        service.read_capture_image(session_id=session.session_id, capture_key="side")
+
+
+def test_get_session_rejects_unknown_session_id(tmp_path):
+    service = KioskTryOnService(session_dir=tmp_path)
+
+    with pytest.raises(FileNotFoundError, match="Kiosk session not found"):
+        service.get_session("kiosk-session:v1:missing")
+
+
+def test_add_user_capture_rejects_empty_image_payload(tmp_path):
+    service = KioskTryOnService(session_dir=tmp_path)
+    session = service.create_session(
+        garment_id=None,
+        avatar_cache_key="avatar:v1:abc",
+        avatar_preview_cache_key="avatar-preview:v1:def",
+    )
+
+    with pytest.raises(ValueError, match="front_image must not be empty"):
         service.add_user_capture(
             session_id=session.session_id,
-            front_image="not-base64",
+            front_image=b"",
         )

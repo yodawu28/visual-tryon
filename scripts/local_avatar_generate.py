@@ -29,7 +29,9 @@ def parse_size(value: str) -> tuple[int, int]:
         width = int(raw_width)
         height = int(raw_height)
     except ValueError as exc:
-        raise ValueError("Expected size format WIDTHxHEIGHT, for example 1024x1024") from exc
+        raise ValueError(
+            "Expected size format WIDTHxHEIGHT, for example 1024x1024"
+        ) from exc
 
     if width <= 0 or height <= 0:
         raise ValueError("Image width and height must be positive")
@@ -164,7 +166,10 @@ def compact_avatar_prompt(prompt: str) -> str:
     )
     shoulders = _first_match(
         prompt_lower,
-        [("broad shoulders", "broad shoulders"), ("narrow shoulders", "narrow shoulders")],
+        [
+            ("broad shoulders", "broad shoulders"),
+            ("narrow shoulders", "narrow shoulders"),
+        ],
         default="natural shoulders",
     )
     skin = _first_match(

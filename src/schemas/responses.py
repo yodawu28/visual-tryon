@@ -57,6 +57,25 @@ class HealthResponse(BaseModel):
     modules: list[str]
 
 
+class ReadinessCheckResponse(BaseModel):
+    """
+    One readiness dependency check.
+    """
+
+    status: str
+    message: str
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class ReadinessResponse(BaseModel):
+    """
+    Operational readiness response for kiosk deployments.
+    """
+
+    status: str
+    checks: dict[str, ReadinessCheckResponse]
+
+
 class TryOnGenerationResponse(BaseModel):
     """
     Response từ try-on generation endpoint.

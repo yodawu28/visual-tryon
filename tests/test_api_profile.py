@@ -20,6 +20,7 @@ def test_kiosk_api_profile_exposes_only_kiosk_relevant_routes():
 
     paths = set(app.openapi()["paths"])
     assert "/api/v1/health" in paths
+    assert "/api/v1/readiness" in paths
     assert "/api/v1/kiosk/garments" in paths
     assert "/api/v1/kiosk/garments/{garment_id}" in paths
     assert "/api/v1/kiosk/sessions" in paths

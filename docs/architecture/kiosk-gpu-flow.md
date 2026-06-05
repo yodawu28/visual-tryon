@@ -35,9 +35,13 @@ available by switching to `API_PROFILE=full` for debugging.
 Use `docs/kiosk-swagger-workflow.md` as the manual Swagger checklist for running
 the flow end to end.
 
-The current kiosk profile covers garment registration, session creation, capture
-analysis, Fit Intelligence, and optional visual preview:
+The current kiosk profile covers deployment readiness, garment registration,
+session creation, capture analysis, Fit Intelligence, and optional visual
+preview:
 
+- `GET /api/v1/readiness`
+  Verifies local storage, SQLite catalogs, job queue paths, and provider config.
+  It returns `503` when the kiosk deployment is not ready for a Swagger run.
 - `POST /api/v1/kiosk/garments`
   Uploads a garment image and stores its local path and optional size chart in
   the garment registry.
@@ -138,7 +142,12 @@ estimation and size-chart scoring before production size recommendations.
 ## Baseline Before GPU Deployment
 
 Run the kiosk E2E baseline before deploying a new GPU-server image. The
-control-plane baseline does not call visual generation providers:
+control-plane baseline does not call visual generation providers.
+
+Before running the baseline, use `GET /api/v1/readiness` or the corresponding
+Swagger operation to verify the API can access its local storage, SQLite
+catalogs, job queue directory, Ollama analyzer config, and Replicate preview
+config:
 
 ```bash
 python -m scripts.run_kiosk_e2e_baseline \

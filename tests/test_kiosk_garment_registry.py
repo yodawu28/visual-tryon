@@ -34,6 +34,8 @@ def test_create_garment_stores_image_and_metadata(tmp_path):
     assert record.storage_uri.endswith(".png")
     assert record.mime_type == "image/png"
     assert record.original_filename == "jersey.png"
+    assert record.size_chart_id is None
+    assert record.size_chart == []
     assert registry.exists(record.garment_id) is True
 
     stored_path = tmp_path / "images" / f"{record.garment_id.replace(':', '-')}.png"
@@ -43,6 +45,42 @@ def test_create_garment_stores_image_and_metadata(tmp_path):
     loaded = registry.get_garment(record.garment_id)
     assert loaded == record
     assert registry.read_image(record.garment_id) == _png_bytes()
+
+
+def test_create_garment_stores_size_chart(tmp_path):
+    registry = GarmentRegistry(
+        db_path=tmp_path / "garments.sqlite3",
+        image_dir=tmp_path / "images",
+    )
+
+    record = registry.create_garment(
+        image_bytes=_png_bytes(),
+        category="tops",
+        size_chart=[{"size": "M", "chest_cm": 96}],
+    )
+
+    assert record.size_chart == [{"size": "M", "chest_cm": 96.0}]
+    loaded = registry.get_garment(record.garment_id)
+    assert loaded is not None
+    assert loaded.size_chart == [{"size": "M", "chest_cm": 96.0}]
+
+
+def test_create_garment_stores_size_chart_id(tmp_path):
+    registry = GarmentRegistry(
+        db_path=tmp_path / "garments.sqlite3",
+        image_dir=tmp_path / "images",
+    )
+
+    record = registry.create_garment(
+        image_bytes=_png_bytes(),
+        category="tops",
+        size_chart_id="size-chart:v1:vn",
+    )
+
+    assert record.size_chart_id == "size-chart:v1:vn"
+    loaded = registry.get_garment(record.garment_id)
+    assert loaded is not None
+    assert loaded.size_chart_id == "size-chart:v1:vn"
 
 
 def test_list_garments_returns_newest_first(tmp_path):

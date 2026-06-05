@@ -21,8 +21,11 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 app = FastAPI(
-    title="Virtual Try-On MVP API",
-    description="Privacy-first virtual try-on system with face anonymization and semantic parsing",
+    title="Kiosk Virtual Try-On API",
+    description=(
+        "Kiosk-focused virtual try-on API for garment upload, user capture, "
+        "capture analysis, optional visual preview jobs, and Fit Intelligence."
+    ),
     version="0.1.0",
     docs_url="/docs" if settings.debug else None,
     redoc_url="/redoc" if settings.debug else None,

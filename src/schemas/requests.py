@@ -334,8 +334,8 @@ class KioskSessionCreateRequest(BaseModel):
     """
     Request model for creating a kiosk session.
 
-    Avatar fields are optional because the kiosk can either start after an
-    approved avatar preview or skip avatar preview and capture the user directly.
+    The default kiosk flow starts from a garment and then captures the user.
+    Avatar fields are retained for advanced flows, but are not required.
     """
 
     garment_id: Optional[str] = Field(
@@ -344,19 +344,50 @@ class KioskSessionCreateRequest(BaseModel):
     )
     avatar_cache_key: Optional[str] = Field(
         default=None,
-        description="Optional cache key returned by /api/v1/avatar-preview/avatars",
+        description="Advanced optional synthetic avatar cache key",
     )
     avatar_preview_cache_key: Optional[str] = Field(
         default=None,
-        description="Optional cache key returned by /api/v1/avatar-preview/try-on",
+        description="Advanced optional avatar preview cache key",
     )
 
     class Config:
         json_schema_extra = {
             "example": {
-                "garment_id": "garment-001",
-                "avatar_cache_key": None,
-                "avatar_preview_cache_key": None,
+                "garment_id": "garment:v1:642b276d13c341e0accd8b10352b00e3",
+            }
+        }
+
+
+class KioskVisualPreviewJobRequest(BaseModel):
+    """
+    Request for enqueueing an async kiosk visual preview job.
+    """
+
+    use_multimodal_analysis: bool = Field(
+        default=True,
+        description=(
+            "Use the configured multimodal analyzer before visual preview "
+            "generation when the worker executes this job."
+        ),
+    )
+    size: str = Field(
+        default="1024x1024",
+        description="Requested generated image size",
+    )
+    max_attempts: int = Field(
+        default=1,
+        ge=1,
+        le=5,
+        description="Maximum worker attempts for this job",
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "use_multimodal_analysis": True,
+                "size": "1024x1024",
+                "max_attempts": 1,
             }
         }
 
@@ -373,6 +404,78 @@ class KioskSizeChartItem(BaseModel):
     shoulder_cm: Optional[float] = Field(default=None, gt=0)
     length_cm: Optional[float] = Field(default=None, gt=0)
     inseam_cm: Optional[float] = Field(default=None, gt=0)
+
+
+class KioskSizeChartCreateRequest(BaseModel):
+    """
+    Request for creating a reusable kiosk size chart.
+    """
+
+    name: str = Field(..., description="Display name, for example Yonex VN tops")
+    country_code: str = Field(
+        ...,
+        description="Market/country code such as VN, US, UK, EU, or JP",
+        max_length=12,
+    )
+    region: Optional[str] = Field(
+        default=None,
+        description="Optional region label such as Southeast Asia",
+        max_length=80,
+    )
+    category: str = Field(
+        ..., description="Garment category: tops, bottoms, one_pieces"
+    )
+    garment_type: Optional[str] = Field(
+        default=None,
+        description="Optional garment type such as jersey, t-shirt, shorts",
+        max_length=80,
+    )
+    source_type: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional source label such as generic_reference, brand_official, "
+            "merchant_provided, or internal"
+        ),
+        max_length=80,
+    )
+    source_url: Optional[str] = Field(
+        default=None,
+        description="Optional public source URL for this chart",
+        max_length=500,
+    )
+    last_verified_at: Optional[str] = Field(
+        default=None,
+        description="Optional ISO date/time when this chart was last verified",
+        max_length=80,
+    )
+    size_chart: list[KioskSizeChartItem] = Field(
+        ..., description="Reusable size chart rows for this market/category"
+    )
+    notes: Optional[str] = Field(
+        default=None,
+        description="Optional internal note for this chart",
+        max_length=500,
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "name": "VN regular tops",
+                "country_code": "VN",
+                "region": "Vietnam",
+                "category": "tops",
+                "garment_type": "jersey",
+                "source_type": "generic_reference",
+                "source_url": None,
+                "last_verified_at": None,
+                "size_chart": [
+                    {"size": "S", "chest_cm": 90, "waist_cm": 78},
+                    {"size": "M", "chest_cm": 96, "waist_cm": 84},
+                    {"size": "L", "chest_cm": 102, "waist_cm": 90},
+                ],
+                "notes": "Default VN tops chart for kiosk testing",
+            }
+        }
 
 
 class KioskBodyMeasurements(BaseModel):
@@ -392,6 +495,11 @@ class KioskBodyMeasurements(BaseModel):
 class KioskFitAnalysisRequest(BaseModel):
     """
     Request model for kiosk Fit Intelligence.
+
+    For the normal Swagger workflow, upload the garment size chart once through
+    `POST /api/v1/kiosk/garments` using `size_chart_json`, then call this
+    endpoint with only body measurements and preferred fit. `size_chart` remains
+    available here as an override for ad hoc tests.
     """
 
     preferred_fit: str = Field(
@@ -401,17 +509,22 @@ class KioskFitAnalysisRequest(BaseModel):
     )
     size_chart: list[KioskSizeChartItem] = Field(
         default_factory=list,
-        description="Optional garment size chart. A future recommender will score these sizes.",
+        description=(
+            "Optional override garment size chart. If omitted, Fit Intelligence "
+            "uses the size chart stored on the uploaded garment when available."
+        ),
     )
     body_measurements: Optional[KioskBodyMeasurements] = Field(
         default=None,
         description=(
-            "Optional body measurements from user input or an upstream measurement "
-            "model. When omitted, Fit Intelligence will not invent measurements."
+            "Optional body profile from user input or an upstream measurement model. "
+            "For kiosk Swagger testing, height_cm and weight_kg are enough for a "
+            "low-confidence estimate. Add chest/waist/hip/shoulder/inseam when "
+            "available for a stronger recommendation."
         ),
     )
     use_ai_analysis: bool = Field(
-        default=True,
+        default=False,
         description=(
             "Use the configured AI fit analyzer for advisory notes only. The final "
             "size recommendation remains deterministic."
@@ -423,26 +536,10 @@ class KioskFitAnalysisRequest(BaseModel):
             "example": {
                 "preferred_fit": "regular",
                 "body_measurements": {
-                    "chest_cm": 96,
-                    "waist_cm": 82,
-                    "shoulder_cm": 46,
+                    "height_cm": 178,
+                    "weight_kg": 74,
                 },
-                "use_ai_analysis": True,
-                "size_chart": [
-                    {
-                        "size": "M",
-                        "chest_cm": 96,
-                        "waist_cm": 82,
-                        "shoulder_cm": 46,
-                        "length_cm": 70,
-                    },
-                    {
-                        "size": "L",
-                        "chest_cm": 102,
-                        "waist_cm": 88,
-                        "shoulder_cm": 48,
-                        "length_cm": 72,
-                    },
-                ],
+                "use_ai_analysis": False,
+                "size_chart": [],
             }
         }

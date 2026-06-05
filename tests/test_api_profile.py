@@ -20,22 +20,24 @@ def test_kiosk_api_profile_exposes_only_kiosk_relevant_routes():
 
     paths = set(app.openapi()["paths"])
     assert "/api/v1/health" in paths
-    assert "/api/v1/avatar-preview/avatars" in paths
-    assert "/api/v1/avatar-preview/try-on" in paths
     assert "/api/v1/kiosk/garments" in paths
     assert "/api/v1/kiosk/garments/{garment_id}" in paths
     assert "/api/v1/kiosk/sessions" in paths
     assert "/api/v1/kiosk/sessions/{session_id}/captures" in paths
     assert "/api/v1/kiosk/sessions/{session_id}/captures/analyze" in paths
     assert "/api/v1/kiosk/sessions/{session_id}/visual-preview" in paths
-    assert "/api/v1/kiosk/sessions/{session_id}/try-on" in paths
+    assert "/api/v1/kiosk/sessions/{session_id}/visual-preview/jobs" in paths
     assert "/api/v1/kiosk/sessions/{session_id}/fit/analyze" in paths
+    assert "/api/v1/kiosk/sessions/{session_id}/fit/analysis" in paths
+    assert "/api/v1/kiosk/jobs/{job_id}" in paths
 
+    assert not any(path.startswith("/api/v1/avatar-preview") for path in paths)
     assert not any(path.startswith("/api/v1/privacy") for path in paths)
     assert not any(path.startswith("/api/v1/analysis") for path in paths)
     assert not any(path.startswith("/api/v1/generate") for path in paths)
     assert not any(path.startswith("/api/v1/products") for path in paths)
     assert not any(path.startswith("/api/v1/tryon") for path in paths)
+    assert "/api/v1/kiosk/sessions/{session_id}/try-on" not in paths
 
 
 def test_kiosk_api_profile_openapi_tags_stay_focused():
@@ -49,7 +51,7 @@ def test_kiosk_api_profile_openapi_tags_stay_focused():
         for operation in path_item.values()
         for tag in operation.get("tags", [])
     }
-    assert tags == {"health", "avatar-preview", "kiosk-tryon"}
+    assert tags == {"health", "kiosk-tryon"}
 
 
 def test_kiosk_session_create_request_does_not_require_avatar_preview_keys():
@@ -83,10 +85,9 @@ def test_kiosk_visual_preview_is_primary_qwen_generation_endpoint():
 
     paths = app.openapi()["paths"]
     visual_preview = paths["/api/v1/kiosk/sessions/{session_id}/visual-preview"]["post"]
-    legacy_tryon = paths["/api/v1/kiosk/sessions/{session_id}/try-on"]["post"]
 
     assert visual_preview.get("deprecated", False) is False
-    assert legacy_tryon["deprecated"] is True
+    assert "/api/v1/kiosk/sessions/{session_id}/try-on" not in paths
 
 
 def test_full_api_profile_keeps_legacy_router_specs_available():

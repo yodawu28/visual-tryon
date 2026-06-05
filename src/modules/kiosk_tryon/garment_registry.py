@@ -5,12 +5,13 @@ SQLite-backed garment registry for kiosk deployments.
 from __future__ import annotations
 
 import hashlib
+import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from PIL import Image
@@ -37,6 +38,8 @@ class GarmentRecord:
     mime_type: str
     size_bytes: int
     original_filename: str | None
+    size_chart_id: str | None
+    size_chart: list[dict[str, Any]]
     created_at: str
     updated_at: str
 
@@ -66,6 +69,8 @@ class GarmentRegistry:
         name: str | None = None,
         garment_type: str | None = None,
         original_filename: str | None = None,
+        size_chart_id: str | None = None,
+        size_chart: list[dict[str, Any]] | None = None,
         max_size_bytes: int | None = None,
     ) -> GarmentRecord:
         if not image_bytes:
@@ -74,6 +79,7 @@ class GarmentRegistry:
             raise ValueError("garment image file exceeds the configured upload limit")
 
         normalized_category = _normalize_category(category)
+        normalized_size_chart = _normalize_size_chart(size_chart or [])
         mime_type, extension = _detect_image_type(image_bytes)
         image_sha256 = hashlib.sha256(image_bytes).hexdigest()
         now = _utc_now()
@@ -92,6 +98,8 @@ class GarmentRegistry:
             mime_type=mime_type,
             size_bytes=len(image_bytes),
             original_filename=_clean_optional_text(original_filename),
+            size_chart_id=_clean_optional_text(size_chart_id),
+            size_chart=normalized_size_chart,
             created_at=now,
             updated_at=now,
         )
@@ -159,10 +167,12 @@ class GarmentRegistry:
                     mime_type,
                     size_bytes,
                     original_filename,
+                    size_chart_id,
+                    size_chart_json,
                     created_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.garment_id,
@@ -175,6 +185,8 @@ class GarmentRegistry:
                     record.mime_type,
                     record.size_bytes,
                     record.original_filename,
+                    record.size_chart_id,
+                    json.dumps(record.size_chart, sort_keys=True),
                     record.created_at,
                     record.updated_at,
                 ),
@@ -200,11 +212,23 @@ class GarmentRegistry:
                     mime_type TEXT NOT NULL,
                     size_bytes INTEGER NOT NULL,
                     original_filename TEXT,
+                    size_chart_id TEXT,
+                    size_chart_json TEXT NOT NULL DEFAULT '[]',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
                 """
             )
+            columns = {
+                str(row["name"])
+                for row in conn.execute("PRAGMA table_info(garments)").fetchall()
+            }
+            if "size_chart_json" not in columns:
+                conn.execute(
+                    "ALTER TABLE garments ADD COLUMN size_chart_json TEXT NOT NULL DEFAULT '[]'"
+                )
+            if "size_chart_id" not in columns:
+                conn.execute("ALTER TABLE garments ADD COLUMN size_chart_id TEXT")
             conn.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_garments_category_created
@@ -231,6 +255,8 @@ def _record_from_row(row: sqlite3.Row) -> GarmentRecord:
         mime_type=str(row["mime_type"]),
         size_bytes=int(row["size_bytes"]),
         original_filename=row["original_filename"],
+        size_chart_id=row["size_chart_id"],
+        size_chart=_load_size_chart_json(str(row["size_chart_json"])),
         created_at=str(row["created_at"]),
         updated_at=str(row["updated_at"]),
     )
@@ -264,6 +290,62 @@ def _clean_optional_text(value: str | None) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _normalize_size_chart(size_chart: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    supported_measurements = {
+        "chest_cm",
+        "waist_cm",
+        "hip_cm",
+        "shoulder_cm",
+        "length_cm",
+        "inseam_cm",
+    }
+    for item in size_chart:
+        if not isinstance(item, dict):
+            raise ValueError("size_chart entries must be objects")
+        size = item.get("size")
+        if not isinstance(size, str) or not size.strip():
+            raise ValueError("size_chart entries require a non-empty size")
+        normalized_item: dict[str, Any] = {"size": size.strip()}
+        for key in sorted(supported_measurements):
+            if key not in item or item[key] is None:
+                continue
+            try:
+                value = float(item[key])
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"size_chart.{key} must be a positive number") from exc
+            if value <= 0:
+                raise ValueError(f"size_chart.{key} must be a positive number")
+            normalized_item[key] = value
+        normalized.append(normalized_item)
+    return normalized
+
+
+def parse_size_chart_json(size_chart_json: str | None) -> list[dict[str, Any]]:
+    if size_chart_json is None or not size_chart_json.strip():
+        return []
+    try:
+        payload = json.loads(size_chart_json)
+    except json.JSONDecodeError as exc:
+        raise ValueError("size_chart_json must be valid JSON") from exc
+    if not isinstance(payload, list):
+        raise ValueError("size_chart_json must be a JSON array")
+    return _normalize_size_chart(payload)
+
+
+def _load_size_chart_json(size_chart_json: str) -> list[dict[str, Any]]:
+    try:
+        payload = json.loads(size_chart_json)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, list):
+        return []
+    try:
+        return _normalize_size_chart(payload)
+    except ValueError:
+        return []
 
 
 def _safe_filename(value: str) -> str:

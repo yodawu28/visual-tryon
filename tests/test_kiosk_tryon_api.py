@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from src.api.routes import kiosk_tryon
 from src.modules.kiosk_tryon.garment_registry import GarmentRecord
 from src.modules.kiosk_tryon.service import KioskTryOnSession
+from src.modules.kiosk_tryon.size_chart_registry import SizeChartRecord
 
 
 class FakeKioskTryOnService:
@@ -77,6 +78,17 @@ class FakeKioskTryOnService:
                 captures={"front": {"path": "captures/front.png"}},
                 capture_analysis={"passed": True},
             )
+        if session_id == "kiosk-session:v1:fit-ready":
+            return replace(
+                self.session,
+                session_id=session_id,
+                status="fit_analysis_ready",
+                garment_id="garment:v1:test",
+                capture_keys=["front"],
+                captures={"front": {"path": "captures/front.png"}},
+                capture_analysis={"passed": True},
+                fit_analysis_key="kiosk-fit:v1:test",
+            )
         return self.session
 
     def add_user_capture(self, *, session_id, front_image, side_image=None):
@@ -134,6 +146,8 @@ class FakeGarmentRegistry:
                 mime_type="image/png",
                 size_bytes=12,
                 original_filename="jersey.png",
+                size_chart_id="size-chart:v1:test",
+                size_chart=[],
                 created_at="2026-06-01T00:00:00+00:00",
                 updated_at="2026-06-01T00:00:00+00:00",
             )
@@ -147,6 +161,8 @@ class FakeGarmentRegistry:
         name=None,
         garment_type=None,
         original_filename=None,
+        size_chart_id=None,
+        size_chart=None,
         max_size_bytes=None,
     ):
         if image_bytes == b"invalid":
@@ -157,6 +173,8 @@ class FakeGarmentRegistry:
             category=category,
             garment_type=garment_type,
             original_filename=original_filename,
+            size_chart_id=size_chart_id,
+            size_chart=size_chart or [],
             size_bytes=len(image_bytes),
         )
         self.records = [record]
@@ -175,6 +193,85 @@ class FakeGarmentRegistry:
         if self.get_garment(garment_id) is None:
             raise FileNotFoundError(f"Garment not found: {garment_id}")
         return b"garment-image"
+
+
+class FakeKioskSizeChartRegistry:
+    def __init__(self) -> None:
+        self.records = [
+            SizeChartRecord(
+                size_chart_id="size-chart:v1:test",
+                name="VN tops",
+                country_code="VN",
+                region="Vietnam",
+                category="tops",
+                garment_type="jersey",
+                source_type="generic_reference",
+                source_url=None,
+                last_verified_at=None,
+                size_chart=[{"size": "M", "chest_cm": 96.0}],
+                notes=None,
+                created_at="2026-06-01T00:00:00+00:00",
+                updated_at="2026-06-01T00:00:00+00:00",
+            )
+        ]
+
+    def create_size_chart(
+        self,
+        *,
+        name,
+        country_code,
+        category,
+        size_chart,
+        region=None,
+        garment_type=None,
+        source_type=None,
+        source_url=None,
+        last_verified_at=None,
+        notes=None,
+    ):
+        if not size_chart:
+            raise ValueError("size_chart must include at least one size row")
+        record = SizeChartRecord(
+            size_chart_id="size-chart:v1:new",
+            name=name,
+            country_code=country_code.upper(),
+            region=region,
+            category=category,
+            garment_type=garment_type,
+            source_type=source_type,
+            source_url=source_url,
+            last_verified_at=last_verified_at,
+            size_chart=size_chart,
+            notes=notes,
+            created_at="2026-06-01T00:00:00+00:00",
+            updated_at="2026-06-01T00:00:00+00:00",
+        )
+        self.records = [record]
+        return record
+
+    def get_size_chart(self, size_chart_id):
+        if size_chart_id == "size-chart:v1:missing":
+            return None
+        return next(
+            (
+                record
+                for record in self.records
+                if record.size_chart_id == size_chart_id
+            ),
+            None,
+        )
+
+    def list_size_charts(self, *, country_code=None, category=None, limit=100):
+        records = self.records
+        if country_code:
+            records = [
+                record
+                for record in records
+                if record.country_code == country_code.upper()
+            ]
+        if category:
+            records = [record for record in records if record.category == category]
+        return records[:limit]
 
 
 class FakeKioskVisualTryOnService:
@@ -217,6 +314,10 @@ class FakeKioskFitIntelligenceService:
     def generate_tryon(self):
         raise AssertionError("fit service should not generate images")
 
+    def get_analysis(self, fit_analysis_key):
+        assert fit_analysis_key == "kiosk-fit:v1:test"
+        return self._fit_payload(cache_hit=True)
+
     def analyze_fit(
         self,
         *,
@@ -243,12 +344,15 @@ class FakeKioskFitIntelligenceService:
         assert garment_image == b"garment-image"
         assert preferred_fit == "regular"
         assert size_chart == [{"size": "M", "chest_cm": 96.0}]
-        assert body_measurements == {"chest_cm": 90.0}
+        assert body_measurements == {"height_cm": 178.0, "weight_kg": 74.0}
         assert use_ai_analysis is False
+        return self._fit_payload(cache_hit=False)
+
+    def _fit_payload(self, *, cache_hit):
         return {
             "fit_analysis_key": "kiosk-fit:v1:test",
             "fit_analysis_path": "data/kiosk_fit/metadata/test.json",
-            "cache_hit": False,
+            "cache_hit": cache_hit,
             "engine_version": "kiosk-fit-intelligence-hybrid-v2",
             "measurement_estimate": {"status": "provided_measurements"},
             "ai_fit_analysis": {"status": "disabled"},
@@ -277,6 +381,61 @@ class FakeKioskFitIntelligenceService:
         }
 
 
+class FakeKioskJobService:
+    def create_job(
+        self,
+        *,
+        queue_name,
+        job_type,
+        payload,
+        max_attempts=1,
+    ):
+        assert queue_name == "gpu.visual_preview"
+        assert job_type == "kiosk_visual_preview"
+        assert payload == {
+            "session_id": "kiosk-session:v1:ready",
+            "garment_id": "garment:v1:test",
+            "garment_category": "tops",
+            "garment_type": "jersey",
+            "capture_keys": ["front"],
+            "use_multimodal_analysis": False,
+            "size": "1024x1024",
+        }
+        assert max_attempts == 2
+        return self._job_payload(status="queued")
+
+    def get_job(self, job_id):
+        if job_id == "job:v1:missing":
+            raise FileNotFoundError("Job not found: job:v1:missing")
+        assert job_id == "job:v1:test"
+        return self._job_payload(status="queued")
+
+    def _job_payload(self, *, status):
+        return {
+            "job_id": "job:v1:test",
+            "queue_name": "gpu.visual_preview",
+            "job_type": "kiosk_visual_preview",
+            "status": status,
+            "payload": {
+                "session_id": "kiosk-session:v1:ready",
+                "garment_id": "garment:v1:test",
+                "garment_category": "tops",
+                "garment_type": "jersey",
+                "capture_keys": ["front"],
+                "use_multimodal_analysis": False,
+                "size": "1024x1024",
+            },
+            "result": None,
+            "error": None,
+            "attempts": 0,
+            "max_attempts": 2,
+            "created_at": "2026-06-01T00:00:00+00:00",
+            "updated_at": "2026-06-01T00:00:00+00:00",
+            "started_at": None,
+            "finished_at": None,
+        }
+
+
 def _client() -> TestClient:
     app = FastAPI()
     app.include_router(kiosk_tryon.router)
@@ -286,11 +445,17 @@ def _client() -> TestClient:
     app.dependency_overrides[kiosk_tryon.get_kiosk_garment_registry] = (
         lambda: FakeGarmentRegistry()
     )
+    app.dependency_overrides[kiosk_tryon.get_kiosk_size_chart_registry] = (
+        lambda: FakeKioskSizeChartRegistry()
+    )
     app.dependency_overrides[kiosk_tryon.get_kiosk_visual_tryon_service] = (
         lambda: FakeKioskVisualTryOnService()
     )
     app.dependency_overrides[kiosk_tryon.get_kiosk_fit_intelligence_service] = (
         lambda: FakeKioskFitIntelligenceService()
+    )
+    app.dependency_overrides[kiosk_tryon.get_kiosk_job_service] = (
+        lambda: FakeKioskJobService()
     )
     return TestClient(app)
 
@@ -318,6 +483,56 @@ def test_upload_kiosk_garment_endpoint_accepts_multipart_file():
     assert payload["garment"]["storage_provider"] == "local"
     assert payload["garment"]["storage_uri"].endswith("garment-v1-test.png")
     assert payload["garment"]["original_filename"] == "jersey.png"
+    assert payload["garment"]["size_chart"] == []
+
+
+def test_upload_kiosk_garment_endpoint_accepts_size_chart_json():
+    client = _client()
+
+    response = client.post(
+        "/api/v1/kiosk/garments",
+        data={
+            "category": "tops",
+            "garment_type": "jersey",
+            "size_chart_json": '[{"size":"M","chest_cm":96}]',
+        },
+        files={"file": ("jersey.png", b"png-bytes", "image/png")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["garment"]["size_chart"] == [{"size": "M", "chest_cm": 96.0}]
+
+
+def test_upload_kiosk_garment_endpoint_accepts_size_chart_id():
+    client = _client()
+
+    response = client.post(
+        "/api/v1/kiosk/garments",
+        data={
+            "category": "tops",
+            "garment_type": "jersey",
+            "size_chart_id": "size-chart:v1:test",
+        },
+        files={"file": ("jersey.png", b"png-bytes", "image/png")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["garment"]["size_chart_id"] == "size-chart:v1:test"
+
+
+def test_upload_kiosk_garment_endpoint_returns_404_for_missing_size_chart_id():
+    client = _client()
+
+    response = client.post(
+        "/api/v1/kiosk/garments",
+        data={"category": "tops", "size_chart_id": "size-chart:v1:missing"},
+        files={"file": ("jersey.png", b"png-bytes", "image/png")},
+    )
+
+    assert response.status_code == 404
+    assert "Size chart not found" in response.json()["detail"]
 
 
 def test_upload_kiosk_garment_endpoint_returns_422_for_invalid_image():
@@ -331,6 +546,71 @@ def test_upload_kiosk_garment_endpoint_returns_422_for_invalid_image():
 
     assert response.status_code == 422
     assert "valid PNG, JPEG, or WEBP" in response.json()["detail"]
+
+
+def test_upload_kiosk_garment_endpoint_returns_422_for_invalid_size_chart_json():
+    client = _client()
+
+    response = client.post(
+        "/api/v1/kiosk/garments",
+        data={"category": "tops", "size_chart_json": '{"size":"M"}'},
+        files={"file": ("jersey.png", b"png-bytes", "image/png")},
+    )
+
+    assert response.status_code == 422
+    assert "size_chart_json must be a JSON array" in response.json()["detail"]
+
+
+def test_create_kiosk_size_chart_endpoint_returns_catalog_record():
+    client = _client()
+
+    response = client.post(
+        "/api/v1/kiosk/size-charts",
+        json={
+            "name": "VN tops",
+            "country_code": "VN",
+            "region": "Vietnam",
+            "category": "tops",
+            "garment_type": "jersey",
+            "source_type": "generic_reference",
+            "source_url": "https://example.com/size-chart",
+            "last_verified_at": "2026-06-04",
+            "size_chart": [{"size": "M", "chest_cm": 96}],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["size_chart"]["size_chart_id"] == "size-chart:v1:new"
+    assert payload["size_chart"]["country_code"] == "VN"
+    assert payload["size_chart"]["source_type"] == "generic_reference"
+    assert payload["size_chart"]["source_url"] == "https://example.com/size-chart"
+    assert payload["size_chart"]["last_verified_at"] == "2026-06-04"
+    assert payload["size_chart"]["size_chart"] == [{"size": "M", "chest_cm": 96.0}]
+
+
+def test_list_kiosk_size_charts_endpoint_filters_catalog():
+    client = _client()
+
+    response = client.get("/api/v1/kiosk/size-charts?country_code=VN&category=tops")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["count"] == 1
+    assert payload["size_charts"][0]["size_chart_id"] == "size-chart:v1:test"
+
+
+def test_get_kiosk_size_chart_endpoint_returns_catalog_record():
+    client = _client()
+
+    response = client.get("/api/v1/kiosk/size-charts/size-chart:v1:test")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["size_chart"]["name"] == "VN tops"
 
 
 def test_list_kiosk_garments_endpoint_returns_registered_garments():
@@ -525,6 +805,53 @@ def test_generate_visual_preview_endpoint_requires_passed_capture_analysis():
     assert "capture analysis must pass" in response.json()["detail"]
 
 
+def test_enqueue_visual_preview_job_endpoint_returns_queued_job():
+    client = _client()
+
+    response = client.post(
+        "/api/v1/kiosk/sessions/kiosk-session:v1:ready/visual-preview/jobs",
+        json={
+            "use_multimodal_analysis": False,
+            "size": "1024x1024",
+            "max_attempts": 2,
+        },
+    )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["job_id"] == "job:v1:test"
+    assert payload["queue_name"] == "gpu.visual_preview"
+    assert payload["job_type"] == "kiosk_visual_preview"
+    assert payload["status"] == "queued"
+    assert payload["payload"]["session_id"] == "kiosk-session:v1:ready"
+    assert payload["payload"]["garment_id"] == "garment:v1:test"
+    assert payload["message"] == "Kiosk visual preview job queued"
+
+
+def test_get_kiosk_job_endpoint_returns_job_status():
+    client = _client()
+
+    response = client.get("/api/v1/kiosk/jobs/job:v1:test")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["job_id"] == "job:v1:test"
+    assert payload["status"] == "queued"
+    assert payload["payload"]["session_id"] == "kiosk-session:v1:ready"
+    assert payload["message"] == "Kiosk job loaded"
+
+
+def test_get_kiosk_job_endpoint_returns_404_for_missing_job():
+    client = _client()
+
+    response = client.get("/api/v1/kiosk/jobs/job:v1:missing")
+
+    assert response.status_code == 404
+    assert "Job not found" in response.json()["detail"]
+
+
 def test_legacy_try_on_endpoint_remains_compatible_alias():
     client = _client()
 
@@ -543,9 +870,8 @@ def test_analyze_fit_endpoint_updates_session_with_fit_key():
         "/api/v1/kiosk/sessions/kiosk-session:v1:ready/fit/analyze",
         json={
             "preferred_fit": "regular",
-            "body_measurements": {"chest_cm": 90},
+            "body_measurements": {"height_cm": 178, "weight_kg": 74},
             "use_ai_analysis": False,
-            "size_chart": [{"size": "M", "chest_cm": 96}],
         },
     )
 
@@ -560,6 +886,33 @@ def test_analyze_fit_endpoint_updates_session_with_fit_key():
     assert payload["size_scores"][0]["size"] == "M"
     assert payload["size_recommendation"]["status"] == "recommended"
     assert payload["fit_report"]["recommended_size"] == "M"
+
+
+def test_get_fit_analysis_endpoint_loads_cached_session_fit_result():
+    client = _client()
+
+    response = client.get(
+        "/api/v1/kiosk/sessions/kiosk-session:v1:fit-ready/fit/analysis"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["fit_analysis_key"] == "kiosk-fit:v1:test"
+    assert payload["cache_hit"] is True
+    assert payload["session"]["status"] == "fit_analysis_ready"
+    assert payload["session"]["fit_analysis_key"] == "kiosk-fit:v1:test"
+    assert payload["fit_report"]["recommended_size"] == "M"
+    assert payload["message"] == "Kiosk fit analysis loaded"
+
+
+def test_get_fit_analysis_endpoint_returns_404_when_session_has_no_fit_result():
+    client = _client()
+
+    response = client.get("/api/v1/kiosk/sessions/kiosk-session:v1:ready/fit/analysis")
+
+    assert response.status_code == 404
+    assert "Fit analysis not found for session" in response.json()["detail"]
 
 
 def test_analyze_fit_endpoint_requires_passed_capture_analysis():

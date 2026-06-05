@@ -22,6 +22,13 @@ from src.modules.avatar_preview.tryon_analyzer import (
 KIOSK_FIT_ENGINE_VERSION = "kiosk-fit-intelligence-hybrid-v2"
 FIT_ANALYZER_PROMPT_VERSION = "kiosk-fit-analyzer-v1"
 MEASUREMENT_ESTIMATOR_VERSION = "landmark-measurement-preview-v1"
+BODY_SIZE_MEASUREMENT_KEYS = {
+    "chest_cm",
+    "waist_cm",
+    "hip_cm",
+    "shoulder_cm",
+    "inseam_cm",
+}
 
 
 @dataclass(frozen=True)
@@ -220,19 +227,10 @@ class KioskFitIntelligenceService:
 
         if cache_hit:
             payload = json.loads(metadata_path.read_text(encoding="utf-8"))
-            return KioskFitAnalysisResult(
-                fit_analysis_key=str(payload["fit_analysis_key"]),
-                fit_analysis_path=metadata_path,
+            return self._result_from_payload(
+                metadata_path=metadata_path,
+                payload=payload,
                 cache_hit=True,
-                engine_version=str(payload["engine_version"]),
-                measurement_estimate=dict(payload["measurement_estimate"]),
-                ai_fit_analysis=dict(payload["ai_fit_analysis"]),
-                fit_assessment=dict(payload["fit_assessment"]),
-                size_scores=list(payload["size_scores"]),
-                size_recommendation=dict(payload["size_recommendation"]),
-                fit_report=dict(payload.get("fit_report", {})),
-                confidence_score=float(payload["confidence_score"]),
-                warnings=list(payload.get("warnings", [])),
             )
 
         measurement_estimate = self.measurement_estimator.estimate(
@@ -298,6 +296,10 @@ class KioskFitIntelligenceService:
             warnings.append(
                 "No body measurements were provided; size recommendation remains limited."
             )
+        if "height_weight_estimator" in str(measurement_estimate.get("source") or ""):
+            warnings.append(
+                "Size recommendation uses height/weight-derived measurement estimates; collect detailed measurements or calibrated captures for higher confidence."
+            )
         if side_image is None:
             warnings.append(
                 "Side capture is missing; future measurement quality will be limited."
@@ -342,6 +344,24 @@ class KioskFitIntelligenceService:
             fit_report=fit_report,
             confidence_score=float(payload["confidence_score"]),
             warnings=warnings,
+        )
+
+    def get_analysis(self, fit_analysis_key: str) -> KioskFitAnalysisResult:
+        fit_analysis_key = fit_analysis_key.strip()
+        if not fit_analysis_key:
+            raise ValueError("fit_analysis_key must not be empty")
+        if not fit_analysis_key.startswith(self.FIT_PREFIX):
+            raise ValueError(f"fit_analysis_key must start with {self.FIT_PREFIX!r}")
+
+        metadata_path = self._metadata_path(fit_analysis_key)
+        if not metadata_path.exists():
+            raise FileNotFoundError(f"Fit analysis not found: {fit_analysis_key}")
+
+        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+        return self._result_from_payload(
+            metadata_path=metadata_path,
+            payload=payload,
+            cache_hit=True,
         )
 
     def _build_ai_fit_analysis(
@@ -427,6 +447,28 @@ class KioskFitIntelligenceService:
     def _metadata_path(self, fit_analysis_key: str) -> Path:
         return self.metadata_dir / f"{_safe_cache_key_filename(fit_analysis_key)}.json"
 
+    def _result_from_payload(
+        self,
+        *,
+        metadata_path: Path,
+        payload: dict[str, Any],
+        cache_hit: bool,
+    ) -> KioskFitAnalysisResult:
+        return KioskFitAnalysisResult(
+            fit_analysis_key=str(payload["fit_analysis_key"]),
+            fit_analysis_path=metadata_path,
+            cache_hit=cache_hit,
+            engine_version=str(payload["engine_version"]),
+            measurement_estimate=dict(payload["measurement_estimate"]),
+            ai_fit_analysis=dict(payload["ai_fit_analysis"]),
+            fit_assessment=dict(payload["fit_assessment"]),
+            size_scores=list(payload["size_scores"]),
+            size_recommendation=dict(payload["size_recommendation"]),
+            fit_report=dict(payload.get("fit_report", {})),
+            confidence_score=float(payload["confidence_score"]),
+            warnings=list(payload.get("warnings", [])),
+        )
+
 
 def _build_measurement_estimate(
     *,
@@ -444,16 +486,82 @@ def _build_measurement_estimate(
     measurement_signals = _measurement_signals_from_capture_analysis(capture_analysis)
 
     if body_measurements:
+        direct_measurements = {
+            key: value
+            for key, value in body_measurements.items()
+            if key in BODY_SIZE_MEASUREMENT_KEYS
+        }
+        if direct_measurements:
+            estimated_from_profile = _estimate_measurements_from_height_weight(
+                body_measurements
+            )
+            if estimated_from_profile:
+                status = "provided_measurements_with_height_weight_estimate"
+                source = "request_body_and_height_weight_estimator"
+                scorer_measurements = {
+                    **estimated_from_profile,
+                    **direct_measurements,
+                }
+                estimated_measurements = {
+                    **body_measurements,
+                    **scorer_measurements,
+                }
+                confidence = 0.66 if has_side_capture else 0.56
+                estimation_notes = [
+                    "User-provided size measurements are used directly.",
+                    "Missing size measurements were estimated from height and weight.",
+                ]
+            else:
+                status = "provided_measurements"
+                source = "request_body"
+                scorer_measurements = direct_measurements
+                estimated_measurements = dict(body_measurements)
+                confidence = 0.72 if has_side_capture else 0.62
+                estimation_notes = []
+        else:
+            estimated_from_profile = _estimate_measurements_from_height_weight(
+                body_measurements
+            )
+            if not estimated_from_profile:
+                return {
+                    "status": "profile_only",
+                    "source": "request_body",
+                    "estimated_measurements_cm": dict(body_measurements),
+                    "scorer_measurements_cm": {},
+                    "scorer_eligible": False,
+                    "measurement_signals": measurement_signals,
+                    "landmark_quality": landmark_quality,
+                    "estimator_metadata": estimator_metadata,
+                    "confidence": 0.18,
+                    "reason": (
+                        "Body profile was provided, but no size-chart-compatible "
+                        "measurements could be derived."
+                    ),
+                }
+            status = "height_weight_estimate"
+            source = "height_weight_estimator"
+            scorer_measurements = estimated_from_profile
+            estimated_measurements = {
+                **body_measurements,
+                **estimated_from_profile,
+            }
+            confidence = 0.45 if has_side_capture else 0.38
+            estimation_notes = [
+                "Measurements were estimated from height and weight for convenience.",
+                "They are not a calibrated body scan and should be treated as low-confidence.",
+            ]
+
         return {
-            "status": "provided_measurements",
-            "source": "request_body",
-            "estimated_measurements_cm": body_measurements,
-            "scorer_measurements_cm": body_measurements,
+            "status": status,
+            "source": source,
+            "estimated_measurements_cm": estimated_measurements,
+            "scorer_measurements_cm": scorer_measurements,
             "scorer_eligible": True,
             "measurement_signals": measurement_signals,
             "landmark_quality": landmark_quality,
             "estimator_metadata": estimator_metadata,
-            "confidence": 0.72 if has_side_capture else 0.62,
+            "confidence": confidence,
+            "estimation_notes": estimation_notes,
         }
 
     if measurement_signals:
@@ -527,6 +635,30 @@ def _measurement_signals_from_capture_analysis(
             continue
         signals[key] = round(numeric_value, 4)
     return signals
+
+
+def _estimate_measurements_from_height_weight(
+    body_measurements: dict[str, Any],
+) -> dict[str, float]:
+    height_cm = body_measurements.get("height_cm")
+    weight_kg = body_measurements.get("weight_kg")
+    if height_cm is None or weight_kg is None:
+        return {}
+
+    height = float(height_cm)
+    weight = float(weight_kg)
+    if height <= 0 or weight <= 0:
+        return {}
+
+    height_m = height / 100.0
+    bmi_delta = (weight / (height_m * height_m)) - 22.0
+    return {
+        "chest_cm": round(max(50.0, height * 0.52 + bmi_delta * 1.4), 1),
+        "waist_cm": round(max(45.0, height * 0.44 + bmi_delta * 2.2), 1),
+        "hip_cm": round(max(50.0, height * 0.52 + bmi_delta * 1.0), 1),
+        "shoulder_cm": round(max(30.0, height * 0.245 + bmi_delta * 0.25), 1),
+        "inseam_cm": round(max(45.0, height * 0.45), 1),
+    }
 
 
 def _build_fit_assessment(

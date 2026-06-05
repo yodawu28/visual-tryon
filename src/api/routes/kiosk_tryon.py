@@ -9,28 +9,51 @@ from functools import lru_cache
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import status
 
 from src.config.settings import get_settings
 from src.modules.avatar_preview.tryon_analyzer import OllamaTryOnAnalyzer
 from src.modules.image_generator.replicate_avatar_preview_generator import (
     ReplicateAvatarPreviewGenerator,
 )
+from src.modules.jobs.queue import JobService, LocalJobQueueBackend
 from src.modules.kiosk_tryon.capture_analyzer import MediaPipeKioskCaptureAnalyzer
 from src.modules.kiosk_tryon.fit_intelligence import (
     KioskFitIntelligenceService,
     OllamaFitAnalyzer,
 )
-from src.modules.kiosk_tryon.garment_registry import GarmentRecord, GarmentRegistry
+from src.modules.kiosk_tryon.garment_registry import (
+    GarmentRecord,
+    GarmentRegistry,
+    parse_size_chart_json,
+)
+from src.modules.kiosk_tryon.job_handlers import (
+    KIOSK_VISUAL_PREVIEW_JOB_TYPE,
+    KIOSK_VISUAL_PREVIEW_QUEUE,
+)
 from src.modules.kiosk_tryon.service import KioskTryOnService
+from src.modules.kiosk_tryon.size_chart_registry import (
+    SizeChartRecord,
+    SizeChartRegistry,
+)
 from src.modules.kiosk_tryon.visual_tryon import KioskVisualTryOnService
-from src.schemas.requests import KioskFitAnalysisRequest, KioskSessionCreateRequest
+from src.schemas.requests import (
+    KioskFitAnalysisRequest,
+    KioskSessionCreateRequest,
+    KioskSizeChartCreateRequest,
+    KioskVisualPreviewJobRequest,
+)
 from src.schemas.responses import (
     KioskFitAnalysisResponse,
     KioskGarmentListResponse,
     KioskGarmentRecordResponse,
     KioskGarmentResponse,
+    KioskJobResponse,
     KioskPersonalizedTryOnResponse,
     KioskSessionResponse,
+    KioskSizeChartListResponse,
+    KioskSizeChartRecordResponse,
+    KioskSizeChartResponse,
 )
 
 router = APIRouter(prefix="/api/v1/kiosk", tags=["kiosk-tryon"])
@@ -43,6 +66,14 @@ def get_kiosk_garment_registry() -> GarmentRegistry:
     return GarmentRegistry(
         db_path=garment_dir / "garments.sqlite3",
         image_dir=garment_dir / "images",
+    )
+
+
+@lru_cache
+def get_kiosk_size_chart_registry() -> SizeChartRegistry:
+    settings = get_settings()
+    return SizeChartRegistry(
+        db_path=settings.temp_storage_dir / "size_charts" / "size_charts.sqlite3"
     )
 
 
@@ -83,6 +114,17 @@ def get_kiosk_fit_intelligence_service() -> KioskFitIntelligenceService:
     )
 
 
+@lru_cache
+def get_kiosk_job_service() -> JobService:
+    settings = get_settings()
+    queue_backend = settings.job_queue_backend.strip().lower()
+    if queue_backend != "local":
+        raise RuntimeError(f"Unsupported JOB_QUEUE_BACKEND: {settings.job_queue_backend}")
+    return JobService(
+        backend=LocalJobQueueBackend(job_dir=settings.job_queue_dir),
+    )
+
+
 @router.post("/garments", response_model=KioskGarmentResponse)
 async def upload_kiosk_garment(
     file: UploadFile = File(..., description="Garment image file"),
@@ -94,26 +136,121 @@ async def upload_kiosk_garment(
         default=None,
         description="Optional garment type such as jersey, t-shirt, shorts",
     ),
+    size_chart_id: str | None = Form(
+        default=None,
+        description=(
+            "Optional reusable size chart id from /api/v1/kiosk/size-charts. "
+            "Use this for country/region-specific static size charts."
+        ),
+    ),
+    size_chart_json: str | None = Form(
+        default=None,
+        description=(
+            "Optional garment size chart JSON array. If provided, fit/analyze can "
+            "use it automatically without repeating size_chart in the request body. "
+            "This inline chart overrides size_chart_id and is mostly for quick tests."
+        ),
+    ),
     registry: GarmentRegistry = Depends(get_kiosk_garment_registry),
+    size_chart_registry: SizeChartRegistry = Depends(get_kiosk_size_chart_registry),
 ) -> KioskGarmentResponse:
     settings = get_settings()
     image_bytes = await file.read()
     try:
+        _validate_size_chart_id_for_garment(
+            size_chart_id=size_chart_id,
+            garment_category=category,
+            size_chart_registry=size_chart_registry,
+        )
         record = registry.create_garment(
             image_bytes=image_bytes,
             category=category,
             name=name,
             garment_type=garment_type,
             original_filename=file.filename,
+            size_chart_id=size_chart_id,
+            size_chart=parse_size_chart_json(size_chart_json),
             max_size_bytes=settings.max_upload_size_bytes,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     return KioskGarmentResponse(
         success=True,
         garment=_garment_record_response(record),
         message="Kiosk garment uploaded",
+    )
+
+
+@router.post("/size-charts", response_model=KioskSizeChartResponse)
+async def create_kiosk_size_chart(
+    request: KioskSizeChartCreateRequest,
+    registry: SizeChartRegistry = Depends(get_kiosk_size_chart_registry),
+) -> KioskSizeChartResponse:
+    try:
+        record = registry.create_size_chart(
+            name=request.name,
+            country_code=request.country_code,
+            region=request.region,
+            category=request.category,
+            garment_type=request.garment_type,
+            source_type=request.source_type,
+            source_url=request.source_url,
+            last_verified_at=request.last_verified_at,
+            size_chart=[
+                item.model_dump(exclude_none=True) for item in request.size_chart
+            ],
+            notes=request.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return KioskSizeChartResponse(
+        success=True,
+        size_chart=_size_chart_record_response(record),
+        message="Kiosk size chart created",
+    )
+
+
+@router.get("/size-charts", response_model=KioskSizeChartListResponse)
+async def list_kiosk_size_charts(
+    country_code: str | None = Query(default=None),
+    category: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    registry: SizeChartRegistry = Depends(get_kiosk_size_chart_registry),
+) -> KioskSizeChartListResponse:
+    try:
+        records = registry.list_size_charts(
+            country_code=country_code,
+            category=category,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return KioskSizeChartListResponse(
+        success=True,
+        size_charts=[_size_chart_record_response(record) for record in records],
+        count=len(records),
+        message="Kiosk size charts loaded",
+    )
+
+
+@router.get("/size-charts/{size_chart_id}", response_model=KioskSizeChartResponse)
+async def get_kiosk_size_chart(
+    size_chart_id: str,
+    registry: SizeChartRegistry = Depends(get_kiosk_size_chart_registry),
+) -> KioskSizeChartResponse:
+    record = registry.get_size_chart(size_chart_id)
+    if record is None:
+        raise HTTPException(
+            status_code=404, detail=f"Size chart not found: {size_chart_id}"
+        )
+    return KioskSizeChartResponse(
+        success=True,
+        size_chart=_size_chart_record_response(record),
+        message="Kiosk size chart loaded",
     )
 
 
@@ -274,9 +411,59 @@ async def generate_kiosk_visual_preview(
 
 
 @router.post(
+    "/sessions/{session_id}/visual-preview/jobs",
+    response_model=KioskJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Queue optional kiosk visual preview job",
+)
+async def enqueue_kiosk_visual_preview_job(
+    session_id: str,
+    request: KioskVisualPreviewJobRequest,
+    service: KioskTryOnService = Depends(get_kiosk_tryon_service),
+    registry: GarmentRegistry = Depends(get_kiosk_garment_registry),
+    job_service: JobService = Depends(get_kiosk_job_service),
+) -> KioskJobResponse:
+    try:
+        session = service.get_session(session_id)
+        _require_capture_analysis_passed(session)
+        session_payload = _result_to_dict(session)
+        garment_id = session_payload.get("garment_id")
+        if not garment_id:
+            raise ValueError("garment_id is required before visual preview")
+
+        garment = registry.get_garment(str(garment_id))
+        if garment is None:
+            raise FileNotFoundError(f"Garment not found: {garment_id}")
+
+        record = job_service.create_job(
+            queue_name=KIOSK_VISUAL_PREVIEW_QUEUE,
+            job_type=KIOSK_VISUAL_PREVIEW_JOB_TYPE,
+            payload={
+                "session_id": session_payload["session_id"],
+                "garment_id": garment.garment_id,
+                "garment_category": garment.category,
+                "garment_type": garment.garment_type,
+                "capture_keys": session_payload.get("capture_keys", []),
+                "use_multimodal_analysis": request.use_multimodal_analysis,
+                "size": request.size,
+            },
+            max_attempts=request.max_attempts,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return _job_response(record, message="Kiosk visual preview job queued")
+
+
+@router.post(
     "/sessions/{session_id}/try-on",
     response_model=KioskPersonalizedTryOnResponse,
     deprecated=True,
+    include_in_schema=False,
     summary="Deprecated alias for kiosk visual preview",
 )
 async def generate_kiosk_personalized_tryon(
@@ -367,6 +554,7 @@ async def analyze_kiosk_fit(
     request: KioskFitAnalysisRequest,
     service: KioskTryOnService = Depends(get_kiosk_tryon_service),
     registry: GarmentRegistry = Depends(get_kiosk_garment_registry),
+    size_chart_registry: SizeChartRegistry = Depends(get_kiosk_size_chart_registry),
     fit_service: KioskFitIntelligenceService = Depends(
         get_kiosk_fit_intelligence_service
     ),
@@ -400,9 +588,11 @@ async def analyze_kiosk_fit(
             ),
             side_image=side_image,
             garment_image=registry.read_image(garment.garment_id),
-            size_chart=[
-                item.model_dump(exclude_none=True) for item in request.size_chart
-            ],
+            size_chart=_resolve_fit_size_chart(
+                request=request,
+                garment=garment,
+                size_chart_registry=size_chart_registry,
+            ),
             preferred_fit=request.preferred_fit,
             body_measurements=(
                 request.body_measurements.model_dump(exclude_none=True)
@@ -430,6 +620,51 @@ async def analyze_kiosk_fit(
     )
 
 
+@router.get(
+    "/sessions/{session_id}/fit/analysis",
+    response_model=KioskFitAnalysisResponse,
+)
+async def get_kiosk_fit_analysis(
+    session_id: str,
+    service: KioskTryOnService = Depends(get_kiosk_tryon_service),
+    fit_service: KioskFitIntelligenceService = Depends(
+        get_kiosk_fit_intelligence_service
+    ),
+) -> KioskFitAnalysisResponse:
+    try:
+        session = service.get_session(session_id)
+        session_payload = _result_to_dict(session)
+        fit_analysis_key = session_payload.get("fit_analysis_key")
+        if not fit_analysis_key:
+            raise FileNotFoundError(f"Fit analysis not found for session: {session_id}")
+        result = fit_service.get_analysis(str(fit_analysis_key))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return _fit_analysis_response(
+        session,
+        result,
+        message="Kiosk fit analysis loaded",
+    )
+
+
+@router.get("/jobs/{job_id}", response_model=KioskJobResponse)
+async def get_kiosk_job(
+    job_id: str,
+    job_service: JobService = Depends(get_kiosk_job_service),
+) -> KioskJobResponse:
+    try:
+        record = job_service.get_job(job_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return _job_response(record, message="Kiosk job loaded")
+
+
 def _garment_record_response(record: GarmentRecord) -> KioskGarmentRecordResponse:
     return KioskGarmentRecordResponse(
         garment_id=record.garment_id,
@@ -442,8 +677,89 @@ def _garment_record_response(record: GarmentRecord) -> KioskGarmentRecordRespons
         mime_type=record.mime_type,
         size_bytes=record.size_bytes,
         original_filename=record.original_filename,
+        size_chart_id=record.size_chart_id,
+        size_chart=record.size_chart,
         created_at=record.created_at,
         updated_at=record.updated_at,
+    )
+
+
+def _size_chart_record_response(
+    record: SizeChartRecord,
+) -> KioskSizeChartRecordResponse:
+    return KioskSizeChartRecordResponse(
+        size_chart_id=record.size_chart_id,
+        name=record.name,
+        country_code=record.country_code,
+        region=record.region,
+        category=record.category,
+        garment_type=record.garment_type,
+        source_type=record.source_type,
+        source_url=record.source_url,
+        last_verified_at=record.last_verified_at,
+        size_chart=record.size_chart,
+        notes=record.notes,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
+def _resolve_fit_size_chart(
+    *,
+    request: KioskFitAnalysisRequest,
+    garment: GarmentRecord,
+    size_chart_registry: SizeChartRegistry,
+) -> list[dict[str, Any]]:
+    request_size_chart = [
+        item.model_dump(exclude_none=True) for item in request.size_chart
+    ]
+    if request_size_chart:
+        return request_size_chart
+    if garment.size_chart:
+        return garment.size_chart
+    if garment.size_chart_id:
+        size_chart = size_chart_registry.get_size_chart(garment.size_chart_id)
+        if size_chart is None:
+            raise FileNotFoundError(f"Size chart not found: {garment.size_chart_id}")
+        return size_chart.size_chart
+    return garment.size_chart
+
+
+def _validate_size_chart_id_for_garment(
+    *,
+    size_chart_id: str | None,
+    garment_category: str,
+    size_chart_registry: SizeChartRegistry,
+) -> None:
+    if size_chart_id is None or not size_chart_id.strip():
+        return
+    size_chart = size_chart_registry.get_size_chart(size_chart_id.strip())
+    if size_chart is None:
+        raise FileNotFoundError(f"Size chart not found: {size_chart_id}")
+    if size_chart.category != garment_category.strip().lower():
+        raise ValueError(
+            "size_chart_id category must match the uploaded garment category"
+        )
+
+
+def _job_response(record: Any, *, message: str) -> KioskJobResponse:
+    payload = _result_to_dict(record)
+    return KioskJobResponse(
+        success=True,
+        job_id=str(payload["job_id"]),
+        queue_name=str(payload["queue_name"]),
+        job_type=str(payload["job_type"]),
+        status=str(payload["status"]),
+        payload=dict(payload.get("payload", {})),
+        result=payload.get("result"),
+        error=payload.get("error"),
+        attempts=int(payload.get("attempts", 0)),
+        max_attempts=int(payload.get("max_attempts", 1)),
+        created_at=str(payload["created_at"]),
+        updated_at=str(payload["updated_at"]),
+        started_at=payload.get("started_at"),
+        finished_at=payload.get("finished_at"),
+        message=message,
     )
 
 

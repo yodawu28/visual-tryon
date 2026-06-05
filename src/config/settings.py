@@ -138,6 +138,11 @@ class Settings(BaseSettings):
         default=Path(__file__).parent.parent.parent / "data" / "eval" / "reports",
         env="EVAL_REPORT_DIR",
     )
+    job_queue_backend: str = Field(default="local", env="JOB_QUEUE_BACKEND")
+    job_queue_dir: Path = Field(
+        default=Path(__file__).parent.parent.parent / "data" / "jobs",
+        env="JOB_QUEUE_DIR",
+    )
 
     # Memory Management
     enable_memory_cleanup: bool = Field(default=True, env="ENABLE_MEMORY_CLEANUP")
@@ -158,6 +163,7 @@ class Settings(BaseSettings):
         "playwright_profile_dir",
         "eval_report_dir",
         "local_avatar_output_dir",
+        "job_queue_dir",
     )
     @classmethod
     def create_temp_dir(cls, v):

@@ -342,8 +342,51 @@ class KioskGarmentRecordResponse(BaseModel):
     mime_type: str
     size_bytes: int
     original_filename: Optional[str] = None
+    size_chart_id: Optional[str] = None
+    size_chart: list[dict[str, Any]] = Field(default_factory=list)
     created_at: str
     updated_at: str
+
+
+class KioskSizeChartRecordResponse(BaseModel):
+    """
+    Stored reusable kiosk size chart metadata.
+    """
+
+    size_chart_id: str
+    name: str
+    country_code: str
+    region: Optional[str] = None
+    category: str
+    garment_type: Optional[str] = None
+    source_type: Optional[str] = None
+    source_url: Optional[str] = None
+    last_verified_at: Optional[str] = None
+    size_chart: list[dict[str, Any]] = Field(default_factory=list)
+    notes: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class KioskSizeChartResponse(BaseModel):
+    """
+    Response for a stored kiosk size chart.
+    """
+
+    success: bool
+    size_chart: KioskSizeChartRecordResponse
+    message: str
+
+
+class KioskSizeChartListResponse(BaseModel):
+    """
+    Response for listing stored kiosk size charts.
+    """
+
+    success: bool
+    size_charts: list[KioskSizeChartRecordResponse] = Field(default_factory=list)
+    count: int
+    message: str
 
 
 class KioskGarmentResponse(BaseModel):
@@ -364,6 +407,28 @@ class KioskGarmentListResponse(BaseModel):
     success: bool
     garments: list[KioskGarmentRecordResponse] = Field(default_factory=list)
     count: int
+    message: str
+
+
+class KioskJobResponse(BaseModel):
+    """
+    Response for a backend-neutral kiosk job.
+    """
+
+    success: bool
+    job_id: str
+    queue_name: str
+    job_type: str
+    status: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    result: Optional[dict[str, Any]] = None
+    error: Optional[dict[str, Any]] = None
+    attempts: int
+    max_attempts: int
+    created_at: str
+    updated_at: str
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
     message: str
 
 

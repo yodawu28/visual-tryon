@@ -20,7 +20,6 @@ class RouterSpec:
 
 KIOSK_ROUTER_SPECS: tuple[RouterSpec, ...] = (
     RouterSpec(name="health", module="src.api.routes.health"),
-    RouterSpec(name="avatar_preview", module="src.api.routes.avatar_preview"),
     RouterSpec(name="kiosk_tryon", module="src.api.routes.kiosk_tryon"),
 )
 

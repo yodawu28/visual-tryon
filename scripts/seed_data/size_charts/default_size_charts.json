@@ -1,0 +1,148 @@
+{
+  "size_charts": [
+    {
+      "name": "VN Generic Adult Tops Regular",
+      "country_code": "VN",
+      "region": "Vietnam",
+      "category": "tops",
+      "garment_type": "regular_top",
+      "source_type": "generic_reference",
+      "source_url": null,
+      "last_verified_at": null,
+      "notes": "Approximate generic reference chart for kiosk demos and fallback fit recommendations. Not a brand-specific official chart.",
+      "size_chart": [
+        { "size": "S", "chest_cm": 88, "waist_cm": 76, "shoulder_cm": 40, "length_cm": 65 },
+        { "size": "M", "chest_cm": 96, "waist_cm": 84, "shoulder_cm": 43, "length_cm": 68 },
+        { "size": "L", "chest_cm": 104, "waist_cm": 92, "shoulder_cm": 46, "length_cm": 71 },
+        { "size": "XL", "chest_cm": 112, "waist_cm": 100, "shoulder_cm": 49, "length_cm": 74 },
+        { "size": "XXL", "chest_cm": 120, "waist_cm": 108, "shoulder_cm": 52, "length_cm": 77 }
+      ]
+    },
+    {
+      "name": "VN Generic Adult Bottoms Regular",
+      "country_code": "VN",
+      "region": "Vietnam",
+      "category": "bottoms",
+      "garment_type": "regular_bottom",
+      "source_type": "generic_reference",
+      "source_url": null,
+      "last_verified_at": null,
+      "notes": "Approximate generic reference chart for kiosk demos and fallback fit recommendations. Not a brand-specific official chart.",
+      "size_chart": [
+        { "size": "S", "waist_cm": 74, "hip_cm": 90, "inseam_cm": 76, "length_cm": 98 },
+        { "size": "M", "waist_cm": 82, "hip_cm": 98, "inseam_cm": 78, "length_cm": 101 },
+        { "size": "L", "waist_cm": 90, "hip_cm": 106, "inseam_cm": 80, "length_cm": 104 },
+        { "size": "XL", "waist_cm": 98, "hip_cm": 114, "inseam_cm": 82, "length_cm": 107 },
+        { "size": "XXL", "waist_cm": 106, "hip_cm": 122, "inseam_cm": 84, "length_cm": 110 }
+      ]
+    },
+    {
+      "name": "US Generic Adult Tops Regular",
+      "country_code": "US",
+      "region": "United States",
+      "category": "tops",
+      "garment_type": "regular_top",
+      "source_type": "generic_reference",
+      "source_url": null,
+      "last_verified_at": null,
+      "notes": "Approximate generic reference chart for kiosk demos and fallback fit recommendations. Not a brand-specific official chart.",
+      "size_chart": [
+        { "size": "S", "chest_cm": 91, "waist_cm": 79, "shoulder_cm": 41, "length_cm": 68 },
+        { "size": "M", "chest_cm": 99, "waist_cm": 86, "shoulder_cm": 44, "length_cm": 71 },
+        { "size": "L", "chest_cm": 107, "waist_cm": 94, "shoulder_cm": 47, "length_cm": 74 },
+        { "size": "XL", "chest_cm": 117, "waist_cm": 104, "shoulder_cm": 50, "length_cm": 77 },
+        { "size": "XXL", "chest_cm": 127, "waist_cm": 114, "shoulder_cm": 53, "length_cm": 80 }
+      ]
+    },
+    {
+      "name": "US Generic Adult Bottoms Regular",
+      "country_code": "US",
+      "region": "United States",
+      "category": "bottoms",
+      "garment_type": "regular_bottom",
+      "source_type": "generic_reference",
+      "source_url": null,
+      "last_verified_at": null,
+      "notes": "Approximate generic reference chart for kiosk demos and fallback fit recommendations. Not a brand-specific official chart.",
+      "size_chart": [
+        { "size": "S", "waist_cm": 76, "hip_cm": 94, "inseam_cm": 79, "length_cm": 102 },
+        { "size": "M", "waist_cm": 84, "hip_cm": 102, "inseam_cm": 81, "length_cm": 105 },
+        { "size": "L", "waist_cm": 92, "hip_cm": 110, "inseam_cm": 83, "length_cm": 108 },
+        { "size": "XL", "waist_cm": 102, "hip_cm": 120, "inseam_cm": 85, "length_cm": 111 },
+        { "size": "XXL", "waist_cm": 112, "hip_cm": 130, "inseam_cm": 87, "length_cm": 114 }
+      ]
+    },
+    {
+      "name": "UK Generic Adult Tops Regular",
+      "country_code": "UK",
+      "region": "United Kingdom",
+      "category": "tops",
+      "garment_type": "regular_top",
+      "source_type": "generic_reference",
+      "source_url": null,
+      "last_verified_at": null,
+      "notes": "Approximate generic reference chart for kiosk demos and fallback fit recommendations. Not a brand-specific official chart.",
+      "size_chart": [
+        { "size": "S", "chest_cm": 91, "waist_cm": 79, "shoulder_cm": 41, "length_cm": 68 },
+        { "size": "M", "chest_cm": 99, "waist_cm": 86, "shoulder_cm": 44, "length_cm": 71 },
+        { "size": "L", "chest_cm": 107, "waist_cm": 94, "shoulder_cm": 47, "length_cm": 74 },
+        { "size": "XL", "chest_cm": 117, "waist_cm": 104, "shoulder_cm": 50, "length_cm": 77 },
+        { "size": "XXL", "chest_cm": 127, "waist_cm": 114, "shoulder_cm": 53, "length_cm": 80 }
+      ]
+    },
+    {
+      "name": "UK Generic Adult Bottoms Regular",
+      "country_code": "UK",
+      "region": "United Kingdom",
+      "category": "bottoms",
+      "garment_type": "regular_bottom",
+      "source_type": "generic_reference",
+      "source_url": null,
+      "last_verified_at": null,
+      "notes": "Approximate generic reference chart for kiosk demos and fallback fit recommendations. Not a brand-specific official chart.",
+      "size_chart": [
+        { "size": "S", "waist_cm": 76, "hip_cm": 94, "inseam_cm": 79, "length_cm": 102 },
+        { "size": "M", "waist_cm": 84, "hip_cm": 102, "inseam_cm": 81, "length_cm": 105 },
+        { "size": "L", "waist_cm": 92, "hip_cm": 110, "inseam_cm": 83, "length_cm": 108 },
+        { "size": "XL", "waist_cm": 102, "hip_cm": 120, "inseam_cm": 85, "length_cm": 111 },
+        { "size": "XXL", "waist_cm": 112, "hip_cm": 130, "inseam_cm": 87, "length_cm": 114 }
+      ]
+    },
+    {
+      "name": "EU Generic Adult Tops Regular",
+      "country_code": "EU",
+      "region": "Europe",
+      "category": "tops",
+      "garment_type": "regular_top",
+      "source_type": "generic_reference",
+      "source_url": null,
+      "last_verified_at": null,
+      "notes": "Approximate generic reference chart for kiosk demos and fallback fit recommendations. Not a brand-specific official chart.",
+      "size_chart": [
+        { "size": "S", "chest_cm": 90, "waist_cm": 78, "shoulder_cm": 41, "length_cm": 67 },
+        { "size": "M", "chest_cm": 98, "waist_cm": 86, "shoulder_cm": 44, "length_cm": 70 },
+        { "size": "L", "chest_cm": 106, "waist_cm": 94, "shoulder_cm": 47, "length_cm": 73 },
+        { "size": "XL", "chest_cm": 116, "waist_cm": 104, "shoulder_cm": 50, "length_cm": 76 },
+        { "size": "XXL", "chest_cm": 126, "waist_cm": 114, "shoulder_cm": 53, "length_cm": 79 }
+      ]
+    },
+    {
+      "name": "EU Generic Adult Bottoms Regular",
+      "country_code": "EU",
+      "region": "Europe",
+      "category": "bottoms",
+      "garment_type": "regular_bottom",
+      "source_type": "generic_reference",
+      "source_url": null,
+      "last_verified_at": null,
+      "notes": "Approximate generic reference chart for kiosk demos and fallback fit recommendations. Not a brand-specific official chart.",
+      "size_chart": [
+        { "size": "S", "waist_cm": 76, "hip_cm": 92, "inseam_cm": 78, "length_cm": 101 },
+        { "size": "M", "waist_cm": 84, "hip_cm": 100, "inseam_cm": 80, "length_cm": 104 },
+        { "size": "L", "waist_cm": 92, "hip_cm": 108, "inseam_cm": 82, "length_cm": 107 },
+        { "size": "XL", "waist_cm": 102, "hip_cm": 118, "inseam_cm": 84, "length_cm": 110 },
+        { "size": "XXL", "waist_cm": 112, "hip_cm": 128, "inseam_cm": 86, "length_cm": 113 }
+      ]
+    }
+  ]
+}

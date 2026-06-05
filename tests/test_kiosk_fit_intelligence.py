@@ -72,6 +72,10 @@ def test_kiosk_fit_intelligence_scores_size_with_measurements_and_ai_advice(tmp_
     assert first.cache_hit is False
     assert second.cache_hit is True
     assert second.fit_analysis_key == first.fit_analysis_key
+    loaded = service.get_analysis(first.fit_analysis_key)
+    assert loaded.cache_hit is True
+    assert loaded.fit_analysis_key == first.fit_analysis_key
+    assert loaded.size_recommendation["recommended_size"] == "L"
     assert analyzer.calls == 1
     assert first.measurement_estimate["status"] == "provided_measurements"
     assert first.measurement_estimate["scorer_eligible"] is True
@@ -148,6 +152,44 @@ def test_kiosk_fit_intelligence_does_not_invent_size_without_measurements(tmp_pa
         "Collect body measurements or run a calibrated measurement model.",
         "Use front and side captures with calibration before production sizing.",
     ]
+
+
+def test_kiosk_fit_intelligence_estimates_size_from_height_and_weight(tmp_path):
+    service = KioskFitIntelligenceService(fit_dir=tmp_path)
+
+    result = service.analyze_fit(
+        session_id="kiosk-session:v1:abc",
+        garment_id="garment:v1:def",
+        garment_category="tops",
+        garment_type="jersey",
+        capture_analysis={"passed": True},
+        front_image=b"front-image",
+        side_image=b"side-image",
+        size_chart=[
+            {"size": "M", "chest_cm": 96, "waist_cm": 84},
+            {"size": "L", "chest_cm": 102, "waist_cm": 90},
+        ],
+        body_measurements={"height_cm": 178, "weight_kg": 74},
+        preferred_fit="regular",
+        use_ai_analysis=False,
+    )
+
+    assert result.measurement_estimate["status"] == "height_weight_estimate"
+    assert result.measurement_estimate["source"] == "height_weight_estimator"
+    assert result.measurement_estimate["scorer_eligible"] is True
+    assert result.measurement_estimate["scorer_measurements_cm"] == {
+        "chest_cm": 94.5,
+        "hip_cm": 93.9,
+        "inseam_cm": 80.1,
+        "shoulder_cm": 43.9,
+        "waist_cm": 81.3,
+    }
+    assert result.measurement_estimate["confidence"] == 0.45
+    assert result.size_recommendation["status"] == "recommended"
+    assert result.size_recommendation["recommended_size"] == "L"
+    assert "height/weight-derived measurement estimates" in " ".join(
+        result.warnings
+    )
 
 
 def test_kiosk_fit_intelligence_records_landmark_signals_without_scoring(tmp_path):

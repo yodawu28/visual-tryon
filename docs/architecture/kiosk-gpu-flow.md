@@ -41,7 +41,9 @@ preview:
 
 - `GET /api/v1/readiness`
   Verifies local storage, SQLite catalogs, job queue paths, and provider config.
-  It returns `503` when the kiosk deployment is not ready for a Swagger run.
+  It also pings Ollama `/api/tags` and verifies the configured analyzer model
+  is installed without running inference. It returns `503` when the kiosk
+  deployment is not ready for a Swagger run.
 - `POST /api/v1/kiosk/garments`
   Uploads a garment image and stores its local path and optional size chart in
   the garment registry.
@@ -146,8 +148,8 @@ control-plane baseline does not call visual generation providers.
 
 Before running the baseline, use `GET /api/v1/readiness` or the corresponding
 Swagger operation to verify the API can access its local storage, SQLite
-catalogs, job queue directory, Ollama analyzer config, and Replicate preview
-config:
+catalogs, job queue directory, Ollama analyzer runtime/model, and Replicate
+preview config:
 
 ```bash
 python -m scripts.run_kiosk_e2e_baseline \

@@ -8,6 +8,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, Response, status
 
 from src.config.settings import get_settings
@@ -161,11 +162,58 @@ def _check_ollama_analyzer_config(settings: Any) -> ReadinessCheckResponse:
             message="OLLAMA_BASE_URL is not configured",
             details={"model": model},
         )
+    tags_url = f"{base_url.rstrip('/')}/api/tags"
+    try:
+        response = httpx.get(tags_url, timeout=3.0)
+        response.raise_for_status()
+        model_names = _extract_ollama_model_names(response.json())
+    except (httpx.HTTPError, ValueError) as exc:
+        return ReadinessCheckResponse(
+            status="not_ready",
+            message="Ollama analyzer runtime is not reachable",
+            details={
+                "ollama_base_url": base_url,
+                "model": model,
+                "tags_url": tags_url,
+                "error": str(exc),
+            },
+        )
+    if model not in model_names:
+        return ReadinessCheckResponse(
+            status="not_ready",
+            message="Ollama analyzer model is not installed",
+            details={
+                "ollama_base_url": base_url,
+                "model": model,
+                "available_models": model_names[:20],
+            },
+        )
     return ReadinessCheckResponse(
         status="ready",
-        message="Ollama analyzer config is present",
-        details={"ollama_base_url": base_url, "model": model},
+        message="Ollama analyzer runtime and model are ready",
+        details={
+            "ollama_base_url": base_url,
+            "model": model,
+            "model_count": len(model_names),
+        },
     )
+
+
+def _extract_ollama_model_names(payload: Any) -> list[str]:
+    if not isinstance(payload, dict):
+        raise ValueError("Ollama /api/tags response must be a JSON object")
+    models = payload.get("models")
+    if not isinstance(models, list):
+        raise ValueError("Ollama /api/tags response is missing models list")
+
+    model_names: list[str] = []
+    for item in models:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name") or item.get("model")
+        if isinstance(name, str) and name.strip():
+            model_names.append(name.strip())
+    return model_names
 
 
 def _check_replicate_preview_config(settings: Any) -> ReadinessCheckResponse:

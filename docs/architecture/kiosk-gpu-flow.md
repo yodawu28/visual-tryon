@@ -75,6 +75,9 @@ is still implemented, but it is hidden from the kiosk Swagger surface. Use
 
 ## Deployment Shape
 
+For RunPod deployment, use `docs/deployment/runpod-kiosk.md` and
+`.env.runpod.example` as the server setup baseline.
+
 ```mermaid
 flowchart TB
     subgraph Kiosk[Physical kiosk]

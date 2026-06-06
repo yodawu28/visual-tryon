@@ -1,4 +1,4 @@
-.PHONY: help setup install run worker worker-once kiosk-preflight test clean lint format check
+.PHONY: help setup install run run-kiosk worker worker-once kiosk-preflight test clean lint format check
 
 help:
 	@echo "Virtual Try-On MVP - Makefile commands"
@@ -6,6 +6,7 @@ help:
 	@echo "  make setup      - Setup environment và download models"
 	@echo "  make install    - Install dependencies only"
 	@echo "  make run        - Run FastAPI server"
+	@echo "  make run-kiosk  - Run kiosk API on 0.0.0.0:8080 for deployed pods"
 	@echo "  make worker     - Run local kiosk worker loop"
 	@echo "  make worker-once - Process one local kiosk job"
 	@echo "  make kiosk-preflight - Check running kiosk API readiness"
@@ -24,6 +25,9 @@ install:
 
 run:
 	python -m uvicorn src.main:app --reload --host 127.0.0.1 --port 8080
+
+run-kiosk:
+	API_PROFILE=kiosk python -m uvicorn src.main:app --host 0.0.0.0 --port 8080
 
 worker:
 	python -m scripts.run_kiosk_worker

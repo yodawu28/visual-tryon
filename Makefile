@@ -1,4 +1,4 @@
-.PHONY: help setup install run worker worker-once test clean lint format check
+.PHONY: help setup install run worker worker-once kiosk-preflight test clean lint format check
 
 help:
 	@echo "Virtual Try-On MVP - Makefile commands"
@@ -8,6 +8,7 @@ help:
 	@echo "  make run        - Run FastAPI server"
 	@echo "  make worker     - Run local kiosk worker loop"
 	@echo "  make worker-once - Process one local kiosk job"
+	@echo "  make kiosk-preflight - Check running kiosk API readiness"
 	@echo "  make test       - Run tests với coverage"
 	@echo "  make lint       - Run linters (ruff + mypy)"
 	@echo "  make format     - Format code (black + ruff)"
@@ -29,6 +30,9 @@ worker:
 
 worker-once:
 	python -m scripts.run_kiosk_worker --once
+
+kiosk-preflight:
+	python -m scripts.kiosk_preflight
 
 test:
 	pytest tests/ -v --cov=src --cov-report=html --cov-report=term

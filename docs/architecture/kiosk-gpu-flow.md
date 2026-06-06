@@ -152,6 +152,11 @@ catalogs, job queue directory, Ollama analyzer runtime/model, and Replicate
 preview config:
 
 ```bash
+API_PROFILE=kiosk make run
+make kiosk-preflight
+```
+
+```bash
 python -m scripts.run_kiosk_e2e_baseline \
   --front-image /path/to/front.png \
   --side-image /path/to/side.png \

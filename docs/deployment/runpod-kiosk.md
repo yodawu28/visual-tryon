@@ -4,6 +4,9 @@ This runbook targets the first single-pod MVP deployment on RunPod. The API,
 local JSON job queue, worker, Ollama analyzer, and runtime data all run on one
 GPU pod.
 
+For the phased deployment strategy, see
+[RunPod Deployment Roadmap](runpod-roadmap.md).
+
 ## Pod Shape
 
 - Expose HTTP port `8080` for FastAPI Swagger and kiosk API.
@@ -27,9 +30,7 @@ cd /workspace/tryon-visual-project
 
 python3 -m venv venv
 source venv/bin/activate
-make install
-
-cp .env.runpod.example .env
+make runpod-install
 ```
 
 Edit `.env`:
@@ -52,11 +53,34 @@ ollama pull qwen2.5vl:7b-q4_K_M
 ollama list
 ```
 
+You can also pull the configured default model with:
+
+```bash
+make runpod-pull-ollama
+```
+
 `GET /api/v1/readiness` and `make kiosk-preflight` both verify that
 `OLLAMA_BASE_URL/api/tags` is reachable and that
 `TRYON_ANALYZER_OLLAMA_MODEL` is installed. They do not run inference.
 
 ## Start Services
+
+For the single-pod MVP, start the API and local worker together:
+
+```bash
+cd /workspace/tryon-visual-project
+source venv/bin/activate
+make runpod-start
+```
+
+If Ollama is not already managed by the pod image or another shell, you can let
+the supervisor start `ollama serve` when `OLLAMA_BASE_URL` is not reachable:
+
+```bash
+make runpod-start-with-ollama
+```
+
+For debugging, you can still run the API and worker separately.
 
 Terminal 1:
 
@@ -79,7 +103,7 @@ Preflight:
 ```bash
 cd /workspace/tryon-visual-project
 source venv/bin/activate
-make kiosk-preflight
+make runpod-preflight
 python -m scripts.kiosk_preflight --json
 ```
 
@@ -99,10 +123,7 @@ Run this sequence:
 1. `GET /api/v1/readiness`
 2. Optional reset/seed from shell:
    ```bash
-   python -m scripts.reset_kiosk_state \
-     --execute \
-     --include-runtime-files \
-     --seed-default-size-charts
+   make runpod-reset
    ```
 3. `GET /api/v1/kiosk/size-charts?country_code=VN&category=tops`
 4. `POST /api/v1/kiosk/garments`
@@ -118,7 +139,9 @@ Run this sequence:
 
 - For the current MVP, keep `JOB_QUEUE_BACKEND=local`; Redis/Kafka can be added
   later behind the same queue interface.
-- Stop the worker before resetting runtime files.
+- Stop `make run-kiosk-all` or the standalone worker before resetting runtime
+  files.
 - Use `make kiosk-preflight` after any `.env`, model, or volume path change.
 - If the HTTP proxy returns connection refused, verify `make run-kiosk` is still
-  running and listening on `0.0.0.0:8080`.
+  running and listening on `0.0.0.0:8080`, or that `make run-kiosk-all` is still
+  alive.

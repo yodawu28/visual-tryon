@@ -1,4 +1,8 @@
-.PHONY: help setup install run run-kiosk worker worker-once kiosk-preflight test clean lint format check
+RUNPOD_DATA_DIR ?= /workspace/tryon-data
+RUNPOD_MODEL_DIR ?= /workspace/tryon-models
+RUNPOD_ANALYZER_MODEL ?= qwen2.5vl:7b-q4_K_M
+
+.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight test clean lint format check
 
 help:
 	@echo "Virtual Try-On MVP - Makefile commands"
@@ -7,9 +11,21 @@ help:
 	@echo "  make install    - Install dependencies only"
 	@echo "  make run        - Run FastAPI server"
 	@echo "  make run-kiosk  - Run kiosk API on 0.0.0.0:8080 for deployed pods"
+	@echo "  make run-kiosk-all - Run kiosk API + worker in one foreground process"
 	@echo "  make worker     - Run local kiosk worker loop"
 	@echo "  make worker-once - Process one local kiosk job"
 	@echo "  make kiosk-preflight - Check running kiosk API readiness"
+	@echo ""
+	@echo "RunPod phase 1:"
+	@echo "  make runpod-help - Show the minimum RunPod smoke-test commands"
+	@echo "  make runpod-init - Create .env from template and runtime directories"
+	@echo "  make runpod-install - Install Python dependencies and initialize paths"
+	@echo "  make runpod-pull-ollama - Pull the configured Ollama analyzer model"
+	@echo "  make runpod-start - Run kiosk API + worker"
+	@echo "  make runpod-start-with-ollama - Run kiosk API + worker + ollama serve"
+	@echo "  make runpod-preflight - Check running RunPod kiosk readiness"
+	@echo "  make runpod-reset - Reset runtime test data and seed default size charts"
+	@echo ""
 	@echo "  make test       - Run tests với coverage"
 	@echo "  make lint       - Run linters (ruff + mypy)"
 	@echo "  make format     - Format code (black + ruff)"
@@ -29,6 +45,9 @@ run:
 run-kiosk:
 	API_PROFILE=kiosk python -m uvicorn src.main:app --host 0.0.0.0 --port 8080
 
+run-kiosk-all:
+	python -m scripts.run_kiosk_all
+
 worker:
 	python -m scripts.run_kiosk_worker
 
@@ -36,6 +55,55 @@ worker-once:
 	python -m scripts.run_kiosk_worker --once
 
 kiosk-preflight:
+	python -m scripts.kiosk_preflight
+
+runpod-help:
+	@echo "RunPod Phase 1 minimum smoke-test flow"
+	@echo ""
+	@echo "One-time setup:"
+	@echo "  make runpod-install"
+	@echo "  edit .env and set REPLICATE_API_TOKEN/CORS_ORIGINS if needed"
+	@echo "  start Ollama in one shell: ollama serve"
+	@echo "  make runpod-pull-ollama"
+	@echo ""
+	@echo "Run app:"
+	@echo "  make runpod-start"
+	@echo ""
+	@echo "Or run app and let the supervisor start Ollama if needed:"
+	@echo "  make runpod-start-with-ollama"
+	@echo ""
+	@echo "Check readiness from another shell:"
+	@echo "  make runpod-preflight"
+	@echo ""
+	@echo "Reset demo data when needed:"
+	@echo "  make runpod-reset"
+
+runpod-init:
+	@test -f .env || cp .env.runpod.example .env
+	@mkdir -p $(RUNPOD_DATA_DIR)/jobs
+	@mkdir -p $(RUNPOD_MODEL_DIR)/insightface
+	@echo "RunPod env/data initialized"
+	@echo "  .env: $$(pwd)/.env"
+	@echo "  data: $(RUNPOD_DATA_DIR)"
+	@echo "  models: $(RUNPOD_MODEL_DIR)"
+	@echo "Review .env before starting the app."
+
+runpod-install: install runpod-init
+
+runpod-pull-ollama:
+	ollama pull $(RUNPOD_ANALYZER_MODEL)
+	ollama list
+
+runpod-reset:
+	python -m scripts.reset_kiosk_state --data-dir $(RUNPOD_DATA_DIR) --execute --include-runtime-files --seed-default-size-charts
+
+runpod-start:
+	python -m scripts.run_kiosk_all
+
+runpod-start-with-ollama:
+	python -m scripts.run_kiosk_all --start-ollama
+
+runpod-preflight:
 	python -m scripts.kiosk_preflight
 
 test:

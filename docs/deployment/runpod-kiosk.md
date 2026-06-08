@@ -38,13 +38,16 @@ Edit `.env`:
 - Set `REPLICATE_API_TOKEN`.
 - Set `CORS_ORIGINS` to include `https://<pod-id>-8080.proxy.runpod.net` after
   the pod is created.
+- Set `DEBUG=true` for the Phase 1 Swagger smoke test. Set it back to `false`
+  before exposing the API beyond controlled testing.
 - Keep `TEMP_STORAGE_DIR=/workspace/tryon-data`.
 - Keep `JOB_QUEUE_DIR=/workspace/tryon-data/jobs`.
 - Keep `INSIGHTFACE_MODEL_DIR=/workspace/tryon-models/insightface`.
 
 ## Ollama Setup
 
-Install/start Ollama according to the image you selected. Then pull the analyzer
+The RunPod PyTorch 2.8.0 template does not include Ollama by default. Install
+and start Ollama according to the image you selected. Then pull the analyzer
 model configured in `.env`:
 
 ```bash

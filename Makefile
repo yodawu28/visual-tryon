@@ -10,6 +10,9 @@ RUNPOD_QWEN_EDIT_REPORT ?= $(RUNPOD_DATA_DIR)/qwen_edit_smoke/qwen-edit-smoke.js
 RUNPOD_HF_HOME ?= $(RUNPOD_MODEL_DIR)/huggingface
 RUNPOD_TORCH_HOME ?= $(RUNPOD_MODEL_DIR)/torch
 RUNPOD_PIP_CACHE_DIR ?= $(RUNPOD_MODEL_DIR)/pip-cache
+RUNPOD_TORCH_VERSION ?= 2.8.0
+RUNPOD_TORCHVISION_VERSION ?= 0.23.0
+RUNPOD_TORCH_CUDA_INDEX ?= https://download.pytorch.org/whl/cu128
 
 .PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-qwen-edit-smoke test clean lint format check
 
@@ -110,7 +113,11 @@ runpod-init:
 runpod-install: install runpod-init
 
 runpod-install-qwen-edit-deps:
-	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install -U "git+https://github.com/huggingface/diffusers" transformers accelerate safetensors torchvision
+	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install --force-reinstall \
+		torch==$(RUNPOD_TORCH_VERSION) \
+		torchvision==$(RUNPOD_TORCHVISION_VERSION) \
+		--index-url $(RUNPOD_TORCH_CUDA_INDEX)
+	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install -U "git+https://github.com/huggingface/diffusers" transformers accelerate safetensors
 
 runpod-pull-ollama:
 	ollama pull $(RUNPOD_ANALYZER_MODEL)

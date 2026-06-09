@@ -157,8 +157,16 @@ make runpod-install-qwen-edit-deps
 ```
 
 This target installs current `diffusers`, `transformers`, `accelerate`,
-`safetensors`, and `torchvision`. Qwen image-edit pipelines require
-`torchvision` through the Qwen2-VL video/image processor path.
+`safetensors`, and a CUDA 12.8-compatible PyTorch stack:
+
+- `torch==2.8.0`
+- `torchvision==0.23.0`
+- wheel index: `https://download.pytorch.org/whl/cu128`
+
+Qwen image-edit pipelines require `torchvision` through the Qwen2-VL
+video/image processor path. Pinning the PyTorch stack avoids pip pulling a
+newer CUDA wheel that requires a newer NVIDIA driver than the RunPod template
+provides.
 
 Before running the smoke test, check cache and storage usage:
 
@@ -198,6 +206,13 @@ old`, stop the local Qwen-edit smoke. Change the RunPod template or install a
 PyTorch build compatible with the pod's NVIDIA driver before downloading the
 model. The smoke script also fails early when `--device cuda` is requested but
 PyTorch cannot initialize CUDA.
+
+Expected CUDA-compatible probe after `make runpod-install-qwen-edit-deps`:
+
+- `torch` should include `+cu128`.
+- `torchvision` should include `+cu128`.
+- `torch cuda build` should be `12.8`.
+- `cuda available` should be `True`.
 
 Run one two-image smoke test. Use existing files from the RunPod runtime data,
 for example a saved front capture and the uploaded garment image:

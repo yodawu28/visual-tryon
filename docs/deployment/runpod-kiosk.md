@@ -138,6 +138,71 @@ Run this sequence:
    - `POST /api/v1/kiosk/sessions/{session_id}/visual-preview/jobs`
    - `GET /api/v1/kiosk/jobs/{job_id}`
 
+## Optional Local Qwen-Edit Smoke
+
+Run this only after the Replicate-backed visual preview path is working. The
+goal is to benchmark whether local Qwen image editing is viable on the selected
+GPU before adding an API adapter.
+
+This smoke test is intentionally separate from the API and worker. It loads a
+local Hugging Face/Diffusers Qwen image-edit pipeline, runs one generation, and
+writes a PNG plus a JSON report with latency, model, device, and memory metrics.
+
+Install a current Diffusers stack for Qwen image-edit pipelines:
+
+```bash
+cd /workspace/tryon-visual-project
+source venv/bin/activate
+make runpod-install-qwen-edit-deps
+```
+
+Run one two-image smoke test. Use existing files from the RunPod runtime data,
+for example a saved front capture and the uploaded garment image:
+
+```bash
+make runpod-qwen-edit-smoke \
+  PERSON_IMAGE=/workspace/tryon-data/kiosk_sessions/captures/<front>.png \
+  GARMENT_IMAGE=/workspace/tryon-data/garments/images/<garment>.png
+```
+
+The default target uses:
+
+- model: `Qwen/Qwen-Image-Edit-2509`
+- pipeline: `edit-plus`
+- device: `cuda`
+- device map: `none`
+- steps: `20`
+- output: `/workspace/tryon-data/qwen_edit_smoke/qwen-edit-smoke.png`
+- report: `/workspace/tryon-data/qwen_edit_smoke/qwen-edit-smoke.json`
+
+If the model does not fit in VRAM, try an offload/device-map experiment directly
+with the script:
+
+```bash
+python -m scripts.local_qwen_edit_smoke \
+  --person-image /workspace/tryon-data/kiosk_sessions/captures/<front>.png \
+  --garment-image /workspace/tryon-data/garments/images/<garment>.png \
+  --output /workspace/tryon-data/qwen_edit_smoke/qwen-edit-smoke.png \
+  --report /workspace/tryon-data/qwen_edit_smoke/qwen-edit-smoke.json \
+  --model-id Qwen/Qwen-Image-Edit-2509 \
+  --pipeline edit-plus \
+  --device cuda \
+  --device-map auto \
+  --cpu-offload \
+  --steps 20
+```
+
+Treat the local Qwen-edit smoke as passed only when:
+
+- the command exits with code `0`,
+- the report has `"success": true`,
+- the PNG exists and is visually usable,
+- the report latency is acceptable for kiosk preview,
+- GPU/CPU memory usage leaves enough headroom for the API and worker.
+
+If the command fails, keep the generated failure report. It includes the Python
+exception and traceback so the failure can be compared across GPU shapes.
+
 ## Operational Notes
 
 - For the current MVP, keep `JOB_QUEUE_BACKEND=local`; Redis/Kafka can be added

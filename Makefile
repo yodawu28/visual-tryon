@@ -1,8 +1,14 @@
 RUNPOD_DATA_DIR ?= /workspace/tryon-data
 RUNPOD_MODEL_DIR ?= /workspace/tryon-models
 RUNPOD_ANALYZER_MODEL ?= qwen2.5vl:7b-q4_K_M
+RUNPOD_QWEN_EDIT_MODEL ?= Qwen/Qwen-Image-Edit-2509
+RUNPOD_QWEN_EDIT_STEPS ?= 20
+RUNPOD_QWEN_EDIT_DEVICE ?= cuda
+RUNPOD_QWEN_EDIT_DEVICE_MAP ?= none
+RUNPOD_QWEN_EDIT_OUTPUT ?= $(RUNPOD_DATA_DIR)/qwen_edit_smoke/qwen-edit-smoke.png
+RUNPOD_QWEN_EDIT_REPORT ?= $(RUNPOD_DATA_DIR)/qwen_edit_smoke/qwen-edit-smoke.json
 
-.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight test clean lint format check
+.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-qwen-edit-smoke test clean lint format check
 
 help:
 	@echo "Virtual Try-On MVP - Makefile commands"
@@ -25,6 +31,8 @@ help:
 	@echo "  make runpod-start-with-ollama - Run kiosk API + worker + ollama serve"
 	@echo "  make runpod-preflight - Check running RunPod kiosk readiness"
 	@echo "  make runpod-reset - Reset runtime test data and seed default size charts"
+	@echo "  make runpod-install-qwen-edit-deps - Install latest Diffusers stack for local Qwen-edit smoke"
+	@echo "  make runpod-qwen-edit-smoke PERSON_IMAGE=... GARMENT_IMAGE=... - Run local Qwen-edit smoke"
 	@echo ""
 	@echo "  make test       - Run tests với coverage"
 	@echo "  make lint       - Run linters (ruff + mypy)"
@@ -77,6 +85,10 @@ runpod-help:
 	@echo ""
 	@echo "Reset demo data when needed:"
 	@echo "  make runpod-reset"
+	@echo ""
+	@echo "Optional local Qwen-edit smoke:"
+	@echo "  make runpod-install-qwen-edit-deps"
+	@echo "  make runpod-qwen-edit-smoke PERSON_IMAGE=/workspace/tryon-data/...front.png GARMENT_IMAGE=/workspace/tryon-data/...garment.png"
 
 runpod-init:
 	@test -f .env || cp .env.runpod.example .env
@@ -89,6 +101,9 @@ runpod-init:
 	@echo "Review .env before starting the app."
 
 runpod-install: install runpod-init
+
+runpod-install-qwen-edit-deps:
+	pip install -U "git+https://github.com/huggingface/diffusers" transformers accelerate safetensors
 
 runpod-pull-ollama:
 	ollama pull $(RUNPOD_ANALYZER_MODEL)
@@ -105,6 +120,20 @@ runpod-start-with-ollama:
 
 runpod-preflight:
 	python -m scripts.kiosk_preflight
+
+runpod-qwen-edit-smoke:
+	@test -n "$(PERSON_IMAGE)" || (echo "Set PERSON_IMAGE=/path/to/front.png"; exit 2)
+	@test -n "$(GARMENT_IMAGE)" || (echo "Set GARMENT_IMAGE=/path/to/garment.png"; exit 2)
+	python -m scripts.local_qwen_edit_smoke \
+		--person-image "$(PERSON_IMAGE)" \
+		--garment-image "$(GARMENT_IMAGE)" \
+		--output "$(RUNPOD_QWEN_EDIT_OUTPUT)" \
+		--report "$(RUNPOD_QWEN_EDIT_REPORT)" \
+		--model-id "$(RUNPOD_QWEN_EDIT_MODEL)" \
+		--pipeline edit-plus \
+		--device "$(RUNPOD_QWEN_EDIT_DEVICE)" \
+		--device-map "$(RUNPOD_QWEN_EDIT_DEVICE_MAP)" \
+		--steps "$(RUNPOD_QWEN_EDIT_STEPS)"
 
 test:
 	pytest tests/ -v --cov=src --cov-report=html --cov-report=term

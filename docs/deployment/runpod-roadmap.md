@@ -182,7 +182,8 @@ Run and verify everything from Phase 1, plus:
 - Visual preview job queue.
 - Worker stability under repeated jobs.
 - Replicate image generation latency and quality.
-- Optional local image generation adapter once implemented.
+- Local Qwen-edit smoke script before any API adapter is implemented.
+- Optional local image generation adapter only after smoke passes.
 - Qwen multimodal analyzer quality.
 - Memory usage during analyzer and generation workloads.
 
@@ -209,6 +210,17 @@ Run and verify everything from Phase 1, plus:
    ```
 
 6. Run the full Swagger flow, including visual preview jobs.
+7. If the Replicate path is stable, run the isolated local Qwen-edit smoke:
+
+   ```bash
+   make runpod-install-qwen-edit-deps
+   make runpod-qwen-edit-smoke \
+     PERSON_IMAGE=/workspace/tryon-data/kiosk_sessions/captures/<front>.png \
+     GARMENT_IMAGE=/workspace/tryon-data/garments/images/<garment>.png
+   ```
+
+8. Build a local image generation adapter only if the smoke report proves that
+   local generation can meet quality, latency, and memory constraints.
 
 ### Benchmark Notes
 
@@ -232,6 +244,8 @@ Current baseline:
 - The successful job reached `personalized_tryon_ready` and returned no
   warnings.
 - Cached result generation time was about `9.22s`.
+- Local Qwen-edit is now treated as a separate smoke benchmark, not an API
+  dependency.
 
 ### Exit Criteria
 

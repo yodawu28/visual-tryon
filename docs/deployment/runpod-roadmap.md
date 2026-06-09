@@ -153,6 +153,10 @@ Run:
 
 ## Phase 2: Full Feature GPU Test
 
+Status: partially passed on June 9, 2026. The Replicate-backed async visual
+preview path completed successfully on RunPod with the local JSON worker queue.
+Local Qwen-edit generation remains deferred.
+
 ### Goal
 
 Benchmark full visual preview behavior and decide whether the project should
@@ -218,6 +222,16 @@ Track:
 - GPU memory usage.
 - Output quality.
 - Failure modes and retry behavior.
+
+Current baseline:
+
+- Replicate visual preview job completed successfully with
+  `qwen/qwen-image-edit-2511`.
+- Worker persisted generated image and metadata artifacts under
+  `/workspace/tryon-data/kiosk_tryons`.
+- The successful job reached `personalized_tryon_ready` and returned no
+  warnings.
+- Cached result generation time was about `9.22s`.
 
 ### Exit Criteria
 

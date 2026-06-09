@@ -615,3 +615,56 @@ before investing in local image generation.
 - Swagger worked after enabling `DEBUG=true`.
 - Default size charts were inserted and the Swagger kiosk flow was tested
   successfully.
+
+## RunPod Phase 2 Replicate Visual Preview
+
+The second RunPod deployment test validated the async visual preview path with
+Replicate-backed Qwen image edit generation before moving to local GPU
+generation.
+
+### Decisions
+
+- Keep visual generation on Replicate for the first full async validation.
+- Use the existing local JSON job queue and worker in the all-in-one RunPod Pod.
+- Validate that the worker can update the kiosk session and persist generated
+  image artifacts after a successful Replicate prediction.
+- Defer local Qwen-edit generation until the remote path is stable and we have a
+  quality/latency baseline.
+
+### Issues Found
+
+- Reset or fresh RunPod runtime data could remove `kiosk_tryons/images` and
+  `kiosk_tryons/metadata`, causing generated output writes to fail.
+- Worker job completion could fail when result payloads contained `Path`
+  objects, because local JSON job records require JSON-serializable values.
+
+### Implemented
+
+- Made kiosk visual try-on artifact writes recreate output directories before
+  writing images or metadata.
+- Added JSON normalization for job queue payload/result/error fields, including
+  `Path` to string conversion.
+- Added regression tests for output directory recreation and serializing
+  path-like job results.
+
+### Result
+
+- RunPod Phase 2 Replicate visual preview passed on June 9, 2026.
+- Job `job:v1:450fe9e136ed411ba407834d23a174a8` completed with
+  `status=succeeded`.
+- Model: `qwen/qwen-image-edit-2511`.
+- Input mapping: `multi_image_edit`.
+- Prompt version: `avatar-qwen-multimodal-preview-v1`.
+- Session reached `personalized_tryon_ready`.
+- Generated try-on key:
+  `kiosk-tryon:v1:fc854b904af7d3bf4b7eb7e991faa333301d7afcdab9ff70c4e1ce218e748691`.
+- Generation time was about `9.22s` for the cached result.
+- Warnings were empty.
+
+### Next
+
+- Review generated image quality from the persisted output path.
+- Run two or three more garments and captures to get a small latency/quality
+  baseline.
+- Decide whether the MVP should keep Replicate for preview generation or invest
+  next in local Qwen-edit generation on a stronger GPU pod.

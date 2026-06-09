@@ -170,7 +170,9 @@ Start with:
 - GPU: RTX 4090 24 GB VRAM.
 - RAM: 41 GB or more.
 - vCPU: 6 or more.
-- Storage: 50-100 GB local storage is enough for testing.
+- Storage: 50-100 GB is enough for Replicate-backed testing. Use at least
+  120 GB, preferably 150 GB or more, before testing local Qwen-edit model
+  downloads.
 
 If local image generation hits VRAM limits or has unacceptable latency, retest
 with a 48 GB class GPU such as L40, L40S, A40, A6000, or similar.

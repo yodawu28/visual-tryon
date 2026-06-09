@@ -1,4 +1,5 @@
 import json
+import types
 from unittest.mock import Mock
 
 from PIL import Image
@@ -77,6 +78,49 @@ def test_resolve_pipeline_name_uses_edit_plus_when_garment_exists(tmp_path):
         local_qwen_edit_smoke.resolve_pipeline_name("auto", garment_image=None)
         == "edit"
     )
+
+
+def test_generate_smoke_fails_before_loading_model_when_cuda_is_unavailable(
+    tmp_path,
+    monkeypatch,
+):
+    person_image = tmp_path / "person.png"
+    output_path = tmp_path / "out.png"
+    report_path = tmp_path / "report.json"
+    Image.new("RGB", (16, 16), color="white").save(person_image)
+
+    fake_torch = types.SimpleNamespace(
+        cuda=types.SimpleNamespace(is_available=Mock(return_value=False)),
+    )
+    monkeypatch.setitem(__import__("sys").modules, "torch", fake_torch)
+    load_pipeline = Mock()
+    monkeypatch.setattr(local_qwen_edit_smoke, "load_pipeline", load_pipeline)
+
+    try:
+        local_qwen_edit_smoke.generate_smoke(
+            person_image=person_image,
+            garment_image=None,
+            output=output_path,
+            report=report_path,
+            prompt="try on",
+            negative_prompt=" ",
+            model_id="Qwen/Qwen-Image-Edit-2509",
+            pipeline_name="edit",
+            size="16x16",
+            device="cuda",
+            dtype="bfloat16",
+            device_map="none",
+            cpu_offload=False,
+            steps=2,
+            true_cfg_scale=4.0,
+            seed=42,
+        )
+    except RuntimeError as exc:
+        assert "CUDA was requested" in str(exc)
+    else:
+        raise AssertionError("generate_smoke should fail when CUDA is unavailable")
+
+    load_pipeline.assert_not_called()
 
 
 def test_generate_smoke_saves_output_and_report(tmp_path, monkeypatch):

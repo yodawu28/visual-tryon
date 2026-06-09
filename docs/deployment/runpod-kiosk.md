@@ -160,6 +160,14 @@ Before running the smoke test, check cache and storage usage:
 
 ```bash
 make runpod-disk-report
+python - <<'PY'
+import torch
+print("torch", torch.__version__)
+print("torch cuda build", torch.version.cuda)
+print("cuda available", torch.cuda.is_available())
+if torch.cuda.is_available():
+    print("gpu", torch.cuda.get_device_name(0))
+PY
 ```
 
 On RunPod network volumes, `df -h /workspace` can show the shared backing
@@ -173,6 +181,17 @@ fails with `Disk quota exceeded` while `df` still shows free space, inspect the
 - `/root/.cache/torch`
 - `/root/.cache/pip`
 - `/tmp`
+
+The Qwen image-edit smoke model can require more than `57G` of model files
+before runtime overhead. Do not use a `50G` workspace/volume for this smoke
+test. Start with at least `120G`, preferably `150G+`, if local Qwen-edit is a
+deployment goal.
+
+If the CUDA probe prints a warning such as `NVIDIA driver on your system is too
+old`, stop the local Qwen-edit smoke. Change the RunPod template or install a
+PyTorch build compatible with the pod's NVIDIA driver before downloading the
+model. The smoke script also fails early when `--device cuda` is requested but
+PyTorch cannot initialize CUDA.
 
 Run one two-image smoke test. Use existing files from the RunPod runtime data,
 for example a saved front capture and the uploaded garment image:

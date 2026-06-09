@@ -180,6 +180,33 @@ def resolve_dtype(requested_dtype: str, *, device: str):
     return torch.bfloat16 if device == "cuda" else torch.float32
 
 
+def validate_device_runtime(device: str) -> None:
+    if device != "cuda":
+        return
+
+    import torch
+
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "CUDA was requested but torch.cuda.is_available() is false. "
+            "This usually means the RunPod template has an NVIDIA driver / "
+            "PyTorch CUDA build mismatch. Fix the pod image or install a torch "
+            "build compatible with the installed driver before downloading the "
+            "local Qwen image-edit model."
+        )
+
+    try:
+        device_name = torch.cuda.get_device_name(0)
+    except Exception as exc:  # pragma: no cover - driver failure path
+        raise RuntimeError(
+            "CUDA was requested but the CUDA runtime could not initialize. "
+            "Fix the NVIDIA driver / PyTorch CUDA compatibility before "
+            "downloading the local Qwen image-edit model."
+        ) from exc
+
+    progress(f"cuda runtime ready: {device_name}")
+
+
 def resolve_pipeline_name(pipeline: str, *, garment_image: Path | None) -> str:
     if pipeline != "auto":
         return pipeline
@@ -283,6 +310,7 @@ def generate_smoke(
 
     width, height = parse_size(size)
     resolved_device = resolve_device(device)
+    validate_device_runtime(resolved_device)
     torch_dtype = resolve_dtype(dtype, device=resolved_device)
     progress(f"using device={resolved_device}, dtype={torch_dtype}")
 

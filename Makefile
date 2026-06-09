@@ -110,7 +110,7 @@ runpod-init:
 runpod-install: install runpod-init
 
 runpod-install-qwen-edit-deps:
-	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install -U "git+https://github.com/huggingface/diffusers" transformers accelerate safetensors
+	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install -U "git+https://github.com/huggingface/diffusers" transformers accelerate safetensors torchvision
 
 runpod-pull-ollama:
 	ollama pull $(RUNPOD_ANALYZER_MODEL)

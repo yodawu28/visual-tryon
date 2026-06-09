@@ -123,6 +123,55 @@ def test_generate_smoke_fails_before_loading_model_when_cuda_is_unavailable(
     load_pipeline.assert_not_called()
 
 
+def test_generate_smoke_fails_before_loading_model_when_torchvision_is_missing(
+    tmp_path,
+    monkeypatch,
+):
+    person_image = tmp_path / "person.png"
+    output_path = tmp_path / "out.png"
+    report_path = tmp_path / "report.json"
+    Image.new("RGB", (16, 16), color="white").save(person_image)
+
+    monkeypatch.setattr(
+        local_qwen_edit_smoke,
+        "validate_device_runtime",
+        Mock(),
+    )
+    monkeypatch.setattr(
+        local_qwen_edit_smoke,
+        "validate_runtime_dependencies",
+        Mock(side_effect=RuntimeError("torchvision is required")),
+    )
+    load_pipeline = Mock()
+    monkeypatch.setattr(local_qwen_edit_smoke, "load_pipeline", load_pipeline)
+
+    try:
+        local_qwen_edit_smoke.generate_smoke(
+            person_image=person_image,
+            garment_image=None,
+            output=output_path,
+            report=report_path,
+            prompt="try on",
+            negative_prompt=" ",
+            model_id="Qwen/Qwen-Image-Edit-2509",
+            pipeline_name="edit",
+            size="16x16",
+            device="cpu",
+            dtype="float32",
+            device_map="none",
+            cpu_offload=False,
+            steps=2,
+            true_cfg_scale=4.0,
+            seed=42,
+        )
+    except RuntimeError as exc:
+        assert "torchvision is required" in str(exc)
+    else:
+        raise AssertionError("generate_smoke should fail when torchvision is missing")
+
+    load_pipeline.assert_not_called()
+
+
 def test_generate_smoke_saves_output_and_report(tmp_path, monkeypatch):
     person_image = tmp_path / "person.png"
     garment_image = tmp_path / "garment.png"
@@ -143,6 +192,11 @@ def test_generate_smoke_saves_output_and_report(tmp_path, monkeypatch):
         local_qwen_edit_smoke,
         "resolve_device",
         Mock(return_value="cpu"),
+    )
+    monkeypatch.setattr(
+        local_qwen_edit_smoke,
+        "validate_runtime_dependencies",
+        Mock(),
     )
     monkeypatch.setattr(
         local_qwen_edit_smoke,

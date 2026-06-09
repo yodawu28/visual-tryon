@@ -207,6 +207,17 @@ def validate_device_runtime(device: str) -> None:
     progress(f"cuda runtime ready: {device_name}")
 
 
+def validate_runtime_dependencies() -> None:
+    try:
+        import torchvision  # noqa: F401
+    except ImportError as exc:
+        raise RuntimeError(
+            "torchvision is required by Qwen image-edit pipelines but is not "
+            "installed. Run `make runpod-install-qwen-edit-deps` or install a "
+            "torchvision wheel compatible with the current torch/CUDA build."
+        ) from exc
+
+
 def resolve_pipeline_name(pipeline: str, *, garment_image: Path | None) -> str:
     if pipeline != "auto":
         return pipeline
@@ -311,6 +322,7 @@ def generate_smoke(
     width, height = parse_size(size)
     resolved_device = resolve_device(device)
     validate_device_runtime(resolved_device)
+    validate_runtime_dependencies()
     torch_dtype = resolve_dtype(dtype, device=resolved_device)
     progress(f"using device={resolved_device}, dtype={torch_dtype}")
 

@@ -156,13 +156,19 @@ source venv/bin/activate
 make runpod-install-qwen-edit-deps
 ```
 
+This target installs current `diffusers`, `transformers`, `accelerate`,
+`safetensors`, and `torchvision`. Qwen image-edit pipelines require
+`torchvision` through the Qwen2-VL video/image processor path.
+
 Before running the smoke test, check cache and storage usage:
 
 ```bash
 make runpod-disk-report
 python - <<'PY'
 import torch
+import torchvision
 print("torch", torch.__version__)
+print("torchvision", torchvision.__version__)
 print("torch cuda build", torch.version.cuda)
 print("cuda available", torch.cuda.is_available())
 if torch.cuda.is_available():

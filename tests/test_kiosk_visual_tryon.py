@@ -1,4 +1,5 @@
 import base64
+import shutil
 
 from src.modules.avatar_preview.profile import (
     AvatarFraming,
@@ -130,4 +131,31 @@ def test_kiosk_visual_tryon_falls_back_when_analyzer_fails(tmp_path):
     assert "deterministic prompt used" in result.warnings[0]
     assert (
         "selected garment category is tops" in generator.calls[0]["inpainting_prompt"]
+    )
+
+
+def test_kiosk_visual_tryon_recreates_output_dirs_before_writing(tmp_path):
+    generator = FakeGenerator()
+    service = KioskVisualTryOnService(
+        tryon_dir=tmp_path,
+        generator=generator,
+        tryon_analyzer=None,
+    )
+    shutil.rmtree(tmp_path / "images")
+    shutil.rmtree(tmp_path / "metadata")
+
+    result = service.generate_tryon(
+        session_id="kiosk-session:v1:abc",
+        garment_id="garment:v1:def",
+        user_image=b"user-image",
+        garment_image=b"garment-image",
+        garment_category="tops",
+        garment_type="jersey",
+        use_multimodal_analysis=False,
+    )
+
+    assert result.personalized_tryon_path.exists()
+    assert result.metadata_path.exists()
+    assert result.generated_image == base64.b64encode(b"generated-image").decode(
+        "utf-8"
     )

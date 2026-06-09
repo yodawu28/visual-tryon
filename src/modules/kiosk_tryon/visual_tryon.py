@@ -163,8 +163,9 @@ class KioskVisualTryOnService:
                 generated_image,
                 field_name="generated_image",
             )
-            image_path.write_bytes(generated_bytes)
-            metadata_path.write_text(
+            _write_bytes(image_path, generated_bytes)
+            _write_text(
+                metadata_path,
                 json.dumps(
                     {
                         "personalized_tryon_key": personalized_tryon_key,
@@ -198,7 +199,6 @@ class KioskVisualTryOnService:
                     indent=2,
                     sort_keys=True,
                 ),
-                encoding="utf-8",
             )
 
         return KioskVisualTryOnResult(
@@ -318,6 +318,16 @@ def _decode_base64_payload(payload: str, *, field_name: str) -> bytes:
         return base64.b64decode(normalized, validate=True)
     except Exception as exc:
         raise ValueError(f"Invalid base64 {field_name} payload") from exc
+
+
+def _write_bytes(path: Path, payload: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(payload)
+
+
+def _write_text(path: Path, payload: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(payload, encoding="utf-8")
 
 
 def _safe_cache_key_filename(cache_key: str) -> str:

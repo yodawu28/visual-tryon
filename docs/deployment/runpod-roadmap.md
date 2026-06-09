@@ -221,6 +221,9 @@ Run and verify everything from Phase 1, plus:
 
 8. Build a local image generation adapter only if the smoke report proves that
    local generation can meet quality, latency, and memory constraints.
+9. If the local smoke fails with disk quota, storage, or cache errors, keep the
+   Replicate-backed preview path as the MVP baseline and revisit local
+   generation after increasing RunPod storage/quota.
 
 ### Benchmark Notes
 

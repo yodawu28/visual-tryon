@@ -7,8 +7,11 @@ RUNPOD_QWEN_EDIT_DEVICE ?= cuda
 RUNPOD_QWEN_EDIT_DEVICE_MAP ?= none
 RUNPOD_QWEN_EDIT_OUTPUT ?= $(RUNPOD_DATA_DIR)/qwen_edit_smoke/qwen-edit-smoke.png
 RUNPOD_QWEN_EDIT_REPORT ?= $(RUNPOD_DATA_DIR)/qwen_edit_smoke/qwen-edit-smoke.json
+RUNPOD_HF_HOME ?= $(RUNPOD_MODEL_DIR)/huggingface
+RUNPOD_TORCH_HOME ?= $(RUNPOD_MODEL_DIR)/torch
+RUNPOD_PIP_CACHE_DIR ?= $(RUNPOD_MODEL_DIR)/pip-cache
 
-.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-qwen-edit-smoke test clean lint format check
+.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-qwen-edit-smoke test clean lint format check
 
 help:
 	@echo "Virtual Try-On MVP - Makefile commands"
@@ -32,6 +35,7 @@ help:
 	@echo "  make runpod-preflight - Check running RunPod kiosk readiness"
 	@echo "  make runpod-reset - Reset runtime test data and seed default size charts"
 	@echo "  make runpod-install-qwen-edit-deps - Install latest Diffusers stack for local Qwen-edit smoke"
+	@echo "  make runpod-disk-report - Print storage/cache usage for RunPod debugging"
 	@echo "  make runpod-qwen-edit-smoke PERSON_IMAGE=... GARMENT_IMAGE=... - Run local Qwen-edit smoke"
 	@echo ""
 	@echo "  make test       - Run tests với coverage"
@@ -88,22 +92,25 @@ runpod-help:
 	@echo ""
 	@echo "Optional local Qwen-edit smoke:"
 	@echo "  make runpod-install-qwen-edit-deps"
+	@echo "  make runpod-disk-report"
 	@echo "  make runpod-qwen-edit-smoke PERSON_IMAGE=/workspace/tryon-data/...front.png GARMENT_IMAGE=/workspace/tryon-data/...garment.png"
 
 runpod-init:
 	@test -f .env || cp .env.runpod.example .env
 	@mkdir -p $(RUNPOD_DATA_DIR)/jobs
 	@mkdir -p $(RUNPOD_MODEL_DIR)/insightface
+	@mkdir -p $(RUNPOD_HF_HOME) $(RUNPOD_TORCH_HOME) $(RUNPOD_PIP_CACHE_DIR)
 	@echo "RunPod env/data initialized"
 	@echo "  .env: $$(pwd)/.env"
 	@echo "  data: $(RUNPOD_DATA_DIR)"
 	@echo "  models: $(RUNPOD_MODEL_DIR)"
+	@echo "  HF_HOME: $(RUNPOD_HF_HOME)"
 	@echo "Review .env before starting the app."
 
 runpod-install: install runpod-init
 
 runpod-install-qwen-edit-deps:
-	pip install -U "git+https://github.com/huggingface/diffusers" transformers accelerate safetensors
+	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install -U "git+https://github.com/huggingface/diffusers" transformers accelerate safetensors
 
 runpod-pull-ollama:
 	ollama pull $(RUNPOD_ANALYZER_MODEL)
@@ -121,9 +128,35 @@ runpod-start-with-ollama:
 runpod-preflight:
 	python -m scripts.kiosk_preflight
 
+runpod-disk-report:
+	@echo "== df -h =="
+	@df -h
+	@echo ""
+	@echo "== df -ih =="
+	@df -ih
+	@echo ""
+	@echo "== configured cache/data sizes =="
+	@du -sh $(RUNPOD_DATA_DIR) 2>/dev/null || true
+	@du -sh $(RUNPOD_MODEL_DIR) 2>/dev/null || true
+	@du -sh $(RUNPOD_HF_HOME) 2>/dev/null || true
+	@du -sh $(RUNPOD_TORCH_HOME) 2>/dev/null || true
+	@du -sh $(RUNPOD_PIP_CACHE_DIR) 2>/dev/null || true
+	@du -sh ~/.cache/huggingface 2>/dev/null || true
+	@du -sh ~/.cache/torch 2>/dev/null || true
+	@du -sh ~/.cache/pip 2>/dev/null || true
+	@du -sh /tmp 2>/dev/null || true
+	@echo ""
+	@echo "== largest /workspace entries =="
+	@du -xhd1 /workspace 2>/dev/null | sort -h | tail -20 || true
+
 runpod-qwen-edit-smoke:
 	@test -n "$(PERSON_IMAGE)" || (echo "Set PERSON_IMAGE=/path/to/front.png"; exit 2)
 	@test -n "$(GARMENT_IMAGE)" || (echo "Set GARMENT_IMAGE=/path/to/garment.png"; exit 2)
+	HF_HOME="$(RUNPOD_HF_HOME)" \
+	TRANSFORMERS_CACHE="$(RUNPOD_HF_HOME)/transformers" \
+	HUGGINGFACE_HUB_CACHE="$(RUNPOD_HF_HOME)/hub" \
+	TORCH_HOME="$(RUNPOD_TORCH_HOME)" \
+	XDG_CACHE_HOME="$(RUNPOD_MODEL_DIR)/xdg-cache" \
 	python -m scripts.local_qwen_edit_smoke \
 		--person-image "$(PERSON_IMAGE)" \
 		--garment-image "$(GARMENT_IMAGE)" \

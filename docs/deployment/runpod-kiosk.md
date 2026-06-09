@@ -156,6 +156,24 @@ source venv/bin/activate
 make runpod-install-qwen-edit-deps
 ```
 
+Before running the smoke test, check cache and storage usage:
+
+```bash
+make runpod-disk-report
+```
+
+On RunPod network volumes, `df -h /workspace` can show the shared backing
+filesystem rather than the quota available to the pod/account. If a command
+fails with `Disk quota exceeded` while `df` still shows free space, inspect the
+`du` output from `make runpod-disk-report`, especially:
+
+- `/workspace/tryon-models`
+- `/workspace/tryon-models/huggingface`
+- `/root/.cache/huggingface`
+- `/root/.cache/torch`
+- `/root/.cache/pip`
+- `/tmp`
+
 Run one two-image smoke test. Use existing files from the RunPod runtime data,
 for example a saved front capture and the uploaded garment image:
 
@@ -174,6 +192,9 @@ The default target uses:
 - steps: `20`
 - output: `/workspace/tryon-data/qwen_edit_smoke/qwen-edit-smoke.png`
 - report: `/workspace/tryon-data/qwen_edit_smoke/qwen-edit-smoke.json`
+- Hugging Face cache: `/workspace/tryon-models/huggingface`
+- Torch cache: `/workspace/tryon-models/torch`
+- Pip cache: `/workspace/tryon-models/pip-cache`
 
 If the model does not fit in VRAM, try an offload/device-map experiment directly
 with the script:
@@ -202,6 +223,10 @@ Treat the local Qwen-edit smoke as passed only when:
 
 If the command fails, keep the generated failure report. It includes the Python
 exception and traceback so the failure can be compared across GPU shapes.
+
+For quota failures, do not build an API adapter yet. Either increase the RunPod
+disk/volume quota, move caches to a larger mounted path by overriding
+`RUNPOD_MODEL_DIR`, or continue with the Replicate-backed preview baseline.
 
 ## Operational Notes
 

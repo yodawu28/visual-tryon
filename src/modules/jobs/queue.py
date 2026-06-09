@@ -95,7 +95,7 @@ class LocalJobQueueBackend:
 
     def update(self, job_id: str, **fields: Any) -> JobRecord:
         record = self.get(job_id)
-        updated = replace(record, **fields, updated_at=_now_iso())
+        updated = replace(record, **_jsonable(fields), updated_at=_now_iso())
         self._write_record(updated)
         return updated
 
@@ -184,7 +184,10 @@ class LocalJobQueueBackend:
 
     def _write_record(self, record: JobRecord) -> None:
         path = self._job_path(record.job_id)
-        path.write_text(json.dumps(asdict(record), indent=2, sort_keys=True), "utf-8")
+        path.write_text(
+            json.dumps(_jsonable(asdict(record)), indent=2, sort_keys=True),
+            "utf-8",
+        )
 
     def _read_record(self, path: Path) -> JobRecord:
         payload = json.loads(path.read_text("utf-8"))
@@ -292,6 +295,20 @@ def _now_iso() -> str:
 
 def _safe_id(value: str) -> str:
     return "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in value)
+
+
+def _jsonable(value: Any) -> Any:
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, dict):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_jsonable(item) for item in value]
+    if isinstance(value, tuple):
+        return [_jsonable(item) for item in value]
+    return value
 
 
 def _parse_iso(value: str) -> datetime:

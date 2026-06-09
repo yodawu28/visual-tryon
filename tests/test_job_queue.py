@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from src.modules.jobs.queue import JobService, JobStatus, LocalJobQueueBackend
 
@@ -55,6 +56,30 @@ def test_local_job_queue_marks_failure(tmp_path):
     assert failed.status == JobStatus.FAILED.value
     assert failed.error == {"message": "worker unavailable"}
     assert failed.finished_at is not None
+
+
+def test_local_job_queue_serializes_path_values_in_result(tmp_path):
+    service = JobService(backend=LocalJobQueueBackend(job_dir=tmp_path / "jobs"))
+    created = service.create_job(
+        queue_name="gpu.visual_preview",
+        job_type="kiosk_visual_preview",
+        payload={"session_id": "kiosk-session:v1:test"},
+    )
+
+    completed = service.mark_succeeded(
+        job_id=created.job_id,
+        result={
+            "personalized_tryon_path": Path("kiosk_tryons/images/out.png"),
+            "nested": {"metadata_path": Path("kiosk_tryons/metadata/out.json")},
+        },
+    )
+    loaded = service.get_job(created.job_id)
+
+    assert completed.result == {
+        "personalized_tryon_path": "kiosk_tryons/images/out.png",
+        "nested": {"metadata_path": "kiosk_tryons/metadata/out.json"},
+    }
+    assert loaded.result == completed.result
 
 
 def test_local_job_queue_requeues_stale_running_job_when_attempts_remain(tmp_path):

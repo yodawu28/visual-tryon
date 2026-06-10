@@ -143,6 +143,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=True,
         help="Skip Stable Diffusion safety checker for smoke speed/stability",
     )
+    parser.add_argument(
+        "--check-imports-only",
+        action="store_true",
+        help="Clone/use CatVTON and validate imports, then exit before loading models",
+    )
     return parser.parse_args(argv)
 
 
@@ -222,7 +227,7 @@ def ensure_catvton_repo(
     )
 
 
-def load_catvton_modules(catvton_root: Path):
+def load_catvton_modules(catvton_root: Path, *, include_automasker: bool = True):
     root = str(catvton_root.resolve())
     if root not in sys.path:
         sys.path.insert(0, root)
@@ -230,19 +235,18 @@ def load_catvton_modules(catvton_root: Path):
     try:
         from diffusers.image_processor import VaeImageProcessor
         from huggingface_hub import snapshot_download
-        from model.cloth_masker import AutoMasker
         from model.pipeline import CatVTONPipeline
         from utils import init_weight_dtype
         from utils import resize_and_crop
         from utils import resize_and_padding
     except ImportError as exc:
         raise RuntimeError(
-            "CatVTON dependencies are missing or incompatible. Run "
-            "`make runpod-install-catvton-deps`, then retry the smoke."
+            "CatVTON core dependencies are missing or incompatible. Run "
+            "`make runpod-install-catvton-deps`, then retry the smoke. "
+            f"Original import error: {type(exc).__name__}: {exc}"
         ) from exc
 
-    return {
-        "AutoMasker": AutoMasker,
+    modules = {
         "CatVTONPipeline": CatVTONPipeline,
         "VaeImageProcessor": VaeImageProcessor,
         "init_weight_dtype": init_weight_dtype,
@@ -250,6 +254,21 @@ def load_catvton_modules(catvton_root: Path):
         "resize_and_padding": resize_and_padding,
         "snapshot_download": snapshot_download,
     }
+
+    if include_automasker:
+        try:
+            from model.cloth_masker import AutoMasker
+        except ImportError as exc:
+            raise RuntimeError(
+                "CatVTON AutoMasker dependencies are missing or incompatible. "
+                "Use `make runpod-catvton-smoke RUNPOD_CATVTON_MASK_MODE=rough` "
+                "to smoke the core pipeline first, or install the DensePose/SCHP "
+                "dependencies needed by CatVTON auto masking. "
+                f"Original import error: {type(exc).__name__}: {exc}"
+            ) from exc
+        modules["AutoMasker"] = AutoMasker
+
+    return modules
 
 
 def generate_smoke(
@@ -274,6 +293,7 @@ def generate_smoke(
     seed: int,
     allow_tf32: bool,
     skip_safety_check: bool,
+    check_imports_only: bool = False,
 ) -> dict[str, Any]:
     import torch
 
@@ -282,19 +302,35 @@ def generate_smoke(
     width, height = parse_size(size)
     resolved_device = resolve_device(device)
     validate_device_runtime(resolved_device)
+    ensure_catvton_repo(
+        catvton_root=catvton_root,
+        repo_url=repo_url,
+        no_clone=no_clone,
+    )
+    modules = load_catvton_modules(
+        catvton_root,
+        include_automasker=mask_mode == "auto",
+    )
+    if check_imports_only:
+        progress("CatVTON imports passed")
+        report_payload: dict[str, Any] = {
+            "success": True,
+            "finished_at": datetime.now(UTC).isoformat(),
+            "model": "CatVTON",
+            "repo_url": repo_url,
+            "catvton_root": str(catvton_root),
+            "check_imports_only": True,
+            "error": None,
+        }
+        _write_report(report, report_payload)
+        return report_payload
+
     ensure_input_exists(person_image, "person image")
     ensure_input_exists(garment_image, "garment image")
     if mask_mode == "provided":
         if mask_image is None:
             raise ValueError("--mask-image is required when --mask-mode=provided")
         ensure_input_exists(mask_image, "mask image")
-
-    ensure_catvton_repo(
-        catvton_root=catvton_root,
-        repo_url=repo_url,
-        no_clone=no_clone,
-    )
-    modules = load_catvton_modules(catvton_root)
 
     snapshot_download = modules["snapshot_download"]
     resume_candidate = Path(resume_path).expanduser()
@@ -516,6 +552,7 @@ def main(argv: list[str] | None = None) -> int:
             seed=args.seed,
             allow_tf32=args.allow_tf32,
             skip_safety_check=args.skip_safety_check,
+            check_imports_only=args.check_imports_only,
         )
         return 0
     except Exception as exc:
@@ -538,6 +575,7 @@ def main(argv: list[str] | None = None) -> int:
             "seed": args.seed,
             "allow_tf32": args.allow_tf32,
             "skip_safety_check": args.skip_safety_check,
+            "check_imports_only": args.check_imports_only,
             "person_image": str(args.person_image),
             "garment_image": str(args.garment_image),
             "output": str(args.output),

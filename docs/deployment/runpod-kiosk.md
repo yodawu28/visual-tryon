@@ -317,6 +317,7 @@ cd /workspace/tryon-visual-project
 source venv/bin/activate
 make runpod-cuda-report
 make runpod-install-catvton-deps
+make runpod-catvton-import-check
 ```
 
 `make runpod-install-catvton-deps` intentionally does not reinstall `torch` or
@@ -324,6 +325,10 @@ make runpod-install-catvton-deps
 CUDA-enabled torch stack. If `make runpod-cuda-report` shows that CUDA or
 torchvision is broken, fix the pod template or install a compatible torch stack
 explicitly before running CatVTON.
+
+`make runpod-catvton-import-check` clones/uses the CatVTON repo and validates
+Python imports only. It does not load the model weights or run generation. Use
+it to identify the exact missing package before starting the full smoke.
 
 Prepare reusable smoke inputs from the checked-in fixtures:
 
@@ -345,20 +350,27 @@ The default target uses:
 - size: `768x1024`
 - precision: `bf16`
 - cloth type: `upper`
-- mask mode: `auto`
+- mask mode: `rough`
 - steps: `30`
 - guidance scale: `2.5`
 - output: `/workspace/tryon-data/catvton_smoke/catvton-smoke.png`
 - report: `/workspace/tryon-data/catvton_smoke/catvton-smoke.json`
 
-`MASK_MODE=auto` uses CatVTON's DensePose/SCHP AutoMasker. This is the real
-quality path, but it downloads and loads additional preprocessing checkpoints.
-If that blocks the first runtime smoke, validate only the CatVTON pipeline with
-a rough synthetic mask:
+The default uses a rough synthetic mask so the first smoke validates the
+CatVTON pipeline, checkpoint loading, GPU runtime, and output writing without
+being blocked by DensePose/SCHP preprocessing dependencies.
+
+After the rough-mask smoke passes, test CatVTON's real quality path with
+DensePose/SCHP AutoMasker:
 
 ```bash
-make runpod-catvton-smoke RUNPOD_CATVTON_MASK_MODE=rough
+make runpod-catvton-import-check RUNPOD_CATVTON_MASK_MODE=auto
+make runpod-catvton-smoke RUNPOD_CATVTON_MASK_MODE=auto
 ```
+
+If the auto-mask import check fails, inspect
+`/workspace/tryon-data/catvton_smoke/catvton-smoke.json`. The report includes
+the original missing package or incompatible import error.
 
 Use real kiosk captures and uploaded garments when evaluating quality:
 

@@ -52,6 +52,7 @@ def test_parse_args_supports_catvton_smoke_options(tmp_path):
             "7",
             "--no-allow-tf32",
             "--no-skip-safety-check",
+            "--check-imports-only",
         ]
     )
 
@@ -74,6 +75,7 @@ def test_parse_args_supports_catvton_smoke_options(tmp_path):
     assert args.seed == 7
     assert args.allow_tf32 is False
     assert args.skip_safety_check is False
+    assert args.check_imports_only is True
 
 
 def test_create_rough_mask_has_expected_size_and_nonzero_pixels():
@@ -218,6 +220,58 @@ def test_generate_smoke_saves_output_and_report_with_fake_modules(
     saved_report = json.loads(report_path.read_text("utf-8"))
     assert saved_report["output"] == str(output_path)
     assert saved_report["checkpoint_path"] == str(checkpoint_root)
+
+
+def test_generate_smoke_import_check_does_not_require_input_files(
+    tmp_path,
+    monkeypatch,
+):
+    report_path = tmp_path / "report.json"
+    catvton_root = tmp_path / "CatVTON"
+    modules = {
+        "CatVTONPipeline": Mock(),
+        "VaeImageProcessor": Mock(),
+        "init_weight_dtype": Mock(),
+        "resize_and_crop": Mock(),
+        "resize_and_padding": Mock(),
+        "snapshot_download": Mock(),
+    }
+
+    monkeypatch.setattr(local_catvton_smoke, "resolve_device", Mock(return_value="cpu"))
+    monkeypatch.setattr(local_catvton_smoke, "validate_device_runtime", Mock())
+    monkeypatch.setattr(local_catvton_smoke, "ensure_catvton_repo", Mock())
+    load_modules = Mock(return_value=modules)
+    monkeypatch.setattr(local_catvton_smoke, "load_catvton_modules", load_modules)
+    monkeypatch.setitem(sys.modules, "torch", types.SimpleNamespace())
+
+    report = local_catvton_smoke.generate_smoke(
+        person_image=tmp_path / "missing-person.png",
+        garment_image=tmp_path / "missing-garment.png",
+        output=tmp_path / "out.png",
+        report=report_path,
+        catvton_root=catvton_root,
+        repo_url="https://example.test/CatVTON.git",
+        no_clone=True,
+        base_model_path="base/model",
+        resume_path="checkpoint/model",
+        size="16x16",
+        device="auto",
+        mixed_precision="bf16",
+        cloth_type="upper",
+        mask_mode="rough",
+        mask_image=None,
+        steps=2,
+        guidance_scale=2.5,
+        seed=42,
+        allow_tf32=True,
+        skip_safety_check=True,
+        check_imports_only=True,
+    )
+
+    assert report["success"] is True
+    assert report["check_imports_only"] is True
+    assert report_path.exists()
+    load_modules.assert_called_once_with(catvton_root, include_automasker=False)
 
 
 class _NullContext:

@@ -22,7 +22,7 @@ RUNPOD_CATVTON_SIZE ?= 768x1024
 RUNPOD_CATVTON_DEVICE ?= cuda
 RUNPOD_CATVTON_MIXED_PRECISION ?= bf16
 RUNPOD_CATVTON_CLOTH_TYPE ?= upper
-RUNPOD_CATVTON_MASK_MODE ?= auto
+RUNPOD_CATVTON_MASK_MODE ?= rough
 RUNPOD_CATVTON_STEPS ?= 30
 RUNPOD_CATVTON_GUIDANCE_SCALE ?= 2.5
 RUNPOD_CATVTON_SEED ?= 42
@@ -38,7 +38,7 @@ RUNPOD_TORCH_VERSION ?= 2.8.0
 RUNPOD_TORCHVISION_VERSION ?= 0.23.0
 RUNPOD_TORCH_CUDA_INDEX ?= https://download.pytorch.org/whl/cu128
 
-.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-install-catvton-deps runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke test clean lint format check
+.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-install-catvton-deps runpod-catvton-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke test clean lint format check
 
 help:
 	@echo "Virtual Try-On MVP - Makefile commands"
@@ -67,6 +67,7 @@ help:
 	@echo "  make runpod-qwen-edit-smoke-data - Prepare synthetic local Qwen-edit smoke inputs"
 	@echo "  make runpod-qwen-edit-smoke - Run local Qwen-edit smoke with prepared/default inputs"
 	@echo "  make runpod-install-catvton-deps - Install extra deps for local CatVTON smoke"
+	@echo "  make runpod-catvton-import-check - Validate CatVTON imports without loading models"
 	@echo "  make runpod-catvton-smoke - Run local CatVTON smoke with prepared/default inputs"
 	@echo ""
 	@echo "  make test       - Run tests với coverage"
@@ -130,6 +131,7 @@ runpod-help:
 	@echo ""
 	@echo "Optional local CatVTON smoke:"
 	@echo "  make runpod-install-catvton-deps"
+	@echo "  make runpod-catvton-import-check"
 	@echo "  make runpod-qwen-edit-smoke-data"
 	@echo "  make runpod-catvton-smoke"
 
@@ -161,10 +163,31 @@ runpod-install-catvton-deps:
 		"transformers>=4.27.3" \
 		"accelerate>=0.31.0" \
 		"safetensors>=0.4.5" \
+		"PyYAML>=6.0.1" \
+		"scipy>=1.10.1" \
+		"tqdm>=4.66.4" \
+		"packaging>=24.1" \
 		"opencv-python-headless>=4.10.0.84" \
 		"scikit-image>=0.24.0" \
 		"matplotlib>=3.9.1" \
 		"ninja>=1.11.1"
+
+runpod-catvton-import-check:
+	HF_HOME="$(RUNPOD_HF_HOME)" \
+	TRANSFORMERS_CACHE="$(RUNPOD_HF_HOME)/transformers" \
+	HUGGINGFACE_HUB_CACHE="$(RUNPOD_HF_HOME)/hub" \
+	TORCH_HOME="$(RUNPOD_TORCH_HOME)" \
+	XDG_CACHE_HOME="$(RUNPOD_MODEL_DIR)/xdg-cache" \
+	python -m scripts.local_catvton_smoke \
+		--person-image "$(RUNPOD_CATVTON_PERSON_IMAGE)" \
+		--garment-image "$(RUNPOD_CATVTON_GARMENT_IMAGE)" \
+		--output "$(RUNPOD_CATVTON_OUTPUT)" \
+		--report "$(RUNPOD_CATVTON_REPORT)" \
+		--catvton-root "$(RUNPOD_CATVTON_ROOT)" \
+		--repo-url "$(RUNPOD_CATVTON_REPO_URL)" \
+		--device cpu \
+		--mask-mode "$(RUNPOD_CATVTON_MASK_MODE)" \
+		--check-imports-only
 
 runpod-pull-ollama:
 	ollama pull $(RUNPOD_ANALYZER_MODEL)

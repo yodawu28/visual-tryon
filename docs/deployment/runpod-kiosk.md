@@ -315,8 +315,15 @@ Install the extra dependencies used by the CatVTON smoke script:
 ```bash
 cd /workspace/tryon-visual-project
 source venv/bin/activate
+make runpod-cuda-report
 make runpod-install-catvton-deps
 ```
+
+`make runpod-install-catvton-deps` intentionally does not reinstall `torch` or
+`torchvision`. It assumes the RunPod PyTorch template already has a compatible
+CUDA-enabled torch stack. If `make runpod-cuda-report` shows that CUDA or
+torchvision is broken, fix the pod template or install a compatible torch stack
+explicitly before running CatVTON.
 
 Prepare reusable smoke inputs from the checked-in fixtures:
 

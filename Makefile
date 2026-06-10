@@ -155,10 +155,6 @@ runpod-install-qwen-edit-deps:
 	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install -U "git+https://github.com/huggingface/diffusers" transformers accelerate safetensors
 
 runpod-install-catvton-deps:
-	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install --force-reinstall \
-		torch==$(RUNPOD_TORCH_VERSION) \
-		torchvision==$(RUNPOD_TORCHVISION_VERSION) \
-		--index-url $(RUNPOD_TORCH_CUDA_INDEX)
 	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install -U \
 		"huggingface_hub>=0.23.4" \
 		"diffusers>=0.29.2" \

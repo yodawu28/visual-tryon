@@ -5,6 +5,8 @@ RUNPOD_QWEN_EDIT_MODEL ?= Qwen/Qwen-Image-Edit-2509
 RUNPOD_QWEN_EDIT_STEPS ?= 8
 RUNPOD_QWEN_EDIT_SIZE ?= 512x512
 RUNPOD_QWEN_EDIT_INPUT_MAX_SIZE ?= 512
+RUNPOD_SMOKE_GARMENT_CATEGORY ?= upper
+RUNPOD_SMOKE_DATA_OVERWRITE ?= 1
 RUNPOD_QWEN_EDIT_DEVICE ?= cuda
 RUNPOD_QWEN_EDIT_DEVICE_MAP ?= none
 RUNPOD_QWEN_EDIT_CPU_OFFLOAD ?= 1
@@ -21,7 +23,7 @@ RUNPOD_CATVTON_RESUME_PATH ?= zhengchong/CatVTON
 RUNPOD_CATVTON_SIZE ?= 768x1024
 RUNPOD_CATVTON_DEVICE ?= cuda
 RUNPOD_CATVTON_MIXED_PRECISION ?= bf16
-RUNPOD_CATVTON_CLOTH_TYPE ?= upper
+RUNPOD_CATVTON_CLOTH_TYPE ?= $(RUNPOD_SMOKE_GARMENT_CATEGORY)
 RUNPOD_CATVTON_MASK_MODE ?= rough
 RUNPOD_CATVTON_STEPS ?= 30
 RUNPOD_CATVTON_GUIDANCE_SCALE ?= 2.5
@@ -38,7 +40,7 @@ RUNPOD_TORCH_VERSION ?= 2.8.0
 RUNPOD_TORCHVISION_VERSION ?= 0.23.0
 RUNPOD_TORCH_CUDA_INDEX ?= https://download.pytorch.org/whl/cu128
 
-.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-install-catvton-deps runpod-catvton-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke test clean lint format check
+.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-install-catvton-deps runpod-catvton-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke test clean lint format check
 
 help:
 	@echo "Virtual Try-On MVP - Makefile commands"
@@ -65,6 +67,7 @@ help:
 	@echo "  make runpod-disk-report - Print storage/cache usage for RunPod debugging"
 	@echo "  make runpod-cuda-report - Print NVIDIA/PyTorch CUDA diagnostics"
 	@echo "  make runpod-qwen-edit-smoke-data - Prepare synthetic local Qwen-edit smoke inputs"
+	@echo "  make runpod-vton-smoke-data - Alias for shared Qwen/CatVTON smoke inputs"
 	@echo "  make runpod-qwen-edit-smoke - Run local Qwen-edit smoke with prepared/default inputs"
 	@echo "  make runpod-install-catvton-deps - Install extra deps for local CatVTON smoke"
 	@echo "  make runpod-catvton-import-check - Validate CatVTON imports without loading models"
@@ -132,7 +135,7 @@ runpod-help:
 	@echo "Optional local CatVTON smoke:"
 	@echo "  make runpod-install-catvton-deps"
 	@echo "  make runpod-catvton-import-check"
-	@echo "  make runpod-qwen-edit-smoke-data"
+	@echo "  make runpod-vton-smoke-data"
 	@echo "  make runpod-catvton-smoke"
 
 runpod-init:
@@ -164,6 +167,7 @@ runpod-install-catvton-deps:
 		"accelerate>=0.31.0" \
 		"safetensors>=0.4.5" \
 		"PyYAML>=6.0.1" \
+		"omegaconf>=2.3.0" \
 		"scipy>=1.10.1" \
 		"tqdm>=4.66.4" \
 		"packaging>=24.1" \
@@ -230,7 +234,13 @@ runpod-cuda-report:
 	python -m scripts.runpod_cuda_report
 
 runpod-qwen-edit-smoke-data:
-	python -m scripts.prepare_qwen_edit_smoke_data --data-dir $(RUNPOD_DATA_DIR) --fixture-dir $(RUNPOD_QWEN_EDIT_FIXTURE_DIR)
+	python -m scripts.prepare_qwen_edit_smoke_data \
+		--data-dir $(RUNPOD_DATA_DIR) \
+		--fixture-dir $(RUNPOD_QWEN_EDIT_FIXTURE_DIR) \
+		--garment-category $(RUNPOD_SMOKE_GARMENT_CATEGORY) \
+		$(if $(filter 1 true yes,$(RUNPOD_SMOKE_DATA_OVERWRITE)),--overwrite,)
+
+runpod-vton-smoke-data: runpod-qwen-edit-smoke-data
 
 runpod-qwen-edit-smoke:
 	$(eval PERSON_IMAGE_PATH := $(or $(PERSON_IMAGE),$(RUNPOD_QWEN_EDIT_PERSON_IMAGE)))

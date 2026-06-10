@@ -333,8 +333,15 @@ it to identify the exact missing package before starting the full smoke.
 Prepare reusable smoke inputs from the checked-in fixtures:
 
 ```bash
-make runpod-qwen-edit-smoke-data
+make runpod-vton-smoke-data
 ```
+
+This target writes the same person and garment files used by both Qwen-edit and
+CatVTON smoke tests. It overwrites stale smoke files by default, which matters
+when a previous pod run left a lower-body garment at
+`/workspace/tryon-data/garments/images/garment-v1-smoke.webp`. The checked-in
+default fixture is an upper-body garment, so CatVTON's default
+`RUNPOD_CATVTON_CLOTH_TYPE` is also `upper`.
 
 Run the default CatVTON smoke:
 
@@ -370,7 +377,10 @@ make runpod-catvton-smoke RUNPOD_CATVTON_MASK_MODE=auto
 
 If the auto-mask import check fails, inspect
 `/workspace/tryon-data/catvton_smoke/catvton-smoke.json`. The report includes
-the original missing package or incompatible import error.
+the original missing package or incompatible import error. Install the missing
+package incrementally and rerun the import check. Avoid blindly reinstalling
+`torch`/`torchvision` while debugging AutoMasker because that can break the
+known-good CUDA runtime.
 
 Use real kiosk captures and uploaded garments when evaluating quality:
 

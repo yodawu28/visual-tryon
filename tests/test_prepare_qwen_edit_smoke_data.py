@@ -20,7 +20,11 @@ def test_prepare_qwen_edit_smoke_data_creates_inputs_and_manifest(tmp_path: Path
     payload = json.loads(manifest.read_text("utf-8"))
     assert payload["person_image"] == str(person_image)
     assert payload["garment_image"] == str(garment_image)
+    assert payload["garment_category"] == "upper"
+    assert payload["catvton_cloth_type"] == "upper"
     assert "make runpod-qwen-edit-smoke" in payload["smoke_command"]
+    assert "make runpod-catvton-smoke" in payload["catvton_smoke_command"]
+    assert "RUNPOD_CATVTON_CLOTH_TYPE=upper" in payload["catvton_smoke_command"]
     assert "fixture_sources" in payload
 
 
@@ -72,3 +76,19 @@ def test_prepare_qwen_edit_smoke_data_prefers_fixture_images(tmp_path: Path):
     assert garment_image.read_bytes() == b"garment-fixture"
     assert payload["fixture_sources"]["person_image_exists"] is True
     assert payload["fixture_sources"]["garment_image_exists"] is True
+
+
+def test_prepare_qwen_edit_smoke_data_records_garment_category(tmp_path: Path):
+    result = prepare_qwen_edit_smoke_data(
+        data_dir=tmp_path,
+        garment_category="lower",
+    )
+
+    manifest = Path(result["manifest"])
+    payload = json.loads(manifest.read_text("utf-8"))
+
+    assert result["garment_category"] == "lower"
+    assert result["catvton_cloth_type"] == "lower"
+    assert payload["garment_category"] == "lower"
+    assert payload["catvton_cloth_type"] == "lower"
+    assert "RUNPOD_CATVTON_CLOTH_TYPE=lower" in payload["catvton_smoke_command"]

@@ -15,6 +15,7 @@ from PIL import Image, ImageDraw, ImageFont
 DEFAULT_SESSION_STEM = "kiosk-session-v1-smoke"
 DEFAULT_GARMENT_STEM = "garment-v1-smoke"
 DEFAULT_FIXTURE_DIR = Path("examples/qwen_edit_smoke")
+DEFAULT_GARMENT_CATEGORY = "upper"
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,7 @@ def prepare_qwen_edit_smoke_data(
     fixture_dir: Path = DEFAULT_FIXTURE_DIR,
     session_stem: str = DEFAULT_SESSION_STEM,
     garment_stem: str = DEFAULT_GARMENT_STEM,
+    garment_category: str = DEFAULT_GARMENT_CATEGORY,
     overwrite: bool = False,
 ) -> dict[str, Any]:
     data_dir = data_dir.resolve()
@@ -72,8 +74,16 @@ def prepare_qwen_edit_smoke_data(
         },
         "person_image": str(paths.person_image),
         "garment_image": str(paths.garment_image),
+        "garment_category": garment_category,
+        "catvton_cloth_type": garment_category,
         "smoke_command": (
             "make runpod-qwen-edit-smoke "
+            f"PERSON_IMAGE={paths.person_image} "
+            f"GARMENT_IMAGE={paths.garment_image}"
+        ),
+        "catvton_smoke_command": (
+            "make runpod-catvton-smoke "
+            f"RUNPOD_CATVTON_CLOTH_TYPE={garment_category} "
             f"PERSON_IMAGE={paths.person_image} "
             f"GARMENT_IMAGE={paths.garment_image}"
         ),
@@ -90,8 +100,11 @@ def prepare_qwen_edit_smoke_data(
         "created": created,
         "person_image": str(paths.person_image),
         "garment_image": str(paths.garment_image),
+        "garment_category": garment_category,
+        "catvton_cloth_type": garment_category,
         "manifest": str(paths.manifest),
         "smoke_command": payload["smoke_command"],
+        "catvton_smoke_command": payload["catvton_smoke_command"],
     }
 
 
@@ -101,6 +114,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--fixture-dir", type=Path, default=DEFAULT_FIXTURE_DIR)
     parser.add_argument("--session-stem", default=DEFAULT_SESSION_STEM)
     parser.add_argument("--garment-stem", default=DEFAULT_GARMENT_STEM)
+    parser.add_argument(
+        "--garment-category",
+        choices=("upper", "lower", "overall", "inner", "outer"),
+        default=DEFAULT_GARMENT_CATEGORY,
+        help="Garment category used by VTON-specific smoke tests such as CatVTON",
+    )
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args(argv)
 
@@ -112,6 +131,7 @@ def main(argv: list[str] | None = None) -> int:
         fixture_dir=args.fixture_dir,
         session_stem=args.session_stem,
         garment_stem=args.garment_stem,
+        garment_category=args.garment_category,
         overwrite=args.overwrite,
     )
     print(json.dumps(payload, indent=2, sort_keys=True))

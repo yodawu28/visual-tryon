@@ -34,6 +34,9 @@ def test_parse_args_supports_two_image_smoke_options(tmp_path):
             "--device-map",
             "auto",
             "--cpu-offload",
+            "--sequential-cpu-offload",
+            "--input-max-size",
+            "512",
             "--steps",
             "12",
             "--true-cfg-scale",
@@ -53,6 +56,8 @@ def test_parse_args_supports_two_image_smoke_options(tmp_path):
     assert args.dtype == "bfloat16"
     assert args.device_map == "auto"
     assert args.cpu_offload is True
+    assert args.sequential_cpu_offload is True
+    assert args.input_max_size == 512
     assert args.steps == 12
     assert args.true_cfg_scale == 3.5
     assert args.seed == 7
@@ -293,6 +298,63 @@ def test_load_pipeline_cpu_offload_does_not_move_whole_pipeline_to_cuda(
 
     assert pipeline.cpu_offload_enabled is True
     assert pipeline.to_calls == [("bf16",)]
+
+
+def test_load_pipeline_sequential_cpu_offload_takes_precedence(monkeypatch):
+    class FakePipeline:
+        def __init__(self):
+            self.to_calls = []
+            self.cpu_offload_enabled = False
+            self.sequential_cpu_offload_enabled = False
+
+        @classmethod
+        def from_pretrained(cls, model_id, **kwargs):
+            return cls()
+
+        def to(self, *args):
+            self.to_calls.append(args)
+            return self
+
+        def enable_model_cpu_offload(self):
+            self.cpu_offload_enabled = True
+
+        def enable_sequential_cpu_offload(self):
+            self.sequential_cpu_offload_enabled = True
+
+        def set_progress_bar_config(self, **kwargs):
+            self.progress_bar_kwargs = kwargs
+
+    monkeypatch.setitem(
+        sys.modules,
+        "diffusers",
+        types.SimpleNamespace(
+            QwenImageEditPipeline=FakePipeline,
+            QwenImageEditPlusPipeline=FakePipeline,
+        ),
+    )
+
+    pipeline = local_qwen_edit_smoke.load_pipeline(
+        model_id="Qwen/Qwen-Image-Edit-2509",
+        pipeline_name="edit-plus",
+        torch_dtype="bf16",
+        device="cuda",
+        device_map="none",
+        cpu_offload=True,
+        sequential_cpu_offload=True,
+    )
+
+    assert pipeline.sequential_cpu_offload_enabled is True
+    assert pipeline.cpu_offload_enabled is False
+    assert pipeline.to_calls == [("bf16",)]
+
+
+def test_load_rgb_image_resizes_long_side(tmp_path):
+    image_path = tmp_path / "input.png"
+    Image.new("RGB", (100, 200), color="white").save(image_path)
+
+    image = local_qwen_edit_smoke._load_rgb_image(image_path, max_size=50)
+
+    assert image.size == (25, 50)
 
 
 def test_main_writes_failure_report_when_generation_fails(tmp_path, monkeypatch):

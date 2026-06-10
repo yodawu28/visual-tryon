@@ -140,6 +140,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Enable model CPU offload after loading when supported",
     )
     parser.add_argument(
+        "--sequential-cpu-offload",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable more aggressive sequential CPU offload when supported",
+    )
+    parser.add_argument(
+        "--input-max-size",
+        type=int,
+        default=0,
+        help=(
+            "Resize each input image so its longest side is at most this value. "
+            "Use 0 to keep original input sizes."
+        ),
+    )
+    parser.add_argument(
         "--steps",
         type=_positive_int,
         default=20,
@@ -233,6 +248,7 @@ def load_pipeline(
     device: str,
     device_map: str,
     cpu_offload: bool,
+    sequential_cpu_offload: bool = False,
 ):
     import torch
 
@@ -266,7 +282,19 @@ def load_pipeline(
     pipeline = pipeline_cls.from_pretrained(model_id, **from_pretrained_kwargs)
     progress("pipeline loaded")
 
-    if cpu_offload and device == "cuda":
+    if sequential_cpu_offload and device == "cuda":
+        if hasattr(pipeline, "to"):
+            progress(f"moving pipeline to dtype={torch_dtype}")
+            pipeline = pipeline.to(torch_dtype)
+        if hasattr(pipeline, "enable_sequential_cpu_offload"):
+            progress("enabling sequential CPU offload")
+            pipeline.enable_sequential_cpu_offload()
+        else:
+            raise RuntimeError(
+                "Sequential CPU offload was requested but this pipeline does "
+                "not expose enable_sequential_cpu_offload()."
+            )
+    elif cpu_offload and device == "cuda":
         if hasattr(pipeline, "to"):
             progress(f"moving pipeline to dtype={torch_dtype}")
             pipeline = pipeline.to(torch_dtype)
@@ -321,6 +349,8 @@ def generate_smoke(
     steps: int,
     true_cfg_scale: float,
     seed: int,
+    sequential_cpu_offload: bool = False,
+    input_max_size: int = 0,
 ) -> dict[str, Any]:
     import torch
 
@@ -346,11 +376,12 @@ def generate_smoke(
         device=resolved_device,
         device_map=device_map,
         cpu_offload=cpu_offload,
+        sequential_cpu_offload=sequential_cpu_offload,
     )
 
-    images = [_load_rgb_image(person_image)]
+    images = [_load_rgb_image(person_image, max_size=input_max_size)]
     if garment_image is not None:
-        images.append(_load_rgb_image(garment_image))
+        images.append(_load_rgb_image(garment_image, max_size=input_max_size))
 
     generator_device = resolved_device if resolved_device in {"cuda", "cpu"} else "cpu"
     generator = torch.Generator(device=generator_device).manual_seed(seed)
@@ -396,6 +427,8 @@ def generate_smoke(
         "dtype": str(torch_dtype).replace("torch.", ""),
         "device_map": device_map,
         "cpu_offload": cpu_offload,
+        "sequential_cpu_offload": sequential_cpu_offload,
+        "input_max_size": input_max_size,
         "steps": steps,
         "true_cfg_scale": true_cfg_scale,
         "seed": seed,
@@ -455,10 +488,22 @@ def collect_runtime_metrics(device: str) -> dict[str, Any]:
     return metrics
 
 
-def _load_rgb_image(path: Path) -> Image.Image:
+def _load_rgb_image(path: Path, *, max_size: int = 0) -> Image.Image:
     if not path.exists():
         raise FileNotFoundError(f"Input image not found: {path}")
-    return Image.open(path).convert("RGB")
+    with Image.open(path) as image:
+        rgb_image = image.convert("RGB")
+    if max_size > 0:
+        longest_side = max(rgb_image.size)
+        if longest_side > max_size:
+            scale = max_size / longest_side
+            resized_size = (
+                max(1, round(rgb_image.width * scale)),
+                max(1, round(rgb_image.height * scale)),
+            )
+            progress(f"resizing input {path} from {rgb_image.size} to {resized_size}")
+            rgb_image = rgb_image.resize(resized_size, Image.Resampling.LANCZOS)
+    return rgb_image
 
 
 def _write_report(path: Path, payload: dict[str, Any]) -> None:
@@ -510,6 +555,8 @@ def main(argv: list[str] | None = None) -> int:
             steps=args.steps,
             true_cfg_scale=args.true_cfg_scale,
             seed=args.seed,
+            sequential_cpu_offload=args.sequential_cpu_offload,
+            input_max_size=args.input_max_size,
         )
         return 0
     except Exception as exc:
@@ -522,6 +569,8 @@ def main(argv: list[str] | None = None) -> int:
             "dtype": args.dtype,
             "device_map": args.device_map,
             "cpu_offload": args.cpu_offload,
+            "sequential_cpu_offload": args.sequential_cpu_offload,
+            "input_max_size": args.input_max_size,
             "steps": args.steps,
             "true_cfg_scale": args.true_cfg_scale,
             "seed": args.seed,

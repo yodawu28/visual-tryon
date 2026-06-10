@@ -243,32 +243,50 @@ The default target uses:
 
 - model: `Qwen/Qwen-Image-Edit-2509`
 - pipeline: `edit-plus`
-- size: `768x768`
+- size: `512x512`
+- input max size: `512`
 - device: `cuda`
 - device map: `none`
 - CPU offload: enabled
-- steps: `20`
+- sequential CPU offload: enabled
+- steps: `8`
 - output: `/workspace/tryon-data/qwen_edit_smoke/qwen-edit-smoke.png`
 - report: `/workspace/tryon-data/qwen_edit_smoke/qwen-edit-smoke.json`
 - Hugging Face cache: `/workspace/tryon-models/huggingface`
 - Torch cache: `/workspace/tryon-models/torch`
 - Pip cache: `/workspace/tryon-models/pip-cache`
 
-The default smoke target is intentionally configured for 24GB GPUs such as RTX
-3090/A5000. It avoids moving the whole Qwen image-edit pipeline to CUDA at once
-and uses `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` to reduce allocator
+The default smoke target is intentionally configured as a low-memory canary for
+24GB GPUs such as RTX 3090/A5000. It avoids moving the whole Qwen image-edit
+pipeline to CUDA at once, resizes input reference images before the vision
+encoder, uses sequential CPU offload, and sets
+`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` to reduce allocator
 fragmentation.
 
-After the low-memory smoke passes, test higher quality settings explicitly:
+After the low-memory smoke passes, increase settings explicitly:
 
 ```bash
-make runpod-qwen-edit-smoke RUNPOD_QWEN_EDIT_SIZE=1024x1024
+make runpod-qwen-edit-smoke \
+  RUNPOD_QWEN_EDIT_SIZE=768x768 \
+  RUNPOD_QWEN_EDIT_INPUT_MAX_SIZE=768 \
+  RUNPOD_QWEN_EDIT_STEPS=12
+```
+
+Then try the original quality target:
+
+```bash
+make runpod-qwen-edit-smoke \
+  RUNPOD_QWEN_EDIT_SIZE=1024x1024 \
+  RUNPOD_QWEN_EDIT_INPUT_MAX_SIZE=1024 \
+  RUNPOD_QWEN_EDIT_STEPS=20
 ```
 
 To intentionally test full-GPU residency on a larger GPU, disable offload:
 
 ```bash
-make runpod-qwen-edit-smoke RUNPOD_QWEN_EDIT_CPU_OFFLOAD=0
+make runpod-qwen-edit-smoke \
+  RUNPOD_QWEN_EDIT_CPU_OFFLOAD=0 \
+  RUNPOD_QWEN_EDIT_SEQUENTIAL_CPU_OFFLOAD=0
 ```
 
 Treat the local Qwen-edit smoke as passed only when:

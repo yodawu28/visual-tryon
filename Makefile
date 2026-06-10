@@ -2,11 +2,13 @@ RUNPOD_DATA_DIR ?= /workspace/tryon-data
 RUNPOD_MODEL_DIR ?= /workspace/tryon-models
 RUNPOD_ANALYZER_MODEL ?= qwen2.5vl:7b-q4_K_M
 RUNPOD_QWEN_EDIT_MODEL ?= Qwen/Qwen-Image-Edit-2509
-RUNPOD_QWEN_EDIT_STEPS ?= 20
-RUNPOD_QWEN_EDIT_SIZE ?= 768x768
+RUNPOD_QWEN_EDIT_STEPS ?= 8
+RUNPOD_QWEN_EDIT_SIZE ?= 512x512
+RUNPOD_QWEN_EDIT_INPUT_MAX_SIZE ?= 512
 RUNPOD_QWEN_EDIT_DEVICE ?= cuda
 RUNPOD_QWEN_EDIT_DEVICE_MAP ?= none
 RUNPOD_QWEN_EDIT_CPU_OFFLOAD ?= 1
+RUNPOD_QWEN_EDIT_SEQUENTIAL_CPU_OFFLOAD ?= 1
 RUNPOD_QWEN_EDIT_PERSON_IMAGE ?= $(RUNPOD_DATA_DIR)/kiosk_sessions/captures/kiosk-session-v1-smoke-front.png
 RUNPOD_QWEN_EDIT_GARMENT_IMAGE ?= $(RUNPOD_DATA_DIR)/garments/images/garment-v1-smoke.webp
 RUNPOD_QWEN_EDIT_FIXTURE_DIR ?= examples/qwen_edit_smoke
@@ -190,9 +192,11 @@ runpod-qwen-edit-smoke:
 		--model-id "$(RUNPOD_QWEN_EDIT_MODEL)" \
 		--pipeline edit-plus \
 		--size "$(RUNPOD_QWEN_EDIT_SIZE)" \
+		--input-max-size "$(RUNPOD_QWEN_EDIT_INPUT_MAX_SIZE)" \
 		--device "$(RUNPOD_QWEN_EDIT_DEVICE)" \
 		--device-map "$(RUNPOD_QWEN_EDIT_DEVICE_MAP)" \
 		$(if $(filter 1 true yes,$(RUNPOD_QWEN_EDIT_CPU_OFFLOAD)),--cpu-offload,--no-cpu-offload) \
+		$(if $(filter 1 true yes,$(RUNPOD_QWEN_EDIT_SEQUENTIAL_CPU_OFFLOAD)),--sequential-cpu-offload,--no-sequential-cpu-offload) \
 		--steps "$(RUNPOD_QWEN_EDIT_STEPS)"
 
 test:

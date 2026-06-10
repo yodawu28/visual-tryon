@@ -243,8 +243,10 @@ The default target uses:
 
 - model: `Qwen/Qwen-Image-Edit-2509`
 - pipeline: `edit-plus`
+- size: `768x768`
 - device: `cuda`
 - device map: `none`
+- CPU offload: enabled
 - steps: `20`
 - output: `/workspace/tryon-data/qwen_edit_smoke/qwen-edit-smoke.png`
 - report: `/workspace/tryon-data/qwen_edit_smoke/qwen-edit-smoke.json`
@@ -252,21 +254,21 @@ The default target uses:
 - Torch cache: `/workspace/tryon-models/torch`
 - Pip cache: `/workspace/tryon-models/pip-cache`
 
-If the model does not fit in VRAM, try an offload/device-map experiment directly
-with the script:
+The default smoke target is intentionally configured for 24GB GPUs such as RTX
+3090/A5000. It avoids moving the whole Qwen image-edit pipeline to CUDA at once
+and uses `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` to reduce allocator
+fragmentation.
+
+After the low-memory smoke passes, test higher quality settings explicitly:
 
 ```bash
-python -m scripts.local_qwen_edit_smoke \
-  --person-image /workspace/tryon-data/kiosk_sessions/captures/<front>.png \
-  --garment-image /workspace/tryon-data/garments/images/<garment>.png \
-  --output /workspace/tryon-data/qwen_edit_smoke/qwen-edit-smoke.png \
-  --report /workspace/tryon-data/qwen_edit_smoke/qwen-edit-smoke.json \
-  --model-id Qwen/Qwen-Image-Edit-2509 \
-  --pipeline edit-plus \
-  --device cuda \
-  --device-map auto \
-  --cpu-offload \
-  --steps 20
+make runpod-qwen-edit-smoke RUNPOD_QWEN_EDIT_SIZE=1024x1024
+```
+
+To intentionally test full-GPU residency on a larger GPU, disable offload:
+
+```bash
+make runpod-qwen-edit-smoke RUNPOD_QWEN_EDIT_CPU_OFFLOAD=0
 ```
 
 Treat the local Qwen-edit smoke as passed only when:

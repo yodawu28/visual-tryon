@@ -1,4 +1,5 @@
 import json
+import sys
 import types
 from unittest.mock import Mock
 
@@ -239,6 +240,59 @@ def test_generate_smoke_saves_output_and_report(tmp_path, monkeypatch):
     assert call_kwargs["image"][1].size == (16, 16)
     assert call_kwargs["num_inference_steps"] == 2
     assert call_kwargs["true_cfg_scale"] == 4.0
+
+
+def test_load_pipeline_cpu_offload_does_not_move_whole_pipeline_to_cuda(
+    monkeypatch,
+):
+    class FakePipeline:
+        def __init__(self):
+            self.to_calls = []
+            self.cpu_offload_enabled = False
+
+        @classmethod
+        def from_pretrained(cls, model_id, **kwargs):
+            pipeline = cls()
+            pipeline.model_id = model_id
+            pipeline.from_pretrained_kwargs = kwargs
+            return pipeline
+
+        def to(self, *args):
+            self.to_calls.append(args)
+            return self
+
+        def enable_model_cpu_offload(self):
+            self.cpu_offload_enabled = True
+
+        def enable_attention_slicing(self, mode):
+            self.attention_slicing = mode
+
+        def enable_vae_slicing(self):
+            self.vae_slicing = True
+
+        def set_progress_bar_config(self, **kwargs):
+            self.progress_bar_kwargs = kwargs
+
+    monkeypatch.setitem(
+        sys.modules,
+        "diffusers",
+        types.SimpleNamespace(
+            QwenImageEditPipeline=FakePipeline,
+            QwenImageEditPlusPipeline=FakePipeline,
+        ),
+    )
+
+    pipeline = local_qwen_edit_smoke.load_pipeline(
+        model_id="Qwen/Qwen-Image-Edit-2509",
+        pipeline_name="edit-plus",
+        torch_dtype="bf16",
+        device="cuda",
+        device_map="none",
+        cpu_offload=True,
+    )
+
+    assert pipeline.cpu_offload_enabled is True
+    assert pipeline.to_calls == [("bf16",)]
 
 
 def test_main_writes_failure_report_when_generation_fails(tmp_path, monkeypatch):

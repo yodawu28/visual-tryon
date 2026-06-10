@@ -266,7 +266,19 @@ def load_pipeline(
     pipeline = pipeline_cls.from_pretrained(model_id, **from_pretrained_kwargs)
     progress("pipeline loaded")
 
-    if device_map == "none":
+    if cpu_offload and device == "cuda":
+        if hasattr(pipeline, "to"):
+            progress(f"moving pipeline to dtype={torch_dtype}")
+            pipeline = pipeline.to(torch_dtype)
+        if hasattr(pipeline, "enable_model_cpu_offload"):
+            progress("enabling model CPU offload")
+            pipeline.enable_model_cpu_offload()
+        else:
+            raise RuntimeError(
+                "CPU offload was requested but this pipeline does not expose "
+                "enable_model_cpu_offload()."
+            )
+    elif device_map == "none":
         if hasattr(pipeline, "to"):
             progress(f"moving pipeline to dtype={torch_dtype}")
             pipeline = pipeline.to(torch_dtype)
@@ -275,9 +287,6 @@ def load_pipeline(
     elif hasattr(pipeline, "to") and device == "cuda":
         progress(f"using device_map={device_map}; skipping explicit pipeline.to(cuda)")
 
-    if cpu_offload and hasattr(pipeline, "enable_model_cpu_offload"):
-        progress("enabling model CPU offload")
-        pipeline.enable_model_cpu_offload()
     if hasattr(pipeline, "enable_attention_slicing"):
         pipeline.enable_attention_slicing("auto")
     if hasattr(pipeline, "enable_vae_slicing"):
@@ -286,7 +295,10 @@ def load_pipeline(
         pipeline.set_progress_bar_config(disable=False)
 
     if device == "cuda":
-        torch.cuda.reset_peak_memory_stats()
+        try:
+            torch.cuda.reset_peak_memory_stats()
+        except Exception as exc:  # pragma: no cover - environment-specific
+            progress(f"skipping cuda peak memory reset: {exc!r}")
 
     return pipeline
 

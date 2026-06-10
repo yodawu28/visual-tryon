@@ -43,7 +43,7 @@ Integration fit:
   - category
   - output path
 - First smoke target:
-  - `768x1024` or repo default
+  - cheap canary first, then quality-size smoke only after canary passes
   - `bf16`
   - one generated sample from `examples/qwen_edit_smoke`
 
@@ -74,8 +74,10 @@ Recommended RunPod smoke configuration:
   - Keep model/cache paths under `/workspace/tryon-models`.
 - First smoke profile:
   - precision: `bf16`
-  - output size: `1024x768` if the repo default path works
-  - fallback output size: `768x1024` or `768x768`
+  - canary output size: `512x768`
+  - canary steps: `8`
+  - quality output size: `768x1024`
+  - quality steps: `30`
   - sample count: `1`
   - batch size: `1`
 

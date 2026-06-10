@@ -20,19 +20,22 @@ RUNPOD_CATVTON_REPO_URL ?= https://github.com/Zheng-Chong/CatVTON.git
 RUNPOD_CATVTON_ROOT ?= $(RUNPOD_MODEL_DIR)/external/CatVTON
 RUNPOD_CATVTON_BASE_MODEL ?= runwayml/stable-diffusion-inpainting
 RUNPOD_CATVTON_RESUME_PATH ?= zhengchong/CatVTON
-RUNPOD_CATVTON_SIZE ?= 768x1024
+RUNPOD_CATVTON_SIZE ?= 512x768
 RUNPOD_CATVTON_DEVICE ?= cuda
 RUNPOD_CATVTON_MIXED_PRECISION ?= bf16
 RUNPOD_CATVTON_CLOTH_TYPE ?= $(RUNPOD_SMOKE_GARMENT_CATEGORY)
-RUNPOD_CATVTON_MASK_MODE ?= rough
-RUNPOD_CATVTON_STEPS ?= 30
+RUNPOD_CATVTON_MASK_MODE ?= auto
+RUNPOD_CATVTON_STEPS ?= 8
 RUNPOD_CATVTON_GUIDANCE_SCALE ?= 2.5
 RUNPOD_CATVTON_SEED ?= 42
 RUNPOD_CATVTON_PERSON_IMAGE ?= $(RUNPOD_QWEN_EDIT_PERSON_IMAGE)
 RUNPOD_CATVTON_GARMENT_IMAGE ?= $(RUNPOD_QWEN_EDIT_GARMENT_IMAGE)
-RUNPOD_CATVTON_MASK_IMAGE ?=
 RUNPOD_CATVTON_OUTPUT ?= $(RUNPOD_DATA_DIR)/catvton_smoke/catvton-smoke.png
 RUNPOD_CATVTON_REPORT ?= $(RUNPOD_DATA_DIR)/catvton_smoke/catvton-smoke.json
+RUNPOD_CATVTON_QUALITY_SIZE ?= 768x1024
+RUNPOD_CATVTON_QUALITY_STEPS ?= 30
+RUNPOD_CATVTON_QUALITY_OUTPUT ?= $(RUNPOD_DATA_DIR)/catvton_smoke/catvton-quality-smoke.png
+RUNPOD_CATVTON_QUALITY_REPORT ?= $(RUNPOD_DATA_DIR)/catvton_smoke/catvton-quality-smoke.json
 RUNPOD_HF_HOME ?= $(RUNPOD_MODEL_DIR)/huggingface
 RUNPOD_TORCH_HOME ?= $(RUNPOD_MODEL_DIR)/torch
 RUNPOD_PIP_CACHE_DIR ?= $(RUNPOD_MODEL_DIR)/pip-cache
@@ -40,7 +43,7 @@ RUNPOD_TORCH_VERSION ?= 2.8.0
 RUNPOD_TORCHVISION_VERSION ?= 0.23.0
 RUNPOD_TORCH_CUDA_INDEX ?= https://download.pytorch.org/whl/cu128
 
-.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-install-catvton-deps runpod-catvton-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke test clean lint format check
+.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-install-catvton-deps runpod-catvton-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke runpod-catvton-quality-smoke test clean lint format check
 
 help:
 	@echo "Virtual Try-On MVP - Makefile commands"
@@ -71,7 +74,8 @@ help:
 	@echo "  make runpod-qwen-edit-smoke - Run local Qwen-edit smoke with prepared/default inputs"
 	@echo "  make runpod-install-catvton-deps - Install extra deps for local CatVTON smoke"
 	@echo "  make runpod-catvton-import-check - Validate CatVTON imports without loading models"
-	@echo "  make runpod-catvton-smoke - Run local CatVTON smoke with prepared/default inputs"
+	@echo "  make runpod-catvton-smoke - Run cheap local CatVTON canary with prepared/default inputs"
+	@echo "  make runpod-catvton-quality-smoke - Run full CatVTON quality smoke after canary passes"
 	@echo ""
 	@echo "  make test       - Run tests với coverage"
 	@echo "  make lint       - Run linters (ruff + mypy)"
@@ -137,6 +141,7 @@ runpod-help:
 	@echo "  make runpod-catvton-import-check"
 	@echo "  make runpod-vton-smoke-data"
 	@echo "  make runpod-catvton-smoke"
+	@echo "  make runpod-catvton-quality-smoke"
 
 runpod-init:
 	@test -f .env || cp .env.runpod.example .env
@@ -271,7 +276,6 @@ runpod-qwen-edit-smoke:
 runpod-catvton-smoke:
 	$(eval PERSON_IMAGE_PATH := $(or $(PERSON_IMAGE),$(RUNPOD_CATVTON_PERSON_IMAGE)))
 	$(eval GARMENT_IMAGE_PATH := $(or $(GARMENT_IMAGE),$(RUNPOD_CATVTON_GARMENT_IMAGE)))
-	$(eval MASK_IMAGE_PATH := $(or $(MASK_IMAGE),$(RUNPOD_CATVTON_MASK_IMAGE)))
 	@test -f "$(PERSON_IMAGE_PATH)" || (echo "Missing PERSON_IMAGE=$(PERSON_IMAGE_PATH). Run make runpod-qwen-edit-smoke-data or pass PERSON_IMAGE=/path/to/front.png"; exit 2)
 	@test -f "$(GARMENT_IMAGE_PATH)" || (echo "Missing GARMENT_IMAGE=$(GARMENT_IMAGE_PATH). Run make runpod-qwen-edit-smoke-data or pass GARMENT_IMAGE=/path/to/garment.png"; exit 2)
 	HF_HOME="$(RUNPOD_HF_HOME)" \
@@ -294,10 +298,16 @@ runpod-catvton-smoke:
 		--mixed-precision "$(RUNPOD_CATVTON_MIXED_PRECISION)" \
 		--cloth-type "$(RUNPOD_CATVTON_CLOTH_TYPE)" \
 		--mask-mode "$(RUNPOD_CATVTON_MASK_MODE)" \
-		$(if $(MASK_IMAGE_PATH),--mask-image "$(MASK_IMAGE_PATH)",) \
 		--steps "$(RUNPOD_CATVTON_STEPS)" \
 		--guidance-scale "$(RUNPOD_CATVTON_GUIDANCE_SCALE)" \
 		--seed "$(RUNPOD_CATVTON_SEED)"
+
+runpod-catvton-quality-smoke:
+	$(MAKE) runpod-catvton-smoke \
+		RUNPOD_CATVTON_SIZE="$(RUNPOD_CATVTON_QUALITY_SIZE)" \
+		RUNPOD_CATVTON_STEPS="$(RUNPOD_CATVTON_QUALITY_STEPS)" \
+		RUNPOD_CATVTON_OUTPUT="$(RUNPOD_CATVTON_QUALITY_OUTPUT)" \
+		RUNPOD_CATVTON_REPORT="$(RUNPOD_CATVTON_QUALITY_REPORT)"
 
 test:
 	pytest tests/ -v --cov=src --cov-report=html --cov-report=term

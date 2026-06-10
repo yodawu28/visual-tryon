@@ -238,6 +238,16 @@ Run and verify everything from Phase 1, plus:
    make runpod-catvton-smoke
    ```
 
+   This is a low-cost canary using reduced size/steps. Use it to validate
+   installs, AutoMasker imports, checkpoint loading, CUDA runtime, and output
+   writing before spending time on quality evaluation.
+
+   After the canary passes, run the quality smoke once:
+
+   ```bash
+   make runpod-catvton-quality-smoke
+   ```
+
    If DensePose/SCHP auto-mask setup blocks the first runtime check, run the
    pipeline-only fallback:
 

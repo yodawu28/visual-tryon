@@ -759,12 +759,15 @@ RunPod.
 - Added `scripts/local_catvton_smoke.py`.
 - Added `make runpod-install-catvton-deps`.
 - Added `make runpod-catvton-smoke`.
+- Split CatVTON smoke into a cheap canary (`512x768`, `8` steps) and a
+  quality smoke (`768x1024`, `30` steps) to reduce RunPod spend while debugging.
 - Updated the RunPod deployment runbook and roadmap with the CatVTON smoke
   sequence.
 
 ### Next
 
-- Run the CatVTON smoke on RTX 3090 24GB.
+- Run the CatVTON canary first on the cheapest viable 20-24GB VRAM GPU.
+- Run `make runpod-catvton-quality-smoke` only after the canary passes.
 - If `RUNPOD_CATVTON_MASK_MODE=auto` works and output quality is acceptable,
   design `LocalCatVtonEngine` behind the existing kiosk visual-preview worker
   contract.

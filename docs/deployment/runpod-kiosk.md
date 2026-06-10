@@ -343,37 +343,42 @@ when a previous pod run left a lower-body garment at
 default fixture is an upper-body garment, so CatVTON's default
 `RUNPOD_CATVTON_CLOTH_TYPE` is also `upper`.
 
-Run the default CatVTON smoke:
+Run the cheap CatVTON canary first:
 
 ```bash
 make runpod-catvton-smoke
 ```
 
-The default target uses:
+The canary target uses the same prepared person and garment images as the
+Qwen-edit smoke. It does not require a mask image; CatVTON derives the try-on
+region internally through its AutoMasker path. This target is intentionally
+low resolution and low step count so dependency/runtime debugging does not burn
+unnecessary GPU time.
+
+The canary target uses:
 
 - CatVTON repo: `/workspace/tryon-models/external/CatVTON`
 - base model: `runwayml/stable-diffusion-inpainting`
 - checkpoint: `zhengchong/CatVTON`
-- size: `768x1024`
+- size: `512x768`
 - precision: `bf16`
 - cloth type: `upper`
-- mask mode: `rough`
-- steps: `30`
+- mask mode: `auto`
+- steps: `8`
 - guidance scale: `2.5`
 - output: `/workspace/tryon-data/catvton_smoke/catvton-smoke.png`
 - report: `/workspace/tryon-data/catvton_smoke/catvton-smoke.json`
 
-The default uses a rough synthetic mask so the first smoke validates the
-CatVTON pipeline, checkpoint loading, GPU runtime, and output writing without
-being blocked by DensePose/SCHP preprocessing dependencies.
-
-After the rough-mask smoke passes, test CatVTON's real quality path with
-DensePose/SCHP AutoMasker:
+Only after the canary exits successfully, run the full quality smoke:
 
 ```bash
-make runpod-catvton-import-check RUNPOD_CATVTON_MASK_MODE=auto
-make runpod-catvton-smoke RUNPOD_CATVTON_MASK_MODE=auto
+make runpod-catvton-quality-smoke
 ```
+
+The quality target uses `768x1024` and `30` steps, and writes to:
+
+- output: `/workspace/tryon-data/catvton_smoke/catvton-quality-smoke.png`
+- report: `/workspace/tryon-data/catvton_smoke/catvton-quality-smoke.json`
 
 If the auto-mask import check fails, inspect
 `/workspace/tryon-data/catvton_smoke/catvton-smoke.json`. The report includes
@@ -381,6 +386,17 @@ the original missing package or incompatible import error. Install the missing
 package incrementally and rerun the import check. Avoid blindly reinstalling
 `torch`/`torchvision` while debugging AutoMasker because that can break the
 known-good CUDA runtime.
+
+If you only need to verify checkpoint loading, GPU runtime, and output writing
+while AutoMasker dependencies are still being fixed, use the fallback rough
+mask mode:
+
+```bash
+make runpod-catvton-smoke RUNPOD_CATVTON_MASK_MODE=rough
+```
+
+Rough mode is not a quality path. It can produce visually wrong try-on regions
+and should not be used to judge whether CatVTON is suitable for production.
 
 Use real kiosk captures and uploaded garments when evaluating quality:
 
@@ -395,13 +411,14 @@ Treat the CatVTON smoke as passed only when:
 - the command exits with code `0`,
 - the report has `"success": true`,
 - the PNG exists and is visually usable,
-- latency is acceptable for kiosk preview,
+- canary latency confirms the runtime is viable,
+- quality-smoke latency is acceptable for kiosk preview,
 - the report memory metrics leave enough headroom for the API, worker, and
   analyzer.
 
 Do not build the production `LocalCatVtonEngine` adapter from a rough-mask
 result alone. The adapter should wait until the auto-mask quality path is
-working or until we design a production mask generator.
+working with the same person-plus-garment inputs used by the Qwen smoke.
 
 ## Operational Notes
 

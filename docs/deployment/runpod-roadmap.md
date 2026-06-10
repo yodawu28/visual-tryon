@@ -216,6 +216,14 @@ Run and verify everything from Phase 1, plus:
 
    ```bash
    make runpod-install-qwen-edit-deps
+   make runpod-cuda-report
+   make runpod-qwen-edit-smoke-data
+   make runpod-qwen-edit-smoke
+   ```
+
+   Or run against real kiosk outputs:
+
+   ```bash
    make runpod-qwen-edit-smoke \
      PERSON_IMAGE=/workspace/tryon-data/kiosk_sessions/captures/<front>.png \
      GARMENT_IMAGE=/workspace/tryon-data/garments/images/<garment>.png

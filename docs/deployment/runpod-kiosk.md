@@ -168,20 +168,16 @@ video/image processor path. Pinning the PyTorch stack avoids pip pulling a
 newer CUDA wheel that requires a newer NVIDIA driver than the RunPod template
 provides.
 
+This target does not update the pod's NVIDIA driver or host CUDA driver. That
+runtime comes from the RunPod host/template. If PyTorch still cannot initialize
+CUDA after this install, change the pod template/GPU host or install a PyTorch
+wheel compatible with that host driver.
+
 Before running the smoke test, check cache and storage usage:
 
 ```bash
 make runpod-disk-report
-python - <<'PY'
-import torch
-import torchvision
-print("torch", torch.__version__)
-print("torchvision", torchvision.__version__)
-print("torch cuda build", torch.version.cuda)
-print("cuda available", torch.cuda.is_available())
-if torch.cuda.is_available():
-    print("gpu", torch.cuda.get_device_name(0))
-PY
+make runpod-cuda-report
 ```
 
 On RunPod network volumes, `df -h /workspace` can show the shared backing
@@ -222,6 +218,26 @@ make runpod-qwen-edit-smoke \
   PERSON_IMAGE=/workspace/tryon-data/kiosk_sessions/captures/<front>.png \
   GARMENT_IMAGE=/workspace/tryon-data/garments/images/<garment>.png
 ```
+
+If you only need to validate local model loading/runtime and do not want to run
+the full Swagger flow first, prepare smoke inputs from the checked-in example
+fixtures:
+
+```bash
+make runpod-qwen-edit-smoke-data
+make runpod-qwen-edit-smoke
+```
+
+This copies `examples/qwen_edit_smoke/front.png` and
+`examples/qwen_edit_smoke/garment.webp` into the RunPod data directory:
+
+- `/workspace/tryon-data/kiosk_sessions/captures/kiosk-session-v1-smoke-front.png`
+- `/workspace/tryon-data/garments/images/garment-v1-smoke.webp`
+- `/workspace/tryon-data/qwen_edit_smoke/inputs/manifest.json`
+
+If the checked-in examples are missing, the prepare script falls back to
+synthetic generated images. These fixtures are only for runtime smoke testing.
+Use real kiosk captures and uploaded garments when evaluating try-on quality.
 
 The default target uses:
 

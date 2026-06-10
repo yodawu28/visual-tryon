@@ -71,6 +71,8 @@ vto_request.json
 *.jpg
 *.png
 *.jpeg
+!examples/qwen_edit_smoke/*.png
+!examples/qwen_edit_smoke/*.webp
 !tests/fixtures/sample_images/*.jpg
 !tests/fixtures/sample_images/*.png
 

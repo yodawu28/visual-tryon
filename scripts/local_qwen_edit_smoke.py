@@ -201,7 +201,8 @@ def validate_device_runtime(device: str) -> None:
         raise RuntimeError(
             "CUDA was requested but the CUDA runtime could not initialize. "
             "Fix the NVIDIA driver / PyTorch CUDA compatibility before "
-            "downloading the local Qwen image-edit model."
+            "downloading the local Qwen image-edit model. "
+            f"Original CUDA error: {exc!r}"
         ) from exc
 
     progress(f"cuda runtime ready: {device_name}")

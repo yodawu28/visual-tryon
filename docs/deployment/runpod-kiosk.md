@@ -304,6 +304,76 @@ For quota failures, do not build an API adapter yet. Either increase the RunPod
 disk/volume quota, move caches to a larger mounted path by overriding
 `RUNPOD_MODEL_DIR`, or continue with the Replicate-backed preview baseline.
 
+## Optional Local CatVTON Smoke
+
+Run this after the local Qwen-edit canary or directly after the Replicate path
+is stable. CatVTON is the first VTON-specific local candidate because its
+person plus garment input shape is close to the kiosk worker contract.
+
+Install the extra dependencies used by the CatVTON smoke script:
+
+```bash
+cd /workspace/tryon-visual-project
+source venv/bin/activate
+make runpod-install-catvton-deps
+```
+
+Prepare reusable smoke inputs from the checked-in fixtures:
+
+```bash
+make runpod-qwen-edit-smoke-data
+```
+
+Run the default CatVTON smoke:
+
+```bash
+make runpod-catvton-smoke
+```
+
+The default target uses:
+
+- CatVTON repo: `/workspace/tryon-models/external/CatVTON`
+- base model: `runwayml/stable-diffusion-inpainting`
+- checkpoint: `zhengchong/CatVTON`
+- size: `768x1024`
+- precision: `bf16`
+- cloth type: `upper`
+- mask mode: `auto`
+- steps: `30`
+- guidance scale: `2.5`
+- output: `/workspace/tryon-data/catvton_smoke/catvton-smoke.png`
+- report: `/workspace/tryon-data/catvton_smoke/catvton-smoke.json`
+
+`MASK_MODE=auto` uses CatVTON's DensePose/SCHP AutoMasker. This is the real
+quality path, but it downloads and loads additional preprocessing checkpoints.
+If that blocks the first runtime smoke, validate only the CatVTON pipeline with
+a rough synthetic mask:
+
+```bash
+make runpod-catvton-smoke RUNPOD_CATVTON_MASK_MODE=rough
+```
+
+Use real kiosk captures and uploaded garments when evaluating quality:
+
+```bash
+make runpod-catvton-smoke \
+  PERSON_IMAGE=/workspace/tryon-data/kiosk_sessions/captures/<front>.png \
+  GARMENT_IMAGE=/workspace/tryon-data/garments/images/<garment>.png
+```
+
+Treat the CatVTON smoke as passed only when:
+
+- the command exits with code `0`,
+- the report has `"success": true`,
+- the PNG exists and is visually usable,
+- latency is acceptable for kiosk preview,
+- the report memory metrics leave enough headroom for the API, worker, and
+  analyzer.
+
+Do not build the production `LocalCatVtonEngine` adapter from a rough-mask
+result alone. The adapter should wait until the auto-mask quality path is
+working or until we design a production mask generator.
+
 ## Operational Notes
 
 - For the current MVP, keep `JOB_QUEUE_BACKEND=local`; Redis/Kafka can be added

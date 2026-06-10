@@ -668,3 +668,105 @@ generation.
   baseline.
 - Decide whether the MVP should keep Replicate for preview generation or invest
   next in local Qwen-edit generation on a stronger GPU pod.
+
+## RunPod Phase 3 Local Qwen-Edit Smoke
+
+The third RunPod test checked whether Qwen image edit can run fully on our own
+GPU infrastructure instead of depending on Replicate for visual preview
+generation.
+
+### Decisions
+
+- Treat local Qwen image edit as a benchmark and research track, not the default
+  production visual engine yet.
+- Keep Replicate-backed Qwen as the quality and speed baseline while evaluating
+  self-hosted alternatives.
+- Split the self-hosted visual engine work into three tracks:
+  - VTON-specific local model candidate for production.
+  - Quantized or low-memory Qwen image-edit experiment.
+  - Fine-tuning or LoRA only after a base local engine meets latency and memory
+    targets.
+- Do not fine-tune Qwen first. Fine-tuning a model that is too slow or too large
+  for the target kiosk GPU would create a harder production problem.
+
+### Issues Found
+
+- `Qwen/Qwen-Image-Edit-2509` requires large local model storage; the download
+  is roughly `57.7G`.
+- A 24GB RTX 3090 can load and run the model only with aggressive low-memory
+  settings.
+- `768x768` and `1024x1024` generation are still risky on 24GB VRAM.
+- Full CUDA placement causes out-of-memory errors. CPU/sequential offload is
+  required for the current smoke path.
+- The successful low-memory run is too slow for a production kiosk preview.
+
+### Implemented
+
+- Added local Qwen-edit smoke data preparation with reusable example fixtures.
+- Added Makefile defaults for a 24GB-safe smoke profile:
+  - output size `512x512`
+  - input max side `512`
+  - `8` inference steps
+  - CPU offload enabled
+  - sequential CPU offload enabled
+- Added CUDA/runtime reporting helpers for RunPod debugging.
+- Added a self-hosted visual engine strategy document:
+  `docs/architecture/self-hosted-visual-engine-strategy.md`.
+- Added a local VTON candidate shortlist:
+  `docs/architecture/local-vton-candidate-shortlist.md`.
+
+### Result
+
+- Local Qwen-edit smoke passed on June 10, 2026 with:
+  - GPU: RTX 3090 24GB
+  - model: `Qwen/Qwen-Image-Edit-2509`
+  - pipeline: `QwenImageEditPlusPipeline`
+  - output size: `512x512`
+  - input max side: `512`
+  - steps: `8`
+  - CPU offload: enabled
+  - sequential CPU offload: enabled
+  - generation time: about `272s`
+- The result proves self-hosted feasibility, but not production readiness.
+
+### Next
+
+- Run one more Qwen curve test at `640x640`, input max `640`, `8` steps only if
+  the pod has enough headroom.
+- Select one VTON-specific local candidate and build a smoke test before adding
+  an API adapter.
+- Keep the existing Replicate Qwen path as the MVP fallback until a local engine
+  beats it on quality, latency, and reliability.
+
+## CatVTON Local Smoke Harness
+
+After deciding that Qwen local is too slow to be the first production local
+engine, CatVTON became the first VTON-specific local candidate to test on
+RunPod.
+
+### Decisions
+
+- Add a smoke harness before adding any API adapter.
+- Keep CatVTON isolated from the FastAPI app and worker until runtime, quality,
+  and licensing are understood.
+- Use the existing smoke fixtures so CatVTON can be tested without replaying
+  the full Swagger workflow.
+- Default to CatVTON auto-mask for quality testing, but provide a rough-mask
+  fallback for pipeline/runtime debugging.
+
+### Implemented
+
+- Added `scripts/local_catvton_smoke.py`.
+- Added `make runpod-install-catvton-deps`.
+- Added `make runpod-catvton-smoke`.
+- Updated the RunPod deployment runbook and roadmap with the CatVTON smoke
+  sequence.
+
+### Next
+
+- Run the CatVTON smoke on RTX 3090 24GB.
+- If `RUNPOD_CATVTON_MASK_MODE=auto` works and output quality is acceptable,
+  design `LocalCatVtonEngine` behind the existing kiosk visual-preview worker
+  contract.
+- If auto-mask blocks the smoke, use `RUNPOD_CATVTON_MASK_MODE=rough` only to
+  validate pipeline load/runtime, then revisit mask generation separately.

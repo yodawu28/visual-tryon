@@ -85,7 +85,11 @@ vto_request.json
 AGENTS.md
 CLAUDE.md
 
-docs
+docs/*
+!docs/architecture/
+docs/architecture/*
+!docs/architecture/local-vton-candidate-shortlist.md
+!docs/architecture/self-hosted-visual-engine-strategy.md
 data
 .vibe-map
 internal-docs

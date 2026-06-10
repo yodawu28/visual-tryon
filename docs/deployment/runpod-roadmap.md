@@ -185,6 +185,7 @@ Run and verify everything from Phase 1, plus:
 - Worker stability under repeated jobs.
 - Replicate image generation latency and quality.
 - Local Qwen-edit smoke script before any API adapter is implemented.
+- Local CatVTON smoke script as the first VTON-specific self-hosted candidate.
 - Optional local image generation adapter only after smoke passes.
 - Qwen multimodal analyzer quality.
 - Memory usage during analyzer and generation workloads.
@@ -229,9 +230,24 @@ Run and verify everything from Phase 1, plus:
      GARMENT_IMAGE=/workspace/tryon-data/garments/images/<garment>.png
    ```
 
-8. Build a local image generation adapter only if the smoke report proves that
+8. Run the first VTON-specific local smoke candidate:
+
+   ```bash
+   make runpod-install-catvton-deps
+   make runpod-qwen-edit-smoke-data
+   make runpod-catvton-smoke
+   ```
+
+   If DensePose/SCHP auto-mask setup blocks the first runtime check, run the
+   pipeline-only fallback:
+
+   ```bash
+   make runpod-catvton-smoke RUNPOD_CATVTON_MASK_MODE=rough
+   ```
+
+9. Build a local image generation adapter only if the smoke report proves that
    local generation can meet quality, latency, and memory constraints.
-9. If the local smoke fails with disk quota, storage, or cache errors, keep the
+10. If the local smoke fails with disk quota, storage, or cache errors, keep the
    Replicate-backed preview path as the MVP baseline and revisit local
    generation after increasing RunPod storage/quota.
 
@@ -259,6 +275,8 @@ Current baseline:
 - Cached result generation time was about `9.22s`.
 - Local Qwen-edit is now treated as a separate smoke benchmark, not an API
   dependency.
+- CatVTON is the first VTON-specific local candidate to smoke test before
+  building a local adapter.
 
 ### Exit Criteria
 

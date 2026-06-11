@@ -895,3 +895,20 @@ Leffa remains a candidate under evaluation. Do not wire it into
 `KIOSK_VISUAL_PREVIEW_PROVIDER` yet. The next RunPod run should answer whether
 Leffa can beat the fixed quality gate on the same Qwen reference fixture and
 messy web-style garment fixtures.
+
+### Follow-Up
+
+- Initial Leffa smoke on RTX 4000 Ada 20GB looked materially better than
+  CatVTON and preserved the shirt structure/pattern better.
+- Remaining issue: output is still somewhat soft, especially around garment
+  detail and input-image artifacts.
+- Added a deterministic conditioning A/B path:
+  - `scripts/prepare_vton_conditioned_inputs.py`
+  - `make runpod-vton-condition-smoke-inputs`
+  - `make runpod-leffa-conditioned-smoke`
+- This conditioning stage does not use another ML model. It normalizes image
+  contrast/sharpness, crops/centers the garment, converts the garment reference
+  to PNG, and writes a conditioning report.
+- Decision: run conditioned Leffa smoke before changing model weights,
+  fine-tuning, or trying another candidate. If conditioning improves clarity,
+  add an explicit garment conditioning stage to the production architecture.

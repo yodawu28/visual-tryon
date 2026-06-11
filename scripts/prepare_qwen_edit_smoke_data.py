@@ -23,6 +23,9 @@ class SmokeDataPaths:
     person_image: Path
     garment_image: Path
     manifest: Path
+    conditioned_person_image: Path
+    conditioned_garment_image: Path
+    conditioning_report: Path
 
 
 def prepare_qwen_edit_smoke_data(
@@ -43,9 +46,19 @@ def prepare_qwen_edit_smoke_data(
         / f"{session_stem}-front.png",
         garment_image=data_dir / "garments" / "images" / f"{garment_stem}.webp",
         manifest=data_dir / "qwen_edit_smoke" / "inputs" / "manifest.json",
+        conditioned_person_image=data_dir / "vton_conditioned" / "person-front.png",
+        conditioned_garment_image=data_dir / "vton_conditioned" / "garment.png",
+        conditioning_report=data_dir / "vton_conditioned" / "report.json",
     )
 
-    for path in (paths.person_image, paths.garment_image, paths.manifest):
+    for path in (
+        paths.person_image,
+        paths.garment_image,
+        paths.manifest,
+        paths.conditioned_person_image,
+        paths.conditioned_garment_image,
+        paths.conditioning_report,
+    ):
         path.parent.mkdir(parents=True, exist_ok=True)
 
     created: list[str] = []
@@ -94,6 +107,20 @@ def prepare_qwen_edit_smoke_data(
             f"PERSON_IMAGE={paths.person_image} "
             f"GARMENT_IMAGE={paths.garment_image}"
         ),
+        "vton_condition_command": (
+            "make runpod-vton-condition-smoke-inputs "
+            f"PERSON_IMAGE={paths.person_image} "
+            f"GARMENT_IMAGE={paths.garment_image}"
+        ),
+        "conditioned_person_image": str(paths.conditioned_person_image),
+        "conditioned_garment_image": str(paths.conditioned_garment_image),
+        "conditioning_report": str(paths.conditioning_report),
+        "leffa_conditioned_smoke_command": (
+            "make runpod-leffa-conditioned-smoke "
+            f"RUNPOD_LEFFA_GARMENT_TYPE={_leffa_garment_type(garment_category)} "
+            f"PERSON_IMAGE={paths.person_image} "
+            f"GARMENT_IMAGE={paths.garment_image}"
+        ),
         "note": (
             "Smoke inputs are for local pipeline/runtime validation. Use real "
             "kiosk captures and garments for final quality evaluation."
@@ -114,6 +141,8 @@ def prepare_qwen_edit_smoke_data(
         "smoke_command": payload["smoke_command"],
         "catvton_smoke_command": payload["catvton_smoke_command"],
         "leffa_smoke_command": payload["leffa_smoke_command"],
+        "vton_condition_command": payload["vton_condition_command"],
+        "leffa_conditioned_smoke_command": payload["leffa_conditioned_smoke_command"],
     }
 
 

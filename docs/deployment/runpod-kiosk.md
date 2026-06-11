@@ -495,6 +495,30 @@ Treat the Leffa smoke as passed only when the command exits successfully, the
 image is visually close to the Qwen-edit reference, and the report has enough
 runtime headroom for the API, worker, analyzer, and future fit engine.
 
+If the output is structurally good but still soft, run the conditioned-input
+A/B test before changing model weights or generation settings:
+
+```bash
+make runpod-vton-condition-smoke-inputs
+make runpod-leffa-conditioned-smoke
+```
+
+The conditioning target is deterministic and model-free. It normalizes the
+person image, crops and centers the detected garment region, writes a PNG
+garment reference, applies conservative contrast/sharpness cleanup, and records
+a report at `/workspace/tryon-data/vton_conditioned/report.json`.
+
+The conditioned Leffa smoke writes to:
+
+- output: `/workspace/tryon-data/leffa_smoke/leffa-conditioned-smoke.png`
+- report: `/workspace/tryon-data/leffa_smoke/leffa-conditioned-smoke.json`
+
+Use the conditioned output only as an A/B comparison. If it improves clarity,
+the production architecture should add an explicit garment conditioning stage
+before the visual try-on engine. If it makes logos, text, or colors worse, keep
+the original garment input and move optimization to model selection or model
+settings.
+
 Do not build a production `LocalLeffaEngine` adapter until Leffa passes the
 fixed Model Quality Gate Matrix.
 

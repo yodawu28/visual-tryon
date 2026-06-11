@@ -31,6 +31,12 @@ Use the same fixtures for every candidate:
 If a candidate requires masks, parsing, or pose maps, the smoke must record
 whether those inputs were manually provided, auto-generated, or unavailable.
 
+If deterministic input conditioning is used, record both the original-input
+result and the conditioned-input result. Conditioning can crop/center a garment,
+normalize contrast/sharpness, and convert lossy web images to PNG, but it must
+not be allowed to hide a weak model by destroying logo, text, color, or pattern
+fidelity.
+
 ## Score Scale
 
 Use `1` to `5` for each visual category:
@@ -179,3 +185,9 @@ The smoke report should match the existing Qwen/CatVTON report shape:
 - preprocessing mode
 - success/error
 - manual quality score fields
+
+For Leffa, also run the conditioned-input A/B target when the first output is
+structurally good but soft:
+
+- `make runpod-vton-condition-smoke-inputs`
+- `make runpod-leffa-conditioned-smoke`

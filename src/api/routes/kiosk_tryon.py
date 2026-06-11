@@ -92,7 +92,7 @@ def get_kiosk_visual_tryon_service() -> KioskVisualTryOnService:
     settings = get_settings()
     return KioskVisualTryOnService(
         tryon_dir=settings.temp_storage_dir / "kiosk_tryons",
-        generator=ReplicateAvatarPreviewGenerator(),
+        generator=_build_kiosk_visual_generator(settings),
         tryon_analyzer=OllamaTryOnAnalyzer(
             model=settings.tryon_analyzer_ollama_model,
             base_url=settings.ollama_base_url,
@@ -119,7 +119,9 @@ def get_kiosk_job_service() -> JobService:
     settings = get_settings()
     queue_backend = settings.job_queue_backend.strip().lower()
     if queue_backend != "local":
-        raise RuntimeError(f"Unsupported JOB_QUEUE_BACKEND: {settings.job_queue_backend}")
+        raise RuntimeError(
+            f"Unsupported JOB_QUEUE_BACKEND: {settings.job_queue_backend}"
+        )
     return JobService(
         backend=LocalJobQueueBackend(job_dir=settings.job_queue_dir),
     )
@@ -376,6 +378,43 @@ async def analyze_kiosk_user_capture(
     return _session_response(result, message="Kiosk user capture analyzed")
 
 
+def _build_kiosk_visual_generator(settings: Any) -> Any:
+    provider = _kiosk_visual_preview_provider(settings)
+    if provider == "replicate_qwen":
+        return ReplicateAvatarPreviewGenerator()
+    raise RuntimeError(
+        "Kiosk visual preview provider is disabled. Production kiosk visual "
+        "preview requires a self-hosted GPU engine; Replicate Qwen is available "
+        "only by explicitly setting KIOSK_VISUAL_PREVIEW_PROVIDER=replicate_qwen "
+        "for benchmark/debug."
+    )
+
+
+def require_kiosk_visual_preview_enabled() -> None:
+    settings = get_settings()
+    provider = _kiosk_visual_preview_provider(settings)
+    if provider == "replicate_qwen":
+        return
+    raise HTTPException(
+        status_code=503,
+        detail=(
+            "Kiosk visual preview provider is disabled. Set "
+            "KIOSK_VISUAL_PREVIEW_PROVIDER=replicate_qwen only for benchmark/debug, "
+            "or configure a self-hosted production visual engine when available."
+        ),
+    )
+
+
+def _kiosk_visual_preview_provider(settings: Any) -> str:
+    return (
+        str(
+            getattr(settings, "kiosk_visual_preview_provider", "disabled") or "disabled"
+        )
+        .strip()
+        .lower()
+    )
+
+
 @router.post(
     "/sessions/{session_id}/visual-preview",
     response_model=KioskPersonalizedTryOnResponse,
@@ -396,6 +435,7 @@ async def generate_kiosk_visual_preview(
     ),
     service: KioskTryOnService = Depends(get_kiosk_tryon_service),
     registry: GarmentRegistry = Depends(get_kiosk_garment_registry),
+    _visual_preview_enabled: None = Depends(require_kiosk_visual_preview_enabled),
     visual_tryon_service: KioskVisualTryOnService = Depends(
         get_kiosk_visual_tryon_service
     ),
@@ -421,6 +461,7 @@ async def enqueue_kiosk_visual_preview_job(
     request: KioskVisualPreviewJobRequest,
     service: KioskTryOnService = Depends(get_kiosk_tryon_service),
     registry: GarmentRegistry = Depends(get_kiosk_garment_registry),
+    _visual_preview_enabled: None = Depends(require_kiosk_visual_preview_enabled),
     job_service: JobService = Depends(get_kiosk_job_service),
 ) -> KioskJobResponse:
     try:
@@ -480,6 +521,7 @@ async def generate_kiosk_personalized_tryon(
     ),
     service: KioskTryOnService = Depends(get_kiosk_tryon_service),
     registry: GarmentRegistry = Depends(get_kiosk_garment_registry),
+    _visual_preview_enabled: None = Depends(require_kiosk_visual_preview_enabled),
     visual_tryon_service: KioskVisualTryOnService = Depends(
         get_kiosk_visual_tryon_service
     ),

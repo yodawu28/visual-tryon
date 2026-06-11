@@ -1,4 +1,5 @@
 from dataclasses import replace
+from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -436,7 +437,7 @@ class FakeKioskJobService:
         }
 
 
-def _client() -> TestClient:
+def _client(*, enable_visual_preview: bool = True) -> TestClient:
     app = FastAPI()
     app.include_router(kiosk_tryon.router)
     app.dependency_overrides[kiosk_tryon.get_kiosk_tryon_service] = (
@@ -451,6 +452,10 @@ def _client() -> TestClient:
     app.dependency_overrides[kiosk_tryon.get_kiosk_visual_tryon_service] = (
         lambda: FakeKioskVisualTryOnService()
     )
+    if enable_visual_preview:
+        app.dependency_overrides[kiosk_tryon.require_kiosk_visual_preview_enabled] = (
+            lambda: None
+        )
     app.dependency_overrides[kiosk_tryon.get_kiosk_fit_intelligence_service] = (
         lambda: FakeKioskFitIntelligenceService()
     )
@@ -827,6 +832,29 @@ def test_enqueue_visual_preview_job_endpoint_returns_queued_job():
     assert payload["payload"]["session_id"] == "kiosk-session:v1:ready"
     assert payload["payload"]["garment_id"] == "garment:v1:test"
     assert payload["message"] == "Kiosk visual preview job queued"
+
+
+def test_enqueue_visual_preview_job_returns_503_when_provider_is_disabled(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        kiosk_tryon,
+        "get_settings",
+        lambda: SimpleNamespace(kiosk_visual_preview_provider="disabled"),
+    )
+    client = _client(enable_visual_preview=False)
+
+    response = client.post(
+        "/api/v1/kiosk/sessions/kiosk-session:v1:ready/visual-preview/jobs",
+        json={
+            "use_multimodal_analysis": False,
+            "size": "1024x1024",
+            "max_attempts": 2,
+        },
+    )
+
+    assert response.status_code == 503
+    assert "visual preview provider is disabled" in response.json()["detail"]
 
 
 def test_get_kiosk_job_endpoint_returns_job_status():

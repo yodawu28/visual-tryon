@@ -21,7 +21,7 @@ flowchart LR
     H --> I[Size and fit recommendation]
     I --> J{User wants visual preview?}
     J -- Yes --> K[Queue visual preview job]
-    K --> M[GPU worker runs Qwen visual preview]
+    K --> M[GPU worker runs configured self-hosted visual engine]
     J -- No --> L[Result review]
     M --> L
 ```
@@ -62,7 +62,9 @@ preview:
 - `GET /api/v1/kiosk/sessions/{session_id}/fit/analysis`
   Loads the latest cached Fit Intelligence result attached to the session.
 - `POST /api/v1/kiosk/sessions/{session_id}/visual-preview`
-  Runs optional Qwen-style visual preview only when the user requests it.
+  Runs optional visual preview only when the user requests it and a provider is
+  explicitly enabled. Production kiosk should use a self-hosted GPU engine, not
+  Replicate Qwen.
 - `POST /api/v1/kiosk/sessions/{session_id}/visual-preview/jobs`
   Queues an optional visual preview job. The job payload stores references
   such as session and garment ids, not image bytes.
@@ -92,7 +94,7 @@ flowchart TB
         WORKER[GPU worker]
         FIT[Fit Intelligence]
         QWEN[Optional multimodal analyzer]
-        GEN[Optional image generation provider]
+        GEN[Self-hosted visual engine]
     end
 
     UI --> API
@@ -151,8 +153,8 @@ control-plane baseline does not call visual generation providers.
 
 Before running the baseline, use `GET /api/v1/readiness` or the corresponding
 Swagger operation to verify the API can access its local storage, SQLite
-catalogs, job queue directory, Ollama analyzer runtime/model, and Replicate
-preview config:
+catalogs, job queue directory, Ollama analyzer runtime/model, and configured
+visual preview provider:
 
 ```bash
 API_PROFILE=kiosk make run
@@ -171,4 +173,6 @@ python -m scripts.run_kiosk_e2e_baseline \
 ```
 
 Add `--run-visual-preview` only when you intentionally want to test the
-configured image generation model through the local worker.
+configured image generation model through the local worker. Production-style
+kiosk smoke tests should keep `KIOSK_VISUAL_PREVIEW_PROVIDER=disabled` until a
+self-hosted engine is ready.

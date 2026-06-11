@@ -26,7 +26,10 @@ def test_readiness_endpoint_reports_ready_for_local_kiosk_dependencies(
     assert payload["checks"]["size_chart_registry"]["status"] == "ready"
     assert payload["checks"]["job_queue"]["status"] == "ready"
     assert payload["checks"]["ollama_analyzer_config"]["status"] == "ready"
-    assert payload["checks"]["replicate_preview_config"]["status"] == "ready"
+    assert payload["checks"]["visual_preview_provider"]["status"] == "ready"
+    assert payload["checks"]["visual_preview_provider"]["details"]["provider"] == (
+        "disabled"
+    )
     assert (tmp_path / "garments" / "garments.sqlite3").exists()
     assert (tmp_path / "size_charts" / "size_charts.sqlite3").exists()
 
@@ -38,7 +41,11 @@ def test_readiness_endpoint_returns_503_when_required_config_is_missing(
     monkeypatch.setattr(
         health,
         "get_settings",
-        lambda: _settings(tmp_path, replicate_api_token=""),
+        lambda: _settings(
+            tmp_path,
+            kiosk_visual_preview_provider="replicate_qwen",
+            replicate_api_token="",
+        ),
     )
     monkeypatch.setattr(health.httpx, "get", _ollama_tags_response)
     client = _client()
@@ -48,10 +55,10 @@ def test_readiness_endpoint_returns_503_when_required_config_is_missing(
     assert response.status_code == 503
     payload = response.json()
     assert payload["status"] == "not_ready"
-    assert payload["checks"]["replicate_preview_config"]["status"] == "not_ready"
-    assert "REPLICATE_API_TOKEN" in payload["checks"]["replicate_preview_config"][
-        "message"
-    ]
+    assert payload["checks"]["visual_preview_provider"]["status"] == "not_ready"
+    assert (
+        "REPLICATE_API_TOKEN" in payload["checks"]["visual_preview_provider"]["message"]
+    )
 
 
 def test_readiness_endpoint_returns_503_when_ollama_analyzer_model_is_missing(
@@ -70,9 +77,10 @@ def test_readiness_endpoint_returns_503_when_ollama_analyzer_model_is_missing(
     assert response.status_code == 503
     payload = response.json()
     assert payload["checks"]["ollama_analyzer_config"]["status"] == "not_ready"
-    assert "TRYON_ANALYZER_OLLAMA_MODEL" in payload["checks"][
-        "ollama_analyzer_config"
-    ]["message"]
+    assert (
+        "TRYON_ANALYZER_OLLAMA_MODEL"
+        in payload["checks"]["ollama_analyzer_config"]["message"]
+    )
 
 
 def test_readiness_endpoint_returns_503_when_ollama_model_is_not_installed(
@@ -129,6 +137,7 @@ def _client() -> TestClient:
 def _settings(
     tmp_path: Path,
     *,
+    kiosk_visual_preview_provider: str = "disabled",
     replicate_api_token: str = "test-token",
     tryon_analyzer_ollama_model: str = "qwen2.5vl:7b-q4_K_M",
 ):
@@ -137,6 +146,7 @@ def _settings(
         job_queue_dir=tmp_path / "jobs",
         ollama_base_url="http://127.0.0.1:11434",
         tryon_analyzer_ollama_model=tryon_analyzer_ollama_model,
+        kiosk_visual_preview_provider=kiosk_visual_preview_provider,
         replicate_api_token=replicate_api_token,
         replicate_preview_model="qwen/qwen-image-edit-2511",
         replicate_preview_input_mapping="multi_image_edit",

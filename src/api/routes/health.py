@@ -58,7 +58,7 @@ async def readiness_check(response: Response) -> ReadinessResponse:
         ),
         "job_queue": _check_writable_directory(settings.job_queue_dir),
         "ollama_analyzer_config": _check_ollama_analyzer_config(settings),
-        "replicate_preview_config": _check_replicate_preview_config(settings),
+        "visual_preview_provider": _check_visual_preview_provider(settings),
     }
 
     overall_status = (
@@ -216,7 +216,33 @@ def _extract_ollama_model_names(payload: Any) -> list[str]:
     return model_names
 
 
-def _check_replicate_preview_config(settings: Any) -> ReadinessCheckResponse:
+def _check_visual_preview_provider(settings: Any) -> ReadinessCheckResponse:
+    provider = (
+        str(
+            getattr(settings, "kiosk_visual_preview_provider", "disabled") or "disabled"
+        )
+        .strip()
+        .lower()
+    )
+    if provider == "disabled":
+        return ReadinessCheckResponse(
+            status="ready",
+            message="Kiosk visual preview provider is disabled",
+            details={
+                "provider": provider,
+                "production_note": (
+                    "Remote Replicate Qwen preview is not part of the production "
+                    "kiosk runtime."
+                ),
+            },
+        )
+    if provider != "replicate_qwen":
+        return ReadinessCheckResponse(
+            status="not_ready",
+            message=f"Unsupported KIOSK_VISUAL_PREVIEW_PROVIDER: {provider}",
+            details={"provider": provider},
+        )
+
     model = str(settings.replicate_preview_model or "").strip()
     token = str(settings.replicate_api_token or "").strip()
     if not model:
@@ -233,8 +259,9 @@ def _check_replicate_preview_config(settings: Any) -> ReadinessCheckResponse:
         )
     return ReadinessCheckResponse(
         status="ready",
-        message="Replicate preview config is present",
+        message="Replicate Qwen preview config is present for benchmark/debug",
         details={
+            "provider": provider,
             "model": model,
             "token_configured": True,
             "input_mapping": settings.replicate_preview_input_mapping,

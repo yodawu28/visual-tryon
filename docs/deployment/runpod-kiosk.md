@@ -140,9 +140,10 @@ Run this sequence:
 
 ## Optional Local Qwen-Edit Smoke
 
-Run this only after the Replicate-backed visual preview path is working. The
-goal is to benchmark whether local Qwen image editing is viable on the selected
-GPU before adding an API adapter.
+Run this as a self-hosted research benchmark. The production kiosk target is
+one GPU server with no Replicate/Qwen-edit remote dependency, so this smoke
+checks whether local Qwen image editing is viable before any API adapter is
+considered.
 
 This smoke test is intentionally separate from the API and worker. It loads a
 local Hugging Face/Diffusers Qwen image-edit pipeline, runs one generation, and
@@ -302,13 +303,15 @@ exception and traceback so the failure can be compared across GPU shapes.
 
 For quota failures, do not build an API adapter yet. Either increase the RunPod
 disk/volume quota, move caches to a larger mounted path by overriding
-`RUNPOD_MODEL_DIR`, or continue with the Replicate-backed preview baseline.
+`RUNPOD_MODEL_DIR`, or keep production-style kiosk visual preview disabled
+until a viable self-hosted engine is selected.
 
 ## Optional Local CatVTON Smoke
 
-Run this after the local Qwen-edit canary or directly after the Replicate path
-is stable. CatVTON is the first VTON-specific local candidate because its
-person plus garment input shape is close to the kiosk worker contract.
+Run this after the local Qwen-edit canary or as the first VTON-specific local
+candidate. CatVTON's person plus garment input shape is close to the kiosk
+worker contract, but it must beat the quality gate before becoming a production
+adapter.
 
 Install the extra dependencies used by the CatVTON smoke script:
 
@@ -419,6 +422,81 @@ Treat the CatVTON smoke as passed only when:
 Do not build the production `LocalCatVtonEngine` adapter from a rough-mask
 result alone. The adapter should wait until the auto-mask quality path is
 working with the same person-plus-garment inputs used by the Qwen smoke.
+
+## Optional Local Leffa Smoke
+
+Run Leffa after CatVTON has been paused or when testing the next
+higher-ROI self-hosted visual try-on candidate. Leffa uses the same prepared
+person and garment smoke files, but its own preprocessing path generates mask
+and densepose artifacts for debugging.
+
+Install the extra dependencies used by the Leffa smoke script:
+
+```bash
+cd /workspace/tryon-visual-project
+source venv/bin/activate
+make runpod-cuda-report
+make runpod-install-leffa-deps
+make runpod-leffa-import-check
+```
+
+`make runpod-install-leffa-deps` intentionally does not reinstall `torch` or
+`torchvision`. It assumes the RunPod PyTorch template already has a compatible
+CUDA-enabled torch stack. If CUDA is not healthy, fix the pod or torch stack
+before running Leffa.
+
+`make runpod-leffa-import-check` clones/uses the Leffa repo and validates
+Python imports only. It does not download model weights or generate an image.
+Use this check to catch DensePose, SCHP, OpenPose, or dependency issues before
+spending GPU time on generation.
+
+Prepare reusable smoke inputs:
+
+```bash
+make runpod-leffa-smoke-data
+```
+
+This target is an alias for the shared Qwen/CatVTON/Leffa smoke inputs. It
+writes a manifest at
+`/workspace/tryon-data/qwen_edit_smoke/inputs/manifest.json` that includes a
+ready-to-copy `leffa_smoke_command`.
+
+Run the Leffa smoke:
+
+```bash
+make runpod-leffa-smoke
+```
+
+Default Leffa smoke settings:
+
+- Leffa repo: `/workspace/tryon-models/external/Leffa`
+- checkpoints: `/workspace/tryon-models/external/Leffa/ckpts`
+- model repo: `franciszzj/Leffa`
+- size: `768x1024`
+- precision: `float16`
+- model type: `viton_hd`
+- garment type: `upper_body`
+- steps: `30`
+- guidance scale: `2.5`
+- output: `/workspace/tryon-data/leffa_smoke/leffa-smoke.png`
+- report: `/workspace/tryon-data/leffa_smoke/leffa-smoke.json`
+
+The report includes:
+
+- generated output path,
+- generated mask path,
+- generated densepose path,
+- latency,
+- runtime memory metrics,
+- preprocessing settings,
+- manual quality score placeholders.
+
+Treat the Leffa smoke as passed only when the command exits successfully, the
+image is visually close to the Qwen-edit reference, and the report has enough
+runtime headroom for the API, worker, analyzer, and future fit engine.
+
+Do not build a production `LocalLeffaEngine` adapter until Leffa passes the
+fixed Model Quality Gate Matrix.
 
 ## Operational Notes
 

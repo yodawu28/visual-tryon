@@ -76,6 +76,7 @@ def prepare_qwen_edit_smoke_data(
         "garment_image": str(paths.garment_image),
         "garment_category": garment_category,
         "catvton_cloth_type": garment_category,
+        "leffa_garment_type": _leffa_garment_type(garment_category),
         "smoke_command": (
             "make runpod-qwen-edit-smoke "
             f"PERSON_IMAGE={paths.person_image} "
@@ -84,6 +85,12 @@ def prepare_qwen_edit_smoke_data(
         "catvton_smoke_command": (
             "make runpod-catvton-smoke "
             f"RUNPOD_CATVTON_CLOTH_TYPE={garment_category} "
+            f"PERSON_IMAGE={paths.person_image} "
+            f"GARMENT_IMAGE={paths.garment_image}"
+        ),
+        "leffa_smoke_command": (
+            "make runpod-leffa-smoke "
+            f"RUNPOD_LEFFA_GARMENT_TYPE={_leffa_garment_type(garment_category)} "
             f"PERSON_IMAGE={paths.person_image} "
             f"GARMENT_IMAGE={paths.garment_image}"
         ),
@@ -102,9 +109,11 @@ def prepare_qwen_edit_smoke_data(
         "garment_image": str(paths.garment_image),
         "garment_category": garment_category,
         "catvton_cloth_type": garment_category,
+        "leffa_garment_type": payload["leffa_garment_type"],
         "manifest": str(paths.manifest),
         "smoke_command": payload["smoke_command"],
         "catvton_smoke_command": payload["catvton_smoke_command"],
+        "leffa_smoke_command": payload["leffa_smoke_command"],
     }
 
 
@@ -143,6 +152,14 @@ def _fixture_sources(fixture_dir: Path) -> dict[str, Path]:
         "person_image": fixture_dir / "front.png",
         "garment_image": fixture_dir / "garment.webp",
     }
+
+
+def _leffa_garment_type(garment_category: str) -> str:
+    if garment_category == "lower":
+        return "lower_body"
+    if garment_category == "overall":
+        return "dresses"
+    return "upper_body"
 
 
 def _create_person_capture(path: Path) -> None:

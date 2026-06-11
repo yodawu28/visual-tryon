@@ -98,7 +98,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     settings = get_settings()
-    output_report = args.output_report or _default_report_path(settings.temp_storage_dir)
+    output_report = args.output_report or _default_report_path(
+        settings.temp_storage_dir
+    )
 
     for input_path in [args.front_image, args.side_image, args.garment_image]:
         if input_path is not None and not input_path.exists():
@@ -157,9 +159,12 @@ def main() -> int:
         "fit": None,
         "visual_preview_job": None,
         "visual_preview_result": None,
-        "status": "capture_analysis_passed"
-        if session.capture_analysis and session.capture_analysis.get("passed") is True
-        else "capture_analysis_failed",
+        "status": (
+            "capture_analysis_passed"
+            if session.capture_analysis
+            and session.capture_analysis.get("passed") is True
+            else "capture_analysis_failed"
+        ),
     }
 
     capture_passed = bool(
@@ -284,7 +289,7 @@ def _build_visual_preview_worker(
 ) -> JobWorker:
     visual_tryon_service = KioskVisualTryOnService(
         tryon_dir=data_dir / "kiosk_tryons",
-        generator=ReplicateAvatarPreviewGenerator(),
+        generator=_build_visual_preview_generator(settings),
         tryon_analyzer=OllamaTryOnAnalyzer(
             model=settings.tryon_analyzer_ollama_model,
             base_url=settings.ollama_base_url,
@@ -301,6 +306,23 @@ def _build_visual_preview_worker(
                 visual_tryon_service=visual_tryon_service,
             )
         },
+    )
+
+
+def _build_visual_preview_generator(settings: Any) -> Any:
+    provider = (
+        str(
+            getattr(settings, "kiosk_visual_preview_provider", "disabled") or "disabled"
+        )
+        .strip()
+        .lower()
+    )
+    if provider == "replicate_qwen":
+        return ReplicateAvatarPreviewGenerator()
+    raise RuntimeError(
+        "Kiosk visual preview provider is disabled. Production kiosk visual "
+        "preview requires a self-hosted GPU engine; use "
+        "KIOSK_VISUAL_PREVIEW_PROVIDER=replicate_qwen only for benchmark/debug."
     )
 
 

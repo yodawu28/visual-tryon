@@ -82,7 +82,7 @@ def build_worker(*, stale_running_seconds: int | None = 1800) -> JobWorker:
     )
     visual_tryon_service = KioskVisualTryOnService(
         tryon_dir=settings.temp_storage_dir / "kiosk_tryons",
-        generator=ReplicateAvatarPreviewGenerator(),
+        generator=_build_kiosk_visual_generator(settings),
         tryon_analyzer=OllamaTryOnAnalyzer(
             model=settings.tryon_analyzer_ollama_model,
             base_url=settings.ollama_base_url,
@@ -103,6 +103,24 @@ def build_worker(*, stale_running_seconds: int | None = 1800) -> JobWorker:
                 visual_tryon_service=visual_tryon_service,
             )
         },
+    )
+
+
+def _build_kiosk_visual_generator(settings):
+    provider = (
+        str(
+            getattr(settings, "kiosk_visual_preview_provider", "disabled") or "disabled"
+        )
+        .strip()
+        .lower()
+    )
+    if provider == "replicate_qwen":
+        return ReplicateAvatarPreviewGenerator()
+    raise RuntimeError(
+        "Kiosk visual preview provider is disabled. Production kiosk visual "
+        "preview requires a self-hosted GPU engine; Replicate Qwen is available "
+        "only by explicitly setting KIOSK_VISUAL_PREVIEW_PROVIDER=replicate_qwen "
+        "for benchmark/debug."
     )
 
 

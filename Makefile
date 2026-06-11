@@ -36,6 +36,25 @@ RUNPOD_CATVTON_QUALITY_SIZE ?= 768x1024
 RUNPOD_CATVTON_QUALITY_STEPS ?= 30
 RUNPOD_CATVTON_QUALITY_OUTPUT ?= $(RUNPOD_DATA_DIR)/catvton_smoke/catvton-quality-smoke.png
 RUNPOD_CATVTON_QUALITY_REPORT ?= $(RUNPOD_DATA_DIR)/catvton_smoke/catvton-quality-smoke.json
+RUNPOD_LEFFA_REPO_URL ?= https://github.com/franciszzj/Leffa.git
+RUNPOD_LEFFA_ROOT ?= $(RUNPOD_MODEL_DIR)/external/Leffa
+RUNPOD_LEFFA_MODEL_REPO_ID ?= franciszzj/Leffa
+RUNPOD_LEFFA_CHECKPOINT_DIR ?= $(RUNPOD_LEFFA_ROOT)/ckpts
+RUNPOD_LEFFA_SIZE ?= 768x1024
+RUNPOD_LEFFA_DEVICE ?= cuda
+RUNPOD_LEFFA_DTYPE ?= float16
+RUNPOD_LEFFA_VT_MODEL_TYPE ?= viton_hd
+RUNPOD_LEFFA_GARMENT_TYPE ?= upper_body
+RUNPOD_LEFFA_STEPS ?= 30
+RUNPOD_LEFFA_GUIDANCE_SCALE ?= 2.5
+RUNPOD_LEFFA_SEED ?= 42
+RUNPOD_LEFFA_REF_ACCELERATION ?= 0
+RUNPOD_LEFFA_REPAINT ?= 0
+RUNPOD_LEFFA_PREPROCESS_GARMENT ?= 0
+RUNPOD_LEFFA_PERSON_IMAGE ?= $(RUNPOD_QWEN_EDIT_PERSON_IMAGE)
+RUNPOD_LEFFA_GARMENT_IMAGE ?= $(RUNPOD_QWEN_EDIT_GARMENT_IMAGE)
+RUNPOD_LEFFA_OUTPUT ?= $(RUNPOD_DATA_DIR)/leffa_smoke/leffa-smoke.png
+RUNPOD_LEFFA_REPORT ?= $(RUNPOD_DATA_DIR)/leffa_smoke/leffa-smoke.json
 RUNPOD_HF_HOME ?= $(RUNPOD_MODEL_DIR)/huggingface
 RUNPOD_TORCH_HOME ?= $(RUNPOD_MODEL_DIR)/torch
 RUNPOD_PIP_CACHE_DIR ?= $(RUNPOD_MODEL_DIR)/pip-cache
@@ -43,7 +62,7 @@ RUNPOD_TORCH_VERSION ?= 2.8.0
 RUNPOD_TORCHVISION_VERSION ?= 0.23.0
 RUNPOD_TORCH_CUDA_INDEX ?= https://download.pytorch.org/whl/cu128
 
-.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-install-catvton-deps runpod-catvton-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke runpod-catvton-quality-smoke test clean lint format check
+.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-install-catvton-deps runpod-install-leffa-deps runpod-catvton-import-check runpod-leffa-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-leffa-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke runpod-catvton-quality-smoke runpod-leffa-smoke test clean lint format check
 
 help:
 	@echo "Virtual Try-On MVP - Makefile commands"
@@ -70,12 +89,16 @@ help:
 	@echo "  make runpod-disk-report - Print storage/cache usage for RunPod debugging"
 	@echo "  make runpod-cuda-report - Print NVIDIA/PyTorch CUDA diagnostics"
 	@echo "  make runpod-qwen-edit-smoke-data - Prepare synthetic local Qwen-edit smoke inputs"
-	@echo "  make runpod-vton-smoke-data - Alias for shared Qwen/CatVTON smoke inputs"
+	@echo "  make runpod-vton-smoke-data - Alias for shared Qwen/CatVTON/Leffa smoke inputs"
+	@echo "  make runpod-leffa-smoke-data - Alias for shared Qwen/CatVTON/Leffa smoke inputs"
 	@echo "  make runpod-qwen-edit-smoke - Run local Qwen-edit smoke with prepared/default inputs"
 	@echo "  make runpod-install-catvton-deps - Install extra deps for local CatVTON smoke"
 	@echo "  make runpod-catvton-import-check - Validate CatVTON imports without loading models"
 	@echo "  make runpod-catvton-smoke - Run cheap local CatVTON canary with prepared/default inputs"
 	@echo "  make runpod-catvton-quality-smoke - Run full CatVTON quality smoke after canary passes"
+	@echo "  make runpod-install-leffa-deps - Install extra deps for local Leffa smoke"
+	@echo "  make runpod-leffa-import-check - Validate Leffa imports without loading models"
+	@echo "  make runpod-leffa-smoke - Run local Leffa smoke with prepared/default inputs"
 	@echo ""
 	@echo "  make test       - Run tests với coverage"
 	@echo "  make lint       - Run linters (ruff + mypy)"
@@ -142,6 +165,12 @@ runpod-help:
 	@echo "  make runpod-vton-smoke-data"
 	@echo "  make runpod-catvton-smoke"
 	@echo "  make runpod-catvton-quality-smoke"
+	@echo ""
+	@echo "Optional local Leffa smoke:"
+	@echo "  make runpod-install-leffa-deps"
+	@echo "  make runpod-leffa-import-check"
+	@echo "  make runpod-leffa-smoke-data"
+	@echo "  make runpod-leffa-smoke"
 
 runpod-init:
 	@test -f .env || cp .env.runpod.example .env
@@ -181,6 +210,42 @@ runpod-install-catvton-deps:
 		"matplotlib>=3.9.1" \
 		"ninja>=1.11.1"
 
+runpod-install-leffa-deps:
+	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install -U \
+		"accelerate>=0.31.0" \
+		"av>=12.0.0" \
+		"cloudpickle>=3.0.0" \
+		"diffusers>=0.29.2" \
+		"einops>=0.8.0" \
+		"fvcore>=0.1.5.post20221221" \
+		"huggingface_hub>=0.23.4" \
+		"imageio>=2.34.0" \
+		"iopath>=0.1.10" \
+		"matplotlib>=3.9.1" \
+		"numpy>=1.26.4" \
+		"omegaconf>=2.3.0" \
+		"onnxruntime>=1.18.0" \
+		"opencv-python-headless>=4.10.0.84" \
+		"packaging>=24.1" \
+		"pandas>=2.2.2" \
+		"peft>=0.11.1" \
+		"pillow>=10.4.0" \
+		"psutil>=6.0.0" \
+		"pycocotools>=2.0.8" \
+		"PyYAML>=6.0.1" \
+		"regex==2024.5.15" \
+		"safetensors>=0.4.5" \
+		"scikit-image>=0.24.0" \
+		"scipy>=1.10.1" \
+		"tabulate>=0.9.0" \
+		"termcolor>=2.4.0" \
+		"timm>=1.0.7" \
+		"tokenizers>=0.19.1" \
+		"torchmetrics>=1.4.0" \
+		"tqdm>=4.66.4" \
+		"transformers>=4.43.0" \
+		"yacs>=0.1.8"
+
 runpod-catvton-import-check:
 	HF_HOME="$(RUNPOD_HF_HOME)" \
 	TRANSFORMERS_CACHE="$(RUNPOD_HF_HOME)/transformers" \
@@ -194,8 +259,26 @@ runpod-catvton-import-check:
 		--report "$(RUNPOD_CATVTON_REPORT)" \
 		--catvton-root "$(RUNPOD_CATVTON_ROOT)" \
 		--repo-url "$(RUNPOD_CATVTON_REPO_URL)" \
+			--device cpu \
+			--mask-mode "$(RUNPOD_CATVTON_MASK_MODE)" \
+			--check-imports-only
+
+runpod-leffa-import-check:
+	HF_HOME="$(RUNPOD_HF_HOME)" \
+	TRANSFORMERS_CACHE="$(RUNPOD_HF_HOME)/transformers" \
+	HUGGINGFACE_HUB_CACHE="$(RUNPOD_HF_HOME)/hub" \
+	TORCH_HOME="$(RUNPOD_TORCH_HOME)" \
+	XDG_CACHE_HOME="$(RUNPOD_MODEL_DIR)/xdg-cache" \
+	python -m scripts.local_leffa_smoke \
+		--person-image "$(RUNPOD_LEFFA_PERSON_IMAGE)" \
+		--garment-image "$(RUNPOD_LEFFA_GARMENT_IMAGE)" \
+		--output "$(RUNPOD_LEFFA_OUTPUT)" \
+		--report "$(RUNPOD_LEFFA_REPORT)" \
+		--leffa-root "$(RUNPOD_LEFFA_ROOT)" \
+		--repo-url "$(RUNPOD_LEFFA_REPO_URL)" \
+		--model-repo-id "$(RUNPOD_LEFFA_MODEL_REPO_ID)" \
+		--checkpoint-dir "$(RUNPOD_LEFFA_CHECKPOINT_DIR)" \
 		--device cpu \
-		--mask-mode "$(RUNPOD_CATVTON_MASK_MODE)" \
 		--check-imports-only
 
 runpod-pull-ollama:
@@ -246,6 +329,8 @@ runpod-qwen-edit-smoke-data:
 		$(if $(filter 1 true yes,$(RUNPOD_SMOKE_DATA_OVERWRITE)),--overwrite,)
 
 runpod-vton-smoke-data: runpod-qwen-edit-smoke-data
+
+runpod-leffa-smoke-data: runpod-qwen-edit-smoke-data
 
 runpod-qwen-edit-smoke:
 	$(eval PERSON_IMAGE_PATH := $(or $(PERSON_IMAGE),$(RUNPOD_QWEN_EDIT_PERSON_IMAGE)))
@@ -308,6 +393,38 @@ runpod-catvton-quality-smoke:
 		RUNPOD_CATVTON_STEPS="$(RUNPOD_CATVTON_QUALITY_STEPS)" \
 		RUNPOD_CATVTON_OUTPUT="$(RUNPOD_CATVTON_QUALITY_OUTPUT)" \
 		RUNPOD_CATVTON_REPORT="$(RUNPOD_CATVTON_QUALITY_REPORT)"
+
+runpod-leffa-smoke:
+	$(eval PERSON_IMAGE_PATH := $(or $(PERSON_IMAGE),$(RUNPOD_LEFFA_PERSON_IMAGE)))
+	$(eval GARMENT_IMAGE_PATH := $(or $(GARMENT_IMAGE),$(RUNPOD_LEFFA_GARMENT_IMAGE)))
+	@test -f "$(PERSON_IMAGE_PATH)" || (echo "Missing PERSON_IMAGE=$(PERSON_IMAGE_PATH). Run make runpod-qwen-edit-smoke-data or pass PERSON_IMAGE=/path/to/front.png"; exit 2)
+	@test -f "$(GARMENT_IMAGE_PATH)" || (echo "Missing GARMENT_IMAGE=$(GARMENT_IMAGE_PATH). Run make runpod-qwen-edit-smoke-data or pass GARMENT_IMAGE=/path/to/garment.png"; exit 2)
+	HF_HOME="$(RUNPOD_HF_HOME)" \
+	TRANSFORMERS_CACHE="$(RUNPOD_HF_HOME)/transformers" \
+	HUGGINGFACE_HUB_CACHE="$(RUNPOD_HF_HOME)/hub" \
+	TORCH_HOME="$(RUNPOD_TORCH_HOME)" \
+	XDG_CACHE_HOME="$(RUNPOD_MODEL_DIR)/xdg-cache" \
+	PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" \
+	python -m scripts.local_leffa_smoke \
+		--person-image "$(PERSON_IMAGE_PATH)" \
+		--garment-image "$(GARMENT_IMAGE_PATH)" \
+		--output "$(RUNPOD_LEFFA_OUTPUT)" \
+		--report "$(RUNPOD_LEFFA_REPORT)" \
+		--leffa-root "$(RUNPOD_LEFFA_ROOT)" \
+		--repo-url "$(RUNPOD_LEFFA_REPO_URL)" \
+		--model-repo-id "$(RUNPOD_LEFFA_MODEL_REPO_ID)" \
+		--checkpoint-dir "$(RUNPOD_LEFFA_CHECKPOINT_DIR)" \
+		--size "$(RUNPOD_LEFFA_SIZE)" \
+		--device "$(RUNPOD_LEFFA_DEVICE)" \
+		--dtype "$(RUNPOD_LEFFA_DTYPE)" \
+		--vt-model-type "$(RUNPOD_LEFFA_VT_MODEL_TYPE)" \
+		--garment-type "$(RUNPOD_LEFFA_GARMENT_TYPE)" \
+		$(if $(filter 1 true yes,$(RUNPOD_LEFFA_REF_ACCELERATION)),--ref-acceleration,--no-ref-acceleration) \
+		$(if $(filter 1 true yes,$(RUNPOD_LEFFA_REPAINT)),--repaint,--no-repaint) \
+		$(if $(filter 1 true yes,$(RUNPOD_LEFFA_PREPROCESS_GARMENT)),--preprocess-garment,--no-preprocess-garment) \
+		--steps "$(RUNPOD_LEFFA_STEPS)" \
+		--guidance-scale "$(RUNPOD_LEFFA_GUIDANCE_SCALE)" \
+		--seed "$(RUNPOD_LEFFA_SEED)"
 
 test:
 	pytest tests/ -v --cov=src --cov-report=html --cov-report=term

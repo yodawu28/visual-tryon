@@ -57,9 +57,13 @@ class Settings(BaseSettings):
         default=300,
         env="TRYON_ANALYZER_TIMEOUT",
     )
+    kiosk_visual_preview_provider: str = Field(
+        default="disabled",
+        env="KIOSK_VISUAL_PREVIEW_PROVIDER",
+    )  # "disabled" for production until a self-hosted engine passes; "replicate_qwen" for benchmark/debug
 
     # Replicate
-    replicate_api_token: str = Field(..., env="REPLICATE_API_TOKEN")
+    replicate_api_token: Optional[str] = Field(default=None, env="REPLICATE_API_TOKEN")
     replicate_timeout: int = Field(default=120, env="REPLICATE_TIMEOUT")
     replicate_preview_model: str = Field(
         default="qwen/qwen-image-edit-2511", env="REPLICATE_PREVIEW_MODEL"

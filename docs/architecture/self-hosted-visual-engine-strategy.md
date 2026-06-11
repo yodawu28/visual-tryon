@@ -4,8 +4,16 @@
 
 The product direction is to run the kiosk stack fully on our own infrastructure:
 API, worker, capture analysis, fit intelligence, and visual try-on generation.
-Replicate remains useful as a baseline, but it should not be the long-term
-runtime dependency for the production kiosk.
+Coach feedback tightened this into a hard production constraint: all production
+kiosk models must run on one GPU server package. Replicate/Qwen-edit remains
+useful as a quality reference, notebook benchmark, or future avatar-specific
+feature, but it is not a production runtime dependency for kiosk visual preview.
+
+Production garment inputs are expected to be messy: product images downloaded
+from websites may include backgrounds, watermarks, model shots, crops, shadows,
+non-flat-lay composition, or partial catalog overlays. A self-hosted visual
+engine must therefore be judged against Qwen-edit-level robustness, not only on
+clean VTON benchmark-style garment images.
 
 The first local Qwen image-edit smoke test on RTX 3090 validated that the
 runtime can load and execute, but only with aggressive low-memory settings:
@@ -26,13 +34,15 @@ cannot depend on a 4-5 minute local image-edit path.
 
 ## Decision
 
-Separate the local visual engine strategy into three tracks:
+Separate the self-hosted visual engine strategy into three tracks:
 
-1. **Self-hosted VTON production candidate**
-   - Prioritize a VTON-specific model that is smaller and purpose-built for
-     person plus garment try-on.
-   - Qwen image edit is a useful quality reference, but not the first
-     production local engine on 24GB GPUs.
+1. **Self-hosted production visual engine candidate**
+   - Prioritize models that run entirely on our GPU server and accept person
+     plus garment references.
+   - A VTON-specific model is preferred only if it can handle uncontrolled web
+     garment images. Otherwise, a self-hosted foundation image-edit model may be
+     required.
+   - Remote Qwen image edit is a quality reference, not a production fallback.
 
 2. **Qwen local optimization experiment**
    - Keep Qwen image edit as a benchmark and research track.
@@ -49,7 +59,8 @@ Separate the local visual engine strategy into three tracks:
 ## Candidate Model Tracks
 
 See `docs/architecture/local-vton-candidate-shortlist.md` for the current
-model shortlist and smoke-test order.
+model shortlist and `docs/eval/model-quality-gate-matrix.md` for the fixed
+quality gate and ROI order.
 
 ### Track A: VTON-Specific Local Model
 
@@ -78,6 +89,17 @@ Success gate:
   the current baseline.
 - Leaves enough memory headroom for API/worker/Ollama analyzer or runs cleanly
   in a separate GPU worker process.
+
+Current CatVTON status:
+
+- RTX 4000 Ada 20GB can run the cheap canary and full quality smoke.
+- The quality smoke is better than the canary but still visually soft on the
+  shared fixture, and retesting did not resolve the softness.
+- CatVTON has not passed the quality gate. Do not build a production adapter
+  until it reaches Qwen-reference quality on the same person/garment
+  pair and proves robust on uncontrolled web garment images.
+- Current decision: pause CatVTON work. Keep Qwen-edit/Replicate as a
+  reference-only benchmark while evaluating stronger self-hosted options.
 
 ### Track B: Quantized Qwen Image Edit
 
@@ -140,15 +162,24 @@ Success gate:
 Keep the API contract independent from the model implementation:
 
 - `VisualTryOnEngine`
-  - `ReplicateQwenPreviewEngine`
+  - `ReplicateQwenPreviewEngine` benchmark/debug only
   - `LocalQwenEditEngine` experiment only
   - `LocalVtonEngine` production candidate
 
 The worker should choose an engine from config:
 
-- `VISUAL_TRYON_ENGINE=replicate_qwen`
+- `VISUAL_TRYON_ENGINE=disabled`
 - `VISUAL_TRYON_ENGINE=local_qwen_edit`
 - `VISUAL_TRYON_ENGINE=local_vton`
+
+Production gate:
+
+- Kiosk production must not call remote image generation providers.
+- `KIOSK_VISUAL_PREVIEW_PROVIDER=replicate_qwen` is allowed only for
+  benchmark/debug runs and should not be used in the production RunPod template.
+- `KIOSK_VISUAL_PREVIEW_PROVIDER=disabled` is the safe default until a
+  self-hosted visual engine passes quality, latency, memory, and licensing
+  gates.
 
 The request/result schema should stay stable:
 
@@ -160,10 +191,11 @@ The request/result schema should stay stable:
 
 1. Record the RTX 3090 Qwen local smoke result as a benchmark.
 2. Run one more Qwen curve test at `640x640`, input max `640`, `8` steps.
-3. Research and select one VTON-specific local candidate for the next smoke.
-4. Implement a small `LocalVtonEngine` adapter behind the same worker contract.
-5. Compare:
-   - Replicate Qwen
+3. Build a Leffa smoke harness as the next high-ROI candidate.
+4. Implement a production adapter only after a candidate passes the fixed
+   quality gate.
+5. Compare against the reference:
+   - Replicate Qwen reference output
    - Local Qwen low-memory
    - Local VTON candidate
 6. Only then decide whether to invest in quantization or LoRA/fine-tuning.
@@ -173,4 +205,6 @@ The request/result schema should stay stable:
 The product should continue moving toward a fully self-hosted runtime, but the
 local visual generation engine should not be locked to Qwen image edit. Qwen is
 valuable as a multimodal quality reference; the production engine may need to be
-a smaller VTON-specific model with later fine-tuning.
+a smaller VTON-specific model with later fine-tuning, or a self-hosted
+foundation image-edit model if VTON-specific candidates remain too weak on
+messy production garment inputs.

@@ -2,7 +2,7 @@
 
 This document tracks local visual try-on model candidates for the kiosk
 architecture. The goal is to find a self-hosted engine that can replace or
-complement the Replicate-backed Qwen preview path.
+outperform the Replicate-backed Qwen reference path for production kiosk use.
 
 ## Selection Criteria
 
@@ -15,16 +15,110 @@ Candidates are evaluated against the current kiosk system:
 - Has public code and weights, or at least a practical path to local inference.
 - Has manageable licensing risk for the current research stage.
 
+Use `docs/eval/model-quality-gate-matrix.md` as the fixed quality gate before
+promoting any candidate to an API adapter.
+
 ## Recommended Test Order
 
-### 1. CatVTON
+### 1. Leffa
+
+Source:
+
+- GitHub: `https://github.com/franciszzj/Leffa`
+- Paper: `https://arxiv.org/abs/2412.08486`
+
+Why it is the next high-ROI candidate:
+
+- Public code, model links, Hugging Face demo path, and MIT license.
+- Purpose includes virtual try-on and pose transfer.
+- The method explicitly targets fine-grained texture distortion, which maps
+  directly to our garment fidelity requirement.
+- More mature implementation signal than the newer research candidates.
+
+Integration fit:
+
+- Candidate adapter name: `LocalLeffaEngine`.
+- Smoke first, no API adapter until it passes the fixed quality gate.
+- Reuse the same person/garment fixtures as Qwen-edit and CatVTON.
+
+Risks:
+
+- Uses preprocessing components such as SCHP/DensePose, so dependency setup may
+  be heavier than CatVTON.
+- Reported fast runtime is on A100-class hardware; we still need RTX 3090 /
+  RTX 4000 Ada / L4 numbers.
+
+Verdict: **test next**. This has the best immediate ROI among the current
+candidate set.
+
+### 2. OmniVTON
+
+Source:
+
+- GitHub: `https://github.com/Jerome-Young/OmniVTON`
+- Paper: `https://arxiv.org/abs/2507.15037`
+
+Why it is useful:
+
+- Training-free universal VTON direction fits the messy garment input problem.
+- Claims garment detail preservation and pose consistency across diverse
+  settings.
+- Public repository exists.
+
+Risks:
+
+- Newer and less mature repository signal than Leffa.
+- May have more complex runtime because it is training-free and universal.
+
+Verdict: **second candidate after Leffa**.
+
+### 3. Re-CatVTON
+
+Source:
+
+- Paper: `https://arxiv.org/abs/2511.18775`
+
+Why it is useful:
+
+- Directly addresses CatVTON's efficiency/quality trade-off.
+- If code and weights become available, it is the most natural successor to the
+  failed CatVTON smoke.
+
+Risks:
+
+- Treat as research watchlist until public local inference code and weights are
+  clearly available.
+
+Verdict: **track, but do not smoke before Leffa/OmniVTON unless release status
+changes**.
+
+### 4. DiT-VTON
+
+Source:
+
+- Paper: `https://arxiv.org/abs/2510.04797`
+
+Why it is useful:
+
+- Promising direction for multi-category product handling and real-world image
+  robustness.
+- Strategically relevant if classic VTON pipelines continue failing on messy
+  garment inputs.
+
+Risks:
+
+- Lower immediate ROI without a straightforward public local inference path.
+
+Verdict: **research watchlist only for now**.
+
+### 5. CatVTON
 
 Source:
 
 - GitHub: `https://github.com/Zheng-Chong/CatVTON`
 - Paper: `https://arxiv.org/abs/2407.15886`
 
-Why it is the first local candidate:
+Why it was the first local candidate:
 
 - Purpose-built VTON model, not a general image-edit model.
 - Simple input direction: person image plus garment image.
@@ -55,7 +149,20 @@ Risks:
   simplest inference path and avoid coupling the kiosk API to those
   preprocessors unless quality requires it.
 
-Verdict: **primary research candidate**.
+Retest result:
+
+- CatVTON ran successfully on RTX 4000 Ada 20GB.
+- The cheap canary was useful for runtime validation only.
+- The quality smoke improved over the canary, but repeated tests were still
+  visually soft and below the Qwen-edit/Replicate reference quality.
+- Production garments may come from web product images with background,
+  watermark, model shots, crops, or non-flat-lay composition. CatVTON did not
+  demonstrate enough robustness for this production input profile.
+
+Verdict: **pause after failed quality gate**. Do not build
+`LocalCatVtonEngine` until there is a clear new hypothesis, such as better
+garment preprocessing, a stronger CatVTON-family checkpoint, or domain
+fine-tuning data. Use Qwen-edit as a reference-only quality benchmark.
 
 Recommended RunPod smoke configuration:
 
@@ -81,7 +188,7 @@ Recommended RunPod smoke configuration:
   - sample count: `1`
   - batch size: `1`
 
-### 2. OOTDiffusion
+### 6. OOTDiffusion
 
 Source:
 
@@ -109,9 +216,11 @@ Risks:
   Mac development.
 - More preprocessing means more operational surface than CatVTON.
 
-Verdict: **second local smoke candidate if CatVTON is poor or blocked**.
+Verdict: **lower ROI than Leffa for the next smoke** because the dependency and
+preprocessing surface is heavier. It still needs to be measured against
+Qwen-edit on uncontrolled web garment inputs before any adapter work.
 
-### 3. IDM-VTON Local
+### 7. IDM-VTON Local
 
 Source:
 
@@ -129,7 +238,7 @@ Why it is useful:
 Integration fit:
 
 - Candidate adapter name: `LocalIdmVtonEngine`.
-- Useful as a local baseline against Replicate/Qwen and CatVTON.
+- Useful as a local comparison point against the Qwen reference and CatVTON.
 
 Risks:
 
@@ -139,9 +248,9 @@ Risks:
   more glue code.
 - More moving parts than desired for the first self-hosted MVP.
 
-Verdict: **quality baseline, not first local production candidate**.
+Verdict: **comparison reference, not first local production candidate**.
 
-### 4. StableVITON
+### 8. StableVITON
 
 Source:
 
@@ -169,7 +278,7 @@ Risks:
 
 Verdict: **deferred comparison candidate**.
 
-### 5. HR-VITON / GP-VTON
+### 9. HR-VITON / GP-VTON
 
 Sources:
 
@@ -216,9 +325,13 @@ our system.
 
 ## Proposed Smoke Milestones
 
-1. Add a generic local VTON smoke command:
-   - `make runpod-local-vton-smoke MODEL=catvton`
+1. Add a Leffa smoke command:
+   - `make runpod-leffa-smoke-data`
+   - `make runpod-install-leffa-deps`
+   - `make runpod-leffa-import-check`
+   - `make runpod-leffa-smoke`
 2. Implement model-specific scripts under `scripts/`:
+   - `scripts/local_leffa_smoke.py`
    - `scripts/local_catvton_smoke.py`
    - `scripts/local_ootdiffusion_smoke.py`
 3. Use the existing example fixtures:
@@ -238,8 +351,11 @@ our system.
 
 ## Current Recommendation
 
-Start with **CatVTON**. If it installs and runs cleanly on RunPod, it is the
-best match for our current system boundary. If CatVTON fails on quality or
-licensing, test **OOTDiffusion** next. Keep **IDM-VTON local** as a quality
-baseline, and keep **Qwen local** as a reference rather than the default local
-engine.
+Pause **CatVTON** after the RTX 4000 Ada smoke results because it runs but does
+not meet the Qwen-edit quality bar. Keep **Qwen-edit/Replicate** as a
+reference-only benchmark, not a production kiosk dependency. If local VTON
+research continues, test **Leffa** next with the same uncontrolled web garment
+requirement before building any API adapter. Keep **OmniVTON** second, keep
+**Re-CatVTON** and **DiT-VTON** on the watchlist, keep **IDM-VTON local** as a
+comparison reference, and keep **Qwen local** as a research reference until it
+can meet the latency and memory gate.

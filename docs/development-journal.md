@@ -624,12 +624,12 @@ generation.
 
 ### Decisions
 
-- Keep visual generation on Replicate for the first full async validation.
+- Keep visual generation on Replicate for the first full async validation only.
 - Use the existing local JSON job queue and worker in the all-in-one RunPod Pod.
 - Validate that the worker can update the kiosk session and persist generated
   image artifacts after a successful Replicate prediction.
-- Defer local Qwen-edit generation until the remote path is stable and we have a
-  quality/latency baseline.
+- Defer local Qwen-edit generation until the async job/session/artifact path is
+  stable and we have a reference quality/latency measurement.
 
 ### Issues Found
 
@@ -666,8 +666,8 @@ generation.
 - Review generated image quality from the persisted output path.
 - Run two or three more garments and captures to get a small latency/quality
   baseline.
-- Decide whether the MVP should keep Replicate for preview generation or invest
-  next in local Qwen-edit generation on a stronger GPU pod.
+- Decide how to move production visual preview onto a self-hosted GPU engine.
+  Replicate remains reference/debug only.
 
 ## RunPod Phase 3 Local Qwen-Edit Smoke
 
@@ -679,8 +679,8 @@ generation.
 
 - Treat local Qwen image edit as a benchmark and research track, not the default
   production visual engine yet.
-- Keep Replicate-backed Qwen as the quality and speed baseline while evaluating
-  self-hosted alternatives.
+- Keep Replicate-backed Qwen as a reference quality/speed measurement while
+  evaluating self-hosted alternatives.
 - Split the self-hosted visual engine work into three tracks:
   - VTON-specific local model candidate for production.
   - Quantized or low-memory Qwen image-edit experiment.
@@ -735,8 +735,8 @@ generation.
   the pod has enough headroom.
 - Select one VTON-specific local candidate and build a smoke test before adding
   an API adapter.
-- Keep the existing Replicate Qwen path as the MVP fallback until a local engine
-  beats it on quality, latency, and reliability.
+- Keep the existing Replicate Qwen path only for benchmark/debug until a local
+  engine beats it on quality, latency, and reliability.
 
 ## CatVTON Local Smoke Harness
 
@@ -773,3 +773,125 @@ RunPod.
   contract.
 - If auto-mask blocks the smoke, use `RUNPOD_CATVTON_MASK_MODE=rough` only to
   validate pipeline load/runtime, then revisit mask generation separately.
+
+### Result
+
+- CatVTON smoke was tested on RTX 4000 Ada 20GB.
+- The cheap canary (`512x768`, `8` steps) produced an output but the image was
+  not visually clear enough for quality judgment.
+- The quality smoke (`768x1024`, `30` steps) improved the result and preserved
+  the garment direction, but details were still not clear enough to beat the
+  current Qwen/Replicate baseline.
+- Conclusion: CatVTON is viable as a local runtime candidate, but not ready for
+  a production adapter from this single fixture. Continue with controlled
+  comparison rather than repeated blind CatVTON runs.
+
+### Follow-Up
+
+- CatVTON was retested and remained visually soft.
+- Production garments can come from web product images with background,
+  watermark, model-shot composition, crops, and other uncontrolled artifacts.
+  The production quality bar is therefore Qwen-edit-level robustness, not just
+  clean benchmark VTON transfer.
+- Decision: pause CatVTON. Do not spend more RunPod time on blind CatVTON
+  tuning.
+- Continue using Qwen-edit/Replicate as a reference-only quality benchmark while
+  evaluating either a stronger self-hosted foundation image-edit path or another
+  VTON-specific model that can handle uncontrolled garment inputs.
+
+## Kiosk Single-GPU Runtime Constraint
+
+Coach feedback clarified the production deployment target: the kiosk runtime
+should package all required models on one GPU server. The production kiosk path
+should therefore not depend on Replicate/Qwen-edit for visual preview
+generation.
+
+### Decisions
+
+- Keep Replicate/Qwen-edit only as a benchmark/debug reference for comparing
+  output quality.
+- Do not treat Replicate as the MVP production fallback for kiosk visual
+  preview.
+- Keep remote avatar/user-avatar experiments separate from the kiosk production
+  visual-preview path.
+- Default RunPod kiosk config should disable visual preview until a self-hosted
+  GPU engine passes the quality gate.
+- Continue searching for a self-hosted visual engine that can handle messy web
+  garment images with Qwen-like robustness.
+
+### Implemented
+
+- Added `KIOSK_VISUAL_PREVIEW_PROVIDER`.
+- Set the RunPod kiosk template default to
+  `KIOSK_VISUAL_PREVIEW_PROVIDER=disabled`.
+- Updated readiness so a self-hosted kiosk deployment no longer requires a
+  Replicate API token.
+- Added a guard so kiosk visual-preview endpoints/jobs do not call Replicate
+  unless `KIOSK_VISUAL_PREVIEW_PROVIDER=replicate_qwen` is explicitly enabled
+  for benchmark/debug.
+
+### Next
+
+- Define the production self-hosted visual engine contract.
+- Shortlist stronger local candidates before spending more RunPod time.
+- Keep CatVTON paused until there is a concrete hypothesis that improves the
+  soft-output issue.
+
+## Fixed Model Quality Gate
+
+After CatVTON produced soft outputs on the same smoke fixture, the project now
+uses a fixed Model Quality Gate Matrix before any new self-hosted visual engine
+gets an API adapter.
+
+### Decisions
+
+- Added `docs/eval/model-quality-gate-matrix.md` as the fixed evaluation gate.
+- The production gate prioritizes garment fidelity, web-garment robustness,
+  human preservation, sleeve quality, latency/VRAM, integration simplicity, and
+  license/commercial path.
+- Qwen-edit remains the visual quality reference only; it is not the production
+  kiosk fallback.
+- CatVTON remains paused because the local smoke output is below the required
+  quality bar.
+
+### Candidate ROI Order
+
+1. Leffa.
+2. OmniVTON.
+3. Re-CatVTON, only after code/weights are clearly available.
+4. DiT-VTON, research watchlist only until there is a straightforward local
+   inference path.
+
+### Next
+
+- Build a Leffa smoke harness first:
+  - `make runpod-leffa-smoke-data`
+  - `make runpod-install-leffa-deps`
+  - `make runpod-leffa-import-check`
+  - `make runpod-leffa-smoke`
+- Do not build `LocalLeffaEngine` or wire it into the kiosk worker until Leffa
+  passes the fixed quality gate.
+
+## Leffa Local Smoke Harness
+
+Implemented the first Leffa adaptation layer as a smoke harness, not as a
+production engine adapter.
+
+### Implemented
+
+- Added `scripts/local_leffa_smoke.py`.
+- Added `make runpod-install-leffa-deps`.
+- Added `make runpod-leffa-import-check`.
+- Added `make runpod-leffa-smoke-data` as an alias for shared smoke inputs.
+- Added `make runpod-leffa-smoke`.
+- Extended the shared smoke-data manifest with:
+  - `leffa_garment_type`
+  - `leffa_smoke_command`
+- Updated RunPod docs with the Leffa smoke sequence.
+
+### Decision
+
+Leffa remains a candidate under evaluation. Do not wire it into
+`KIOSK_VISUAL_PREVIEW_PROVIDER` yet. The next RunPod run should answer whether
+Leffa can beat the fixed quality gate on the same Qwen reference fixture and
+messy web-style garment fixtures.

@@ -90,6 +90,9 @@ docs/*
 docs/architecture/*
 !docs/architecture/local-vton-candidate-shortlist.md
 !docs/architecture/self-hosted-visual-engine-strategy.md
+!docs/eval/
+docs/eval/*
+!docs/eval/model-quality-gate-matrix.md
 data
 .vibe-map
 internal-docs

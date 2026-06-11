@@ -40,7 +40,7 @@ Run and verify:
 - MediaPipe capture analysis.
 - Fit Intelligence analysis.
 - Size chart lookup and size recommendation.
-- Optional Replicate-backed visual preview if `REPLICATE_API_TOKEN` is present.
+- Optional visual preview only when a provider is explicitly enabled.
 
 Do not optimize local image generation in this phase.
 
@@ -70,7 +70,10 @@ Do not optimize local image generation in this phase.
 
 5. Review `.env`:
 
-   - Set `REPLICATE_API_TOKEN` if visual preview will be tested.
+   - Keep `KIOSK_VISUAL_PREVIEW_PROVIDER=disabled` for production-style kiosk
+     smoke tests.
+   - Set `KIOSK_VISUAL_PREVIEW_PROVIDER=replicate_qwen` and
+     `REPLICATE_API_TOKEN` only for benchmark/debug visual preview tests.
    - Set `CORS_ORIGINS` to include the RunPod proxy URL.
    - Keep `API_PROFILE=kiosk`.
    - Keep `TEMP_STORAGE_DIR=/workspace/tryon-data`.
@@ -159,9 +162,9 @@ Local Qwen-edit generation remains deferred.
 
 ### Goal
 
-Benchmark full visual preview behavior and decide whether the project should
-continue using Replicate for image generation or move generation onto the GPU
-Pod.
+Benchmark full visual preview behavior while moving the production target toward
+self-hosted GPU generation. The Replicate-backed run is historical validation
+for queue/session/artifact behavior only; it is not the production kiosk target.
 
 ### Recommended Pod
 
@@ -183,7 +186,8 @@ Run and verify everything from Phase 1, plus:
 
 - Visual preview job queue.
 - Worker stability under repeated jobs.
-- Replicate image generation latency and quality.
+- Replicate image generation latency and quality only as a benchmark/debug
+  reference.
 - Local Qwen-edit smoke script before any API adapter is implemented.
 - Local CatVTON smoke script as the first VTON-specific self-hosted candidate.
 - Optional local image generation adapter only after smoke passes.
@@ -212,8 +216,10 @@ Run and verify everything from Phase 1, plus:
    make kiosk-preflight
    ```
 
-6. Run the full Swagger flow, including visual preview jobs.
-7. If the Replicate path is stable, run the isolated local Qwen-edit smoke:
+6. Run the full Swagger flow. Keep visual preview disabled unless intentionally
+   running a benchmark/debug provider.
+7. Run the isolated local Qwen-edit smoke only as a self-hosted research
+   benchmark:
 
    ```bash
    make runpod-install-qwen-edit-deps
@@ -257,8 +263,8 @@ Run and verify everything from Phase 1, plus:
 
 9. Build a local image generation adapter only if the smoke report proves that
    local generation can meet quality, latency, and memory constraints.
-10. If the local smoke fails with disk quota, storage, or cache errors, keep the
-   Replicate-backed preview path as the MVP baseline and revisit local
+10. If the local smoke fails with disk quota, storage, or cache errors, keep
+   visual preview disabled for production-style kiosk tests and revisit local
    generation after increasing RunPod storage/quota.
 
 ### Benchmark Notes
@@ -274,7 +280,7 @@ Track:
 - Output quality.
 - Failure modes and retry behavior.
 
-Current baseline:
+Current reference:
 
 - Replicate visual preview job completed successfully with
   `qwen/qwen-image-edit-2511`.
@@ -287,6 +293,8 @@ Current baseline:
   dependency.
 - CatVTON is the first VTON-specific local candidate to smoke test before
   building a local adapter.
+- Production kiosk visual preview remains disabled until a self-hosted engine
+  meets quality, latency, memory, and licensing gates.
 
 ### Exit Criteria
 
@@ -294,9 +302,10 @@ Current baseline:
 - Worker can process multiple jobs without manual restart.
 - Latency is acceptable for demo use.
 - A clear decision exists:
-  - keep Replicate for generation,
+  - keep visual preview disabled,
   - implement local GPU generation,
-  - or use a hybrid fallback.
+  - or defer production visual preview while keeping Replicate only for
+    benchmark/debug.
 
 ## Phase 3: Production Readiness Review
 
@@ -312,6 +321,9 @@ Turn the validated MVP into a deployable application architecture.
 - Runtime topology:
   - All-in-one Pod for MVP.
   - Split CPU API and GPU worker when traffic or cost requires it.
+- Model/runtime boundary:
+  - Production kiosk models must run on the GPU server package.
+  - Remote Replicate/Qwen-edit is not a production kiosk runtime dependency.
 - Queue backend:
   - Keep local JSON queue for single-node MVP.
   - Add Redis or Kafka behind the existing queue interface when multi-node
@@ -333,7 +345,7 @@ Turn the validated MVP into a deployable application architecture.
   - Error dashboards.
 - Cost:
   - Compare A5000, 4090, and 48 GB GPU classes.
-  - Decide whether generation should stay remote or move local.
+  - Decide which self-hosted GPU class can support production generation.
 - Product completeness:
   - Clean Swagger workflow.
   - Stable reset/seed path for demos.

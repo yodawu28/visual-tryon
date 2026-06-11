@@ -907,8 +907,9 @@ messy web-style garment fixtures.
   - `make runpod-vton-condition-smoke-inputs`
   - `make runpod-leffa-conditioned-smoke`
 - This conditioning stage does not use another ML model. It normalizes image
-  contrast/sharpness, crops/centers the garment, converts the garment reference
-  to PNG, and writes a conditioning report.
+  contrast/sharpness, crops/recenters the person foreground on a clean neutral
+  canvas, crops/centers the garment, converts the references to PNG, and writes
+  a conditioning report.
 - Decision: run conditioned Leffa smoke before changing model weights,
   fine-tuning, or trying another candidate. If conditioning improves clarity,
-  add an explicit garment conditioning stage to the production architecture.
+  add an explicit input conditioning stage to the production architecture.

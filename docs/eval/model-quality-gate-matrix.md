@@ -32,10 +32,11 @@ If a candidate requires masks, parsing, or pose maps, the smoke must record
 whether those inputs were manually provided, auto-generated, or unavailable.
 
 If deterministic input conditioning is used, record both the original-input
-result and the conditioned-input result. Conditioning can crop/center a garment,
-normalize contrast/sharpness, and convert lossy web images to PNG, but it must
-not be allowed to hide a weak model by destroying logo, text, color, or pattern
-fidelity.
+result and the conditioned-input result. Conditioning can crop/recenter the
+person foreground on a clean canvas, crop/center a garment, normalize
+contrast/sharpness, and convert lossy web images to PNG, but it must not be
+allowed to hide a weak model by destroying body alignment, logo, text, color, or
+pattern fidelity.
 
 ## Score Scale
 

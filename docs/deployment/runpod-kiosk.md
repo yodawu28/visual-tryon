@@ -503,10 +503,13 @@ make runpod-vton-condition-smoke-inputs
 make runpod-leffa-conditioned-smoke
 ```
 
-The conditioning target is deterministic and model-free. It normalizes the
-person image, crops and centers the detected garment region, writes a PNG
-garment reference, applies conservative contrast/sharpness cleanup, and records
-a report at `/workspace/tryon-data/vton_conditioned/report.json`.
+The conditioning target is deterministic and model-free. It crops and recenters
+the detected person foreground on a clean neutral canvas, crops and centers the
+detected garment region, writes PNG references, applies conservative
+contrast/sharpness cleanup, and records a report at
+`/workspace/tryon-data/vton_conditioned/report.json`. This is intended to
+remove capture labels, web watermarks, and loose background artifacts before
+Leffa decides what to preserve.
 
 The conditioned Leffa smoke writes to:
 
@@ -514,10 +517,10 @@ The conditioned Leffa smoke writes to:
 - report: `/workspace/tryon-data/leffa_smoke/leffa-conditioned-smoke.json`
 
 Use the conditioned output only as an A/B comparison. If it improves clarity,
-the production architecture should add an explicit garment conditioning stage
-before the visual try-on engine. If it makes logos, text, or colors worse, keep
-the original garment input and move optimization to model selection or model
-settings.
+the production architecture should add an explicit input conditioning stage
+before the visual try-on engine. If it makes logos, text, colors, or body
+alignment worse, keep the original inputs and move optimization to model
+selection or model settings.
 
 Do not build a production `LocalLeffaEngine` adapter until Leffa passes the
 fixed Model Quality Gate Matrix.

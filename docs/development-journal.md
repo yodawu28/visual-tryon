@@ -913,3 +913,30 @@ messy web-style garment fixtures.
 - Decision: run conditioned Leffa smoke before changing model weights,
   fine-tuning, or trying another candidate. If conditioning improves clarity,
   add an explicit input conditioning stage to the production architecture.
+
+### Leffa Conditioned Smoke Result
+
+User tested the conditioned Leffa path on RTX 4000 Ada 20GB and reported the
+result as acceptable on June 11, 2026. Compared with the previous Leffa smoke,
+the deterministic person foreground cleanup removed the right-side capture
+label/background artifacts, and the generated try-on preserved shirt placement,
+main color, logo position, and large front pattern well enough for the current
+kiosk quality gate baseline.
+
+Decision:
+
+- Mark `Leffa conditioned` as a provisional pass in the Model Quality Gate
+  Matrix.
+- Keep Qwen-edit as the quality reference only, not the production kiosk engine.
+- Run 2-3 additional Leffa fixtures before wiring a production `LocalLeffaEngine`
+  adapter.
+- If those fixtures hold, make input conditioning a first-class stage before
+  the visual try-on engine.
+
+Next fixture set:
+
+- Use `data/garment_catalog/garment-2.webp` and
+  `data/garment_catalog/garment-3.webp` as web-style garment fixtures because
+  they include background marks/icons similar to user-downloaded product images.
+- Added `make runpod-leffa-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2|3` so the
+  RunPod smoke output/report is separated per garment.

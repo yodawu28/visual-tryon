@@ -525,6 +525,46 @@ selection or model settings.
 Do not build a production `LocalLeffaEngine` adapter until Leffa passes the
 fixed Model Quality Gate Matrix.
 
+### Web-Style Garment Fixtures
+
+After the fixed fixture passes, test Leffa with messy web-style garment inputs.
+The repository includes two allow-listed catalog fixtures that represent common
+production risk: downloaded product images with background marks, icons, or
+watermark-like artifacts.
+
+Run each fixture separately:
+
+```bash
+make runpod-leffa-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2
+make runpod-leffa-web-garment-smoke RUNPOD_WEB_GARMENT_ID=3
+```
+
+The target prepares the default smoke person image, conditions the selected
+garment from `data/garment_catalog`, and writes separate outputs:
+
+- `RUNPOD_WEB_GARMENT_ID=2`
+  - conditioned person:
+    `/workspace/tryon-data/vton_conditioned/web-garment-2-person-front.png`
+  - conditioned garment:
+    `/workspace/tryon-data/vton_conditioned/web-garment-2-garment.png`
+  - Leffa output:
+    `/workspace/tryon-data/leffa_smoke/leffa-web-garment-2.png`
+  - report:
+    `/workspace/tryon-data/leffa_smoke/leffa-web-garment-2.json`
+- `RUNPOD_WEB_GARMENT_ID=3`
+  - conditioned person:
+    `/workspace/tryon-data/vton_conditioned/web-garment-3-person-front.png`
+  - conditioned garment:
+    `/workspace/tryon-data/vton_conditioned/web-garment-3-garment.png`
+  - Leffa output:
+    `/workspace/tryon-data/leffa_smoke/leffa-web-garment-3.png`
+  - report:
+    `/workspace/tryon-data/leffa_smoke/leffa-web-garment-3.json`
+
+Pass criteria are stricter for these fixtures: Leffa should ignore background
+icons/watermarks from the product image while preserving the garment's main
+color, silhouette, logo/text position, and visible pattern.
+
 ## Operational Notes
 
 - For the current MVP, keep `JOB_QUEUE_BACKEND=local`; Redis/Kafka can be added

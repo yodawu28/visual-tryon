@@ -21,8 +21,10 @@ Use the same fixtures for every candidate:
 - `examples/qwen_edit_smoke/front.png`
 - `examples/qwen_edit_smoke/garment.webp`
 - at least two additional web-style garment images:
-  - product image with background
-  - product image with watermark/text/crop
+  - `data/garment_catalog/garment-2.webp`: product image with web background
+    artifacts/icons
+  - `data/garment_catalog/garment-3.webp`: product image with watermark-like
+    background artifacts
 - at least one logo/text garment
 - at least one patterned garment
 - at least one short-sleeve garment
@@ -84,6 +86,7 @@ Record one row per model and fixture set:
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | Qwen-edit reference | remote/local | varies | varies | varies | varies | TBD | TBD | TBD | TBD | reference | reference only |
 | CatVTON | RTX 4000 Ada | `768x1024` | `30` | `34-41s` | `<4GB` | soft | weak | TBD | TBD | fail | pause |
+| Leffa conditioned | RTX 4000 Ada | `768x1024` | `30` | TBD | TBD | acceptable | acceptable | acceptable | acceptable | provisional pass | continue evaluation |
 
 ## Candidate ROI Order
 
@@ -107,8 +110,13 @@ Main risk:
 
 Gate for continuing:
 
-- If the first Leffa quality smoke is still visibly soft on the fixed fixture,
-  do not build an API adapter. Move to the next candidate.
+- Leffa conditioned smoke passed the first visual review on the fixed smoke
+  fixture on June 11, 2026. Background artifacts were removed by deterministic
+  person/garment conditioning, garment placement was acceptable, and
+  logo/pattern fidelity was materially better than CatVTON.
+- Continue with 2-3 more fixtures before building the production API adapter.
+  If later fixtures regress on logos, text, sleeves, or messy web garments, keep
+  Leffa as research-only and move to the next candidate.
 
 ### 2. OmniVTON
 

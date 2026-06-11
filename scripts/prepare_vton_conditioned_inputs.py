@@ -27,6 +27,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--person-border-ratio", type=float, default=0.06)
     parser.add_argument("--garment-canvas-size", type=int, default=1024)
     parser.add_argument("--garment-border-ratio", type=float, default=0.08)
+    parser.add_argument(
+        "--garment-largest-component",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Crop around the largest garment-like foreground component",
+    )
     parser.add_argument("--background", default="250,250,250")
     parser.add_argument("--foreground-threshold", type=float, default=28.0)
     parser.add_argument(
@@ -62,6 +68,7 @@ def prepare_conditioned_inputs(
     person_border_ratio: float,
     garment_canvas_size: int,
     garment_border_ratio: float,
+    garment_largest_component: bool,
     background: tuple[int, int, int],
     foreground_threshold: float,
     person_clean_background: bool,
@@ -86,6 +93,7 @@ def prepare_conditioned_inputs(
         garment,
         canvas_size=garment_canvas_size,
         border_ratio=garment_border_ratio,
+        largest_component=garment_largest_component,
         background=background,
         foreground_threshold=foreground_threshold,
         enhance=garment_enhance,
@@ -121,6 +129,7 @@ def prepare_conditioned_inputs(
             "output_size": list(conditioned_garment.size),
             "canvas_size": garment_canvas_size,
             "border_ratio": garment_border_ratio,
+            "largest_component": garment_largest_component,
             "background": list(background),
             "foreground_threshold": foreground_threshold,
             "enhance": garment_enhance,
@@ -199,29 +208,52 @@ def _condition_garment(
     *,
     canvas_size: int,
     border_ratio: float,
+    largest_component: bool,
     background: tuple[int, int, int],
     foreground_threshold: float,
     enhance: bool,
 ) -> tuple[Image.Image, dict[str, Any]]:
-    crop_box, mask_ratio = _foreground_bbox(
-        image,
-        threshold=foreground_threshold,
-    )
     warnings: list[str] = []
+    component_mask: np.ndarray | None = None
+    if largest_component:
+        foreground_mask = _foreground_mask(image, threshold=foreground_threshold)
+        component_mask = _largest_component_mask(foreground_mask)
+        if component_mask is None:
+            warnings.append("garment_largest_component_not_found")
+        else:
+            component_mask = _clean_component_mask(component_mask)
+            crop_box, mask_ratio = _bbox_from_mask(component_mask)
+    if component_mask is None:
+        crop_box, mask_ratio = _foreground_bbox(
+            image,
+            threshold=foreground_threshold,
+        )
+
     if crop_box is None:
         crop_box = (0, 0, image.width, image.height)
         warnings.append("foreground_bbox_not_found")
 
     crop_box = _expand_box(crop_box, image.size, ratio=border_ratio)
     cropped = image.crop(crop_box)
+    cropped_mask = None
+    if component_mask is not None:
+        crop_mask = component_mask[crop_box[1] : crop_box[3], crop_box[0] : crop_box[2]]
+        cropped_mask = Image.fromarray(crop_mask.astype("uint8") * 255)
+
+    original_cropped_size = cropped.size
     cropped = _resize_max(
         cropped, max_size=_inner_canvas_size(canvas_size, border_ratio)
     )
+    if cropped_mask is not None and cropped.size != original_cropped_size:
+        cropped_mask = cropped_mask.resize(cropped.size, Image.Resampling.LANCZOS)
 
     canvas = Image.new("RGBA", (canvas_size, canvas_size), (*background, 255))
     x = (canvas.width - cropped.width) // 2
     y = (canvas.height - cropped.height) // 2
-    canvas.alpha_composite(cropped, (x, y))
+    if cropped_mask is not None:
+        canvas.paste(cropped, (x, y), cropped_mask)
+    else:
+        canvas.alpha_composite(cropped, (x, y))
     rgb_canvas = canvas.convert("RGB")
 
     if enhance:
@@ -415,6 +447,7 @@ def main(argv: list[str] | None = None) -> int:
         person_border_ratio=args.person_border_ratio,
         garment_canvas_size=args.garment_canvas_size,
         garment_border_ratio=args.garment_border_ratio,
+        garment_largest_component=args.garment_largest_component,
         background=_parse_rgb(args.background),
         foreground_threshold=args.foreground_threshold,
         person_clean_background=args.person_clean_background,

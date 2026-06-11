@@ -52,6 +52,10 @@ htmlcov/
 # Data & Models
 data/*
 !data/.gitkeep
+!data/garment_catalog/
+data/garment_catalog/*
+!data/garment_catalog/garment-2.webp
+!data/garment_catalog/garment-3.webp
 models/*
 !models/.gitkeep
 
@@ -94,6 +98,7 @@ docs/architecture/*
 docs/eval/*
 !docs/eval/model-quality-gate-matrix.md
 data
+!data/
 .vibe-map
 internal-docs
 .mcp.json

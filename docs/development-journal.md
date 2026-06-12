@@ -940,3 +940,24 @@ Next fixture set:
   they include background marks/icons similar to user-downloaded product images.
 - Added `make runpod-leffa-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2|3` so the
   RunPod smoke output/report is separated per garment.
+
+### Leffa Web Garment Regression
+
+User tested the two web-style garment fixtures on June 11, 2026. Leffa handled
+body placement, shirt shape, sleeve placement, and background cleanup better
+than CatVTON. However, both generated shirts were still soft around the garment
+logos, printed text, and fine pattern details. The second black garment also
+confirmed that production product images may include props/background objects,
+so deterministic conditioning helps but does not guarantee production-grade
+garment fidelity.
+
+Decision:
+
+- Keep Leffa as a promising candidate, but no longer treat it as production
+  pass based only on the first conditioned fixture.
+- Mark the web-style fixture set as a garment-fidelity failure until a detail
+  A/B run proves otherwise.
+- Added `make runpod-leffa-web-garment-detail-smoke` so the next RunPod run can
+  test higher Leffa settings without overwriting the baseline output.
+- If the detail pass remains blurry, move to the next candidate rather than
+  spending more GPU time on preprocessing-only changes.

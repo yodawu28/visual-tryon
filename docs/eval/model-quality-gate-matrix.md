@@ -87,6 +87,7 @@ Record one row per model and fixture set:
 | Qwen-edit reference | remote/local | varies | varies | varies | varies | TBD | TBD | TBD | TBD | reference | reference only |
 | CatVTON | RTX 4000 Ada | `768x1024` | `30` | `34-41s` | `<4GB` | soft | weak | TBD | TBD | fail | pause |
 | Leffa conditioned | RTX 4000 Ada | `768x1024` | `30` | TBD | TBD | acceptable | acceptable | acceptable | acceptable | provisional pass | continue evaluation |
+| Leffa web garments | RTX 4000 Ada | `768x1024` | `30` | TBD | TBD | soft | mixed | acceptable | acceptable | fail | tune or next candidate |
 
 ## Candidate ROI Order
 
@@ -114,9 +115,12 @@ Gate for continuing:
   fixture on June 11, 2026. Background artifacts were removed by deterministic
   person/garment conditioning, garment placement was acceptable, and
   logo/pattern fidelity was materially better than CatVTON.
-- Continue with 2-3 more fixtures before building the production API adapter.
-  If later fixtures regress on logos, text, sleeves, or messy web garments, keep
-  Leffa as research-only and move to the next candidate.
+- Web-style garment fixtures on June 11, 2026 showed good placement and human
+  preservation, but garment logos/text/details were still soft. This is a
+  current quality-gate failure for production web-downloaded garments.
+- Do not build the production API adapter yet. Run one limited detail A/B pass
+  first. If logo/text clarity remains soft, keep Leffa as research-only and move
+  to the next candidate.
 
 ### 2. OmniVTON
 
@@ -200,3 +204,14 @@ structurally good but soft:
 
 - `make runpod-vton-condition-smoke-inputs`
 - `make runpod-leffa-conditioned-smoke`
+
+For web-style garment fixtures, compare the baseline and detail pass without
+overwriting outputs:
+
+- `make runpod-leffa-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2`
+- `make runpod-leffa-web-garment-detail-smoke RUNPOD_WEB_GARMENT_ID=2`
+- `make runpod-leffa-web-garment-smoke RUNPOD_WEB_GARMENT_ID=3`
+- `make runpod-leffa-web-garment-detail-smoke RUNPOD_WEB_GARMENT_ID=3`
+
+If the detail pass is still blurry around garment text/logos, treat that as a
+model limitation rather than a preprocessing issue.

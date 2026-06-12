@@ -565,6 +565,26 @@ Pass criteria are stricter for these fixtures: Leffa should ignore background
 icons/watermarks from the product image while preserving the garment's main
 color, silhouette, logo/text position, and visible pattern.
 
+If placement is acceptable but garment text/logo detail is soft, run one
+limited detail A/B pass before moving to another model:
+
+```bash
+make runpod-leffa-web-garment-detail-smoke RUNPOD_WEB_GARMENT_ID=2
+make runpod-leffa-web-garment-detail-smoke RUNPOD_WEB_GARMENT_ID=3
+```
+
+This uses higher Leffa settings and writes separate files:
+
+- `/workspace/tryon-data/leffa_smoke/leffa-web-garment-2-detail.png`
+- `/workspace/tryon-data/leffa_smoke/leffa-web-garment-2-detail.json`
+- `/workspace/tryon-data/leffa_smoke/leffa-web-garment-3-detail.png`
+- `/workspace/tryon-data/leffa_smoke/leffa-web-garment-3-detail.json`
+
+The detail pass is only a diagnostic. If the shirt still looks blurry around
+logos/text, do not tune preprocessing further; record Leffa as failing garment
+fidelity for web-style production garments and move to the next model
+candidate.
+
 ## Operational Notes
 
 - For the current MVP, keep `JOB_QUEUE_BACKEND=local`; Redis/Kafka can be added

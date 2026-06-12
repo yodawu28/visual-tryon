@@ -37,6 +37,10 @@ RUNPOD_WEB_GARMENT_CONDITION_GARMENT_OUTPUT ?= $(RUNPOD_DATA_DIR)/vton_condition
 RUNPOD_WEB_GARMENT_CONDITION_REPORT ?= $(RUNPOD_DATA_DIR)/vton_conditioned/web-garment-$(RUNPOD_WEB_GARMENT_ID)-report.json
 RUNPOD_LEFFA_WEB_GARMENT_OUTPUT ?= $(RUNPOD_DATA_DIR)/leffa_smoke/leffa-web-garment-$(RUNPOD_WEB_GARMENT_ID).png
 RUNPOD_LEFFA_WEB_GARMENT_REPORT ?= $(RUNPOD_DATA_DIR)/leffa_smoke/leffa-web-garment-$(RUNPOD_WEB_GARMENT_ID).json
+RUNPOD_LEFFA_WEB_DETAIL_STEPS ?= 50
+RUNPOD_LEFFA_WEB_DETAIL_GUIDANCE_SCALE ?= 3.5
+RUNPOD_LEFFA_WEB_DETAIL_OUTPUT ?= $(RUNPOD_DATA_DIR)/leffa_smoke/leffa-web-garment-$(RUNPOD_WEB_GARMENT_ID)-detail.png
+RUNPOD_LEFFA_WEB_DETAIL_REPORT ?= $(RUNPOD_DATA_DIR)/leffa_smoke/leffa-web-garment-$(RUNPOD_WEB_GARMENT_ID)-detail.json
 RUNPOD_CATVTON_REPO_URL ?= https://github.com/Zheng-Chong/CatVTON.git
 RUNPOD_CATVTON_ROOT ?= $(RUNPOD_MODEL_DIR)/external/CatVTON
 RUNPOD_CATVTON_BASE_MODEL ?= runwayml/stable-diffusion-inpainting
@@ -85,7 +89,7 @@ RUNPOD_TORCH_VERSION ?= 2.8.0
 RUNPOD_TORCHVISION_VERSION ?= 0.23.0
 RUNPOD_TORCH_CUDA_INDEX ?= https://download.pytorch.org/whl/cu128
 
-.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-install-catvton-deps runpod-install-leffa-deps runpod-catvton-import-check runpod-leffa-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-vton-condition-smoke-inputs runpod-leffa-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke runpod-catvton-quality-smoke runpod-leffa-smoke runpod-leffa-conditioned-smoke runpod-leffa-web-garment-smoke test clean lint format check
+.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-install-catvton-deps runpod-install-leffa-deps runpod-catvton-import-check runpod-leffa-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-vton-condition-smoke-inputs runpod-leffa-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke runpod-catvton-quality-smoke runpod-leffa-smoke runpod-leffa-conditioned-smoke runpod-leffa-web-garment-smoke runpod-leffa-web-garment-detail-smoke test clean lint format check
 
 help:
 	@echo "Virtual Try-On MVP - Makefile commands"
@@ -199,6 +203,8 @@ runpod-help:
 	@echo "  make runpod-vton-condition-smoke-inputs"
 	@echo "  make runpod-leffa-smoke"
 	@echo "  make runpod-leffa-conditioned-smoke"
+	@echo "  make runpod-leffa-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2"
+	@echo "  make runpod-leffa-web-garment-detail-smoke RUNPOD_WEB_GARMENT_ID=2"
 
 runpod-init:
 	@test -f .env || cp .env.runpod.example .env
@@ -495,6 +501,13 @@ runpod-leffa-web-garment-smoke: runpod-leffa-smoke-data
 		GARMENT_IMAGE="$(RUNPOD_WEB_GARMENT_CONDITION_GARMENT_OUTPUT)" \
 		RUNPOD_LEFFA_OUTPUT="$(RUNPOD_LEFFA_WEB_GARMENT_OUTPUT)" \
 		RUNPOD_LEFFA_REPORT="$(RUNPOD_LEFFA_WEB_GARMENT_REPORT)"
+
+runpod-leffa-web-garment-detail-smoke:
+	$(MAKE) runpod-leffa-web-garment-smoke \
+		RUNPOD_LEFFA_STEPS="$(RUNPOD_LEFFA_WEB_DETAIL_STEPS)" \
+		RUNPOD_LEFFA_GUIDANCE_SCALE="$(RUNPOD_LEFFA_WEB_DETAIL_GUIDANCE_SCALE)" \
+		RUNPOD_LEFFA_WEB_GARMENT_OUTPUT="$(RUNPOD_LEFFA_WEB_DETAIL_OUTPUT)" \
+		RUNPOD_LEFFA_WEB_GARMENT_REPORT="$(RUNPOD_LEFFA_WEB_DETAIL_REPORT)"
 
 test:
 	pytest tests/ -v --cov=src --cov-report=html --cov-report=term

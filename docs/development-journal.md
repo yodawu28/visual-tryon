@@ -961,3 +961,34 @@ Decision:
   test higher Leffa settings without overwriting the baseline output.
 - If the detail pass remains blurry, move to the next candidate rather than
   spending more GPU time on preprocessing-only changes.
+
+### OmniVTON Smoke Harness
+
+After the Leffa detail pass still produced soft and incorrect garment logos/text
+on the web-style fixture, the next candidate is OmniVTON. OmniVTON is promising
+for garment fidelity, but its official inference path is not a drop-in
+person-image + garment-image adapter.
+
+Implemented:
+
+- Added `scripts/local_omnivton_smoke.py`.
+- Added `make runpod-install-omnivton-deps`.
+- Added `make runpod-omnivton-import-check`.
+- Added `make runpod-omnivton-smoke`.
+- Added `make runpod-omnivton-outpainting-smoke`.
+- Added `make runpod-omnivton-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2|3`.
+- Added OmniVTON commands to the shared smoke-data manifest.
+- Updated RunPod docs and Model Quality Gate Matrix.
+
+Design decision:
+
+- Start with cost-safe preflight/import/runtime smoke.
+- Do not attempt full OmniVTON quality scoring until the required condition
+  assets can be generated automatically:
+  - agnostic person mask
+  - clothing mask
+  - CLIP-interrogator prompt JSON
+  - TAPPS parsing maps
+  - OpenPose keypoint JSON
+- If the condition asset generator becomes too complex for MVP, pause OmniVTON
+  and move to a candidate with a simpler inference contract.

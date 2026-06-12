@@ -82,6 +82,23 @@ RUNPOD_LEFFA_OUTPUT ?= $(RUNPOD_DATA_DIR)/leffa_smoke/leffa-smoke.png
 RUNPOD_LEFFA_REPORT ?= $(RUNPOD_DATA_DIR)/leffa_smoke/leffa-smoke.json
 RUNPOD_LEFFA_CONDITIONED_OUTPUT ?= $(RUNPOD_DATA_DIR)/leffa_smoke/leffa-conditioned-smoke.png
 RUNPOD_LEFFA_CONDITIONED_REPORT ?= $(RUNPOD_DATA_DIR)/leffa_smoke/leffa-conditioned-smoke.json
+RUNPOD_OMNIVTON_REPO_URL ?= https://github.com/Jerome-Young/OmniVTON.git
+RUNPOD_OMNIVTON_ROOT ?= $(RUNPOD_MODEL_DIR)/external/OmniVTON
+RUNPOD_OMNIVTON_MODEL_ID ?= sd2_inp
+RUNPOD_OMNIVTON_STAGE ?= preflight
+RUNPOD_OMNIVTON_SIZE ?= 384x512
+RUNPOD_OMNIVTON_DEVICE ?= cuda
+RUNPOD_OMNIVTON_STEPS ?= 30
+RUNPOD_OMNIVTON_GUIDANCE_SCALE ?= 7.5
+RUNPOD_OMNIVTON_SEED ?= 42
+RUNPOD_OMNIVTON_PERSON_IMAGE ?= $(RUNPOD_QWEN_EDIT_PERSON_IMAGE)
+RUNPOD_OMNIVTON_GARMENT_IMAGE ?= $(RUNPOD_QWEN_EDIT_GARMENT_IMAGE)
+RUNPOD_OMNIVTON_WORK_DIR ?= $(RUNPOD_DATA_DIR)/omnivton_smoke/work
+RUNPOD_OMNIVTON_OUTPUT ?= $(RUNPOD_DATA_DIR)/omnivton_smoke/omnivton-smoke.png
+RUNPOD_OMNIVTON_REPORT ?= $(RUNPOD_DATA_DIR)/omnivton_smoke/omnivton-smoke.json
+RUNPOD_OMNIVTON_WEB_GARMENT_OUTPUT ?= $(RUNPOD_DATA_DIR)/omnivton_smoke/omnivton-web-garment-$(RUNPOD_WEB_GARMENT_ID).png
+RUNPOD_OMNIVTON_WEB_GARMENT_REPORT ?= $(RUNPOD_DATA_DIR)/omnivton_smoke/omnivton-web-garment-$(RUNPOD_WEB_GARMENT_ID).json
+RUNPOD_OMNIVTON_WEB_GARMENT_WORK_DIR ?= $(RUNPOD_DATA_DIR)/omnivton_smoke/web-garment-$(RUNPOD_WEB_GARMENT_ID)-work
 RUNPOD_HF_HOME ?= $(RUNPOD_MODEL_DIR)/huggingface
 RUNPOD_TORCH_HOME ?= $(RUNPOD_MODEL_DIR)/torch
 RUNPOD_PIP_CACHE_DIR ?= $(RUNPOD_MODEL_DIR)/pip-cache
@@ -89,7 +106,7 @@ RUNPOD_TORCH_VERSION ?= 2.8.0
 RUNPOD_TORCHVISION_VERSION ?= 0.23.0
 RUNPOD_TORCH_CUDA_INDEX ?= https://download.pytorch.org/whl/cu128
 
-.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-install-catvton-deps runpod-install-leffa-deps runpod-catvton-import-check runpod-leffa-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-vton-condition-smoke-inputs runpod-leffa-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke runpod-catvton-quality-smoke runpod-leffa-smoke runpod-leffa-conditioned-smoke runpod-leffa-web-garment-smoke runpod-leffa-web-garment-detail-smoke test clean lint format check
+.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-install-catvton-deps runpod-install-leffa-deps runpod-install-omnivton-deps runpod-catvton-import-check runpod-leffa-import-check runpod-omnivton-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-vton-condition-smoke-inputs runpod-leffa-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke runpod-catvton-quality-smoke runpod-leffa-smoke runpod-leffa-conditioned-smoke runpod-leffa-web-garment-smoke runpod-leffa-web-garment-detail-smoke runpod-omnivton-smoke runpod-omnivton-outpainting-smoke runpod-omnivton-web-garment-smoke test clean lint format check
 
 help:
 	@echo "Virtual Try-On MVP - Makefile commands"
@@ -129,6 +146,10 @@ help:
 	@echo "  make runpod-leffa-smoke - Run local Leffa smoke with prepared/default inputs"
 	@echo "  make runpod-leffa-conditioned-smoke - Run Leffa with normalized smoke inputs"
 	@echo "  make runpod-leffa-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2 - Run Leffa with data/garment_catalog web garment"
+	@echo "  make runpod-install-omnivton-deps - Install extra deps for local OmniVTON smoke"
+	@echo "  make runpod-omnivton-import-check - Validate OmniVTON imports without loading models"
+	@echo "  make runpod-omnivton-outpainting-smoke - Run OmniVTON stage-1 runtime smoke"
+	@echo "  make runpod-omnivton-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2 - Run OmniVTON web-garment preflight/VTON smoke"
 	@echo ""
 	@echo "  make test       - Run tests với coverage"
 	@echo "  make lint       - Run linters (ruff + mypy)"
@@ -203,6 +224,12 @@ runpod-help:
 	@echo "  make runpod-vton-condition-smoke-inputs"
 	@echo "  make runpod-leffa-smoke"
 	@echo "  make runpod-leffa-conditioned-smoke"
+	@echo ""
+	@echo "Optional local OmniVTON smoke:"
+	@echo "  make runpod-install-omnivton-deps"
+	@echo "  make runpod-omnivton-import-check"
+	@echo "  make runpod-omnivton-outpainting-smoke"
+	@echo "  make runpod-omnivton-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2"
 	@echo "  make runpod-leffa-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2"
 	@echo "  make runpod-leffa-web-garment-detail-smoke RUNPOD_WEB_GARMENT_ID=2"
 
@@ -280,6 +307,24 @@ runpod-install-leffa-deps:
 		"transformers>=4.43.0" \
 		"yacs>=0.1.8"
 
+runpod-install-omnivton-deps:
+	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install -U \
+		"accelerate>=0.31.0" \
+		"diffusers>=0.29.2" \
+		"einops>=0.7.0" \
+		"ftfy>=6.2.0" \
+		"huggingface_hub>=0.23.4" \
+		"matplotlib>=3.9.1" \
+		"omegaconf>=2.3.0" \
+		"opencv-python-headless>=4.10.0.84" \
+		"packaging>=24.1" \
+		"PyYAML>=6.0.1" \
+		"safetensors>=0.4.5" \
+		"scikit-image>=0.24.0" \
+		"scipy>=1.10.1" \
+		"tqdm>=4.66.4" \
+		"transformers>=4.43.0"
+
 runpod-catvton-import-check:
 	HF_HOME="$(RUNPOD_HF_HOME)" \
 	TRANSFORMERS_CACHE="$(RUNPOD_HF_HOME)/transformers" \
@@ -312,6 +357,22 @@ runpod-leffa-import-check:
 		--repo-url "$(RUNPOD_LEFFA_REPO_URL)" \
 		--model-repo-id "$(RUNPOD_LEFFA_MODEL_REPO_ID)" \
 		--checkpoint-dir "$(RUNPOD_LEFFA_CHECKPOINT_DIR)" \
+		--device cpu \
+		--check-imports-only
+
+runpod-omnivton-import-check:
+	HF_HOME="$(RUNPOD_HF_HOME)" \
+	TRANSFORMERS_CACHE="$(RUNPOD_HF_HOME)/transformers" \
+	HUGGINGFACE_HUB_CACHE="$(RUNPOD_HF_HOME)/hub" \
+	TORCH_HOME="$(RUNPOD_TORCH_HOME)" \
+	XDG_CACHE_HOME="$(RUNPOD_MODEL_DIR)/xdg-cache" \
+	python -m scripts.local_omnivton_smoke \
+		--person-image "$(RUNPOD_OMNIVTON_PERSON_IMAGE)" \
+		--garment-image "$(RUNPOD_OMNIVTON_GARMENT_IMAGE)" \
+		--output "$(RUNPOD_OMNIVTON_OUTPUT)" \
+		--report "$(RUNPOD_OMNIVTON_REPORT)" \
+		--omnivton-root "$(RUNPOD_OMNIVTON_ROOT)" \
+		--repo-url "$(RUNPOD_OMNIVTON_REPO_URL)" \
 		--device cpu \
 		--check-imports-only
 
@@ -508,6 +569,55 @@ runpod-leffa-web-garment-detail-smoke:
 		RUNPOD_LEFFA_GUIDANCE_SCALE="$(RUNPOD_LEFFA_WEB_DETAIL_GUIDANCE_SCALE)" \
 		RUNPOD_LEFFA_WEB_GARMENT_OUTPUT="$(RUNPOD_LEFFA_WEB_DETAIL_OUTPUT)" \
 		RUNPOD_LEFFA_WEB_GARMENT_REPORT="$(RUNPOD_LEFFA_WEB_DETAIL_REPORT)"
+
+runpod-omnivton-smoke:
+	$(eval PERSON_IMAGE_PATH := $(or $(PERSON_IMAGE),$(RUNPOD_OMNIVTON_PERSON_IMAGE)))
+	$(eval GARMENT_IMAGE_PATH := $(or $(GARMENT_IMAGE),$(RUNPOD_OMNIVTON_GARMENT_IMAGE)))
+	@test -f "$(PERSON_IMAGE_PATH)" || (echo "Missing PERSON_IMAGE=$(PERSON_IMAGE_PATH). Run make runpod-qwen-edit-smoke-data or pass PERSON_IMAGE=/path/to/front.png"; exit 2)
+	@test -f "$(GARMENT_IMAGE_PATH)" || (echo "Missing GARMENT_IMAGE=$(GARMENT_IMAGE_PATH). Run make runpod-qwen-edit-smoke-data or pass GARMENT_IMAGE=/path/to/garment.png"; exit 2)
+	HF_HOME="$(RUNPOD_HF_HOME)" \
+	TRANSFORMERS_CACHE="$(RUNPOD_HF_HOME)/transformers" \
+	HUGGINGFACE_HUB_CACHE="$(RUNPOD_HF_HOME)/hub" \
+	TORCH_HOME="$(RUNPOD_TORCH_HOME)" \
+	XDG_CACHE_HOME="$(RUNPOD_MODEL_DIR)/xdg-cache" \
+	PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" \
+	python -m scripts.local_omnivton_smoke \
+		--person-image "$(PERSON_IMAGE_PATH)" \
+		--garment-image "$(GARMENT_IMAGE_PATH)" \
+		--output "$(RUNPOD_OMNIVTON_OUTPUT)" \
+		--report "$(RUNPOD_OMNIVTON_REPORT)" \
+		--omnivton-root "$(RUNPOD_OMNIVTON_ROOT)" \
+		--repo-url "$(RUNPOD_OMNIVTON_REPO_URL)" \
+		--stage "$(RUNPOD_OMNIVTON_STAGE)" \
+		--model-id "$(RUNPOD_OMNIVTON_MODEL_ID)" \
+		--size "$(RUNPOD_OMNIVTON_SIZE)" \
+		--device "$(RUNPOD_OMNIVTON_DEVICE)" \
+		--steps "$(RUNPOD_OMNIVTON_STEPS)" \
+		--guidance-scale "$(RUNPOD_OMNIVTON_GUIDANCE_SCALE)" \
+		--seed "$(RUNPOD_OMNIVTON_SEED)" \
+		--work-dir "$(RUNPOD_OMNIVTON_WORK_DIR)"
+
+runpod-omnivton-outpainting-smoke: runpod-leffa-smoke-data
+	$(MAKE) runpod-vton-condition-smoke-inputs
+	$(MAKE) runpod-omnivton-smoke \
+		PERSON_IMAGE="$(RUNPOD_VTON_CONDITION_PERSON_OUTPUT)" \
+		GARMENT_IMAGE="$(RUNPOD_VTON_CONDITION_GARMENT_OUTPUT)" \
+		RUNPOD_OMNIVTON_STAGE="outpainting"
+
+runpod-omnivton-web-garment-smoke: runpod-leffa-smoke-data
+	@test -f "$(RUNPOD_WEB_GARMENT_SOURCE)" || (echo "Missing RUNPOD_WEB_GARMENT_SOURCE=$(RUNPOD_WEB_GARMENT_SOURCE). Use RUNPOD_WEB_GARMENT_ID=2 or 3, or pass RUNPOD_WEB_GARMENT_SOURCE=/path/to/garment.webp"; exit 2)
+	$(MAKE) runpod-vton-condition-smoke-inputs \
+		PERSON_IMAGE="$(RUNPOD_QWEN_EDIT_PERSON_IMAGE)" \
+		GARMENT_IMAGE="$(RUNPOD_WEB_GARMENT_SOURCE)" \
+		RUNPOD_VTON_CONDITION_PERSON_OUTPUT="$(RUNPOD_WEB_GARMENT_CONDITION_PERSON_OUTPUT)" \
+		RUNPOD_VTON_CONDITION_GARMENT_OUTPUT="$(RUNPOD_WEB_GARMENT_CONDITION_GARMENT_OUTPUT)" \
+		RUNPOD_VTON_CONDITION_REPORT="$(RUNPOD_WEB_GARMENT_CONDITION_REPORT)"
+	$(MAKE) runpod-omnivton-smoke \
+		PERSON_IMAGE="$(RUNPOD_WEB_GARMENT_CONDITION_PERSON_OUTPUT)" \
+		GARMENT_IMAGE="$(RUNPOD_WEB_GARMENT_CONDITION_GARMENT_OUTPUT)" \
+		RUNPOD_OMNIVTON_OUTPUT="$(RUNPOD_OMNIVTON_WEB_GARMENT_OUTPUT)" \
+		RUNPOD_OMNIVTON_REPORT="$(RUNPOD_OMNIVTON_WEB_GARMENT_REPORT)" \
+		RUNPOD_OMNIVTON_WORK_DIR="$(RUNPOD_OMNIVTON_WEB_GARMENT_WORK_DIR)"
 
 test:
 	pytest tests/ -v --cov=src --cov-report=html --cov-report=term

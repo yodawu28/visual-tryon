@@ -88,6 +88,7 @@ Record one row per model and fixture set:
 | CatVTON | RTX 4000 Ada | `768x1024` | `30` | `34-41s` | `<4GB` | soft | weak | TBD | TBD | fail | pause |
 | Leffa conditioned | RTX 4000 Ada | `768x1024` | `30` | TBD | TBD | acceptable | acceptable | acceptable | acceptable | provisional pass | continue evaluation |
 | Leffa web garments | RTX 4000 Ada | `768x1024` | `30` | TBD | TBD | soft | mixed | acceptable | acceptable | fail | tune or next candidate |
+| OmniVTON | TBD | `384x512` smoke | `30` | TBD | TBD | TBD | TBD | TBD | TBD | pending | preflight first |
 
 ## Candidate ROI Order
 
@@ -137,6 +138,19 @@ Main risks:
 
 - Newer and less mature repository signal.
 - Training-free pipelines may have more moving parts or slower runtime.
+- The official inference path is not a simple person-image + garment-image
+  call. Full VTON requires agnostic masks, garment masks, CLIP-interrogator
+  condition JSON files, TAPPS parsing maps, and OpenPose keypoint JSON files.
+  This is a major integration risk for a kiosk MVP unless we can automate the
+  condition asset generator.
+
+Gate for continuing:
+
+- `make runpod-omnivton-import-check` must pass.
+- `make runpod-omnivton-outpainting-smoke` should produce a stage-1 runtime
+  output without CUDA/dependency failures.
+- Full `vton` quality evaluation should not start until condition assets can be
+  generated automatically from the same kiosk person/garment inputs.
 
 ### 3. Re-CatVTON
 
@@ -215,3 +229,12 @@ overwriting outputs:
 
 If the detail pass is still blurry around garment text/logos, treat that as a
 model limitation rather than a preprocessing issue.
+
+For OmniVTON, run a cost-safe preflight before any quality run:
+
+- `make runpod-install-omnivton-deps`
+- `make runpod-omnivton-import-check`
+- `make runpod-omnivton-outpainting-smoke`
+
+Only proceed to `RUNPOD_OMNIVTON_STAGE=vton` after adding or providing TAPPS and
+OpenPose condition assets.

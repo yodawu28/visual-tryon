@@ -107,6 +107,16 @@ def prepare_qwen_edit_smoke_data(
             f"PERSON_IMAGE={paths.person_image} "
             f"GARMENT_IMAGE={paths.garment_image}"
         ),
+        "omnivton_smoke_command": (
+            "make runpod-omnivton-smoke "
+            f"PERSON_IMAGE={paths.person_image} "
+            f"GARMENT_IMAGE={paths.garment_image}"
+        ),
+        "omnivton_outpainting_smoke_command": (
+            "make runpod-omnivton-outpainting-smoke "
+            f"PERSON_IMAGE={paths.person_image} "
+            f"GARMENT_IMAGE={paths.garment_image}"
+        ),
         "vton_condition_command": (
             "make runpod-vton-condition-smoke-inputs "
             f"PERSON_IMAGE={paths.person_image} "
@@ -141,6 +151,10 @@ def prepare_qwen_edit_smoke_data(
         "smoke_command": payload["smoke_command"],
         "catvton_smoke_command": payload["catvton_smoke_command"],
         "leffa_smoke_command": payload["leffa_smoke_command"],
+        "omnivton_smoke_command": payload["omnivton_smoke_command"],
+        "omnivton_outpainting_smoke_command": payload[
+            "omnivton_outpainting_smoke_command"
+        ],
         "vton_condition_command": payload["vton_condition_command"],
         "leffa_conditioned_smoke_command": payload["leffa_conditioned_smoke_command"],
     }

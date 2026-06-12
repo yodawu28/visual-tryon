@@ -585,6 +585,60 @@ logos/text, do not tune preprocessing further; record Leffa as failing garment
 fidelity for web-style production garments and move to the next model
 candidate.
 
+## Optional Local OmniVTON Smoke
+
+Run OmniVTON after Leffa fails garment-fidelity quality on web-style garments.
+OmniVTON has a higher integration bar than Leffa: the official final VTON stage
+requires masks, CLIP-interrogator prompt JSON files, TAPPS parsing maps, and
+OpenPose keypoint JSON files. Start with preflight/runtime smoke before burning
+GPU time on quality evaluation.
+
+Install lightweight extra dependencies without reinstalling Torch:
+
+```bash
+make runpod-install-omnivton-deps
+```
+
+Validate that the repo can be cloned and imported:
+
+```bash
+make runpod-omnivton-import-check
+```
+
+Run stage-1 outpainting runtime smoke with the normalized default fixture:
+
+```bash
+make runpod-omnivton-outpainting-smoke
+```
+
+This writes:
+
+- `/workspace/tryon-data/omnivton_smoke/omnivton-smoke.png`
+- `/workspace/tryon-data/omnivton_smoke/omnivton-smoke.json`
+- working files under `/workspace/tryon-data/omnivton_smoke/work`
+
+Run the web garment preflight with the same catalog fixtures:
+
+```bash
+make runpod-omnivton-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2
+make runpod-omnivton-web-garment-smoke RUNPOD_WEB_GARMENT_ID=3
+```
+
+By default this uses `RUNPOD_OMNIVTON_STAGE=preflight`, so it validates the
+repo/dependency/condition contract without loading the heavy inpainting model.
+To attempt the full final VTON stage, pass:
+
+```bash
+make runpod-omnivton-web-garment-smoke \
+  RUNPOD_WEB_GARMENT_ID=2 \
+  RUNPOD_OMNIVTON_STAGE=vton
+```
+
+Expected behavior before condition generation exists: the command fails early
+and writes a report explaining which TAPPS/OpenPose condition files are missing.
+Do not treat that as a model quality failure. Treat it as an integration-gate
+failure until we add an automated condition asset generator.
+
 ## Operational Notes
 
 - For the current MVP, keep `JOB_QUEUE_BACKEND=local`; Redis/Kafka can be added

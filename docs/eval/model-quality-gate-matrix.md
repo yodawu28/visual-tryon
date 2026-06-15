@@ -55,6 +55,10 @@ Important report fields:
   image.
 - `person.blur_variance` and `garment.blur_variance`: basic sharpness proxies.
 - `issues`: input-quality blockers to fix before judging the VTON model.
+- `critical_issues`: blockers that make a high-detail VTON judgment invalid
+  even when the total score is high.
+- `recommendation`: next action, usually closer capture, upper-body crop, or
+  sharper garment image.
 
 ## Score Scale
 
@@ -71,7 +75,7 @@ Use `1` to `5` for each visual category:
 | Gate | Minimum | Hard Fail Condition |
 | --- | ---: | --- |
 | Garment fidelity | `4.3/5` avg | Logo/text/pattern unreadable or replaced |
-| Input quality | `0.85` score | Source capture too blurry/small for detail |
+| Input quality | `0.85` score and no `critical_issues` | Source capture too blurry/small for detail |
 | Human preservation | `4.0/5` avg | Face/body/pose heavily changed |
 | Arm/sleeve quality | `4.0/5` avg | Severe sleeve/arm artifacts |
 | Web garment robustness | `4.0/5` avg | Fails on background/watermark/cropped garment |

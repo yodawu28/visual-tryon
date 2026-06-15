@@ -579,7 +579,9 @@ The report is written to:
 
 If `person.estimated_logo_width_px` or `person.torso_area_ratio_estimate` is low,
 the full-body capture may not provide enough pixels for logo/text preservation.
-In that case test an upper-body VTON crop before rejecting the model:
+If `critical_issues` contains `torso_detail_enough`, do not judge the model from
+the full-body output. In that case test an upper-body VTON crop before rejecting
+the model:
 
 ```bash
 make runpod-leffa-upper-body-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2

@@ -1022,3 +1022,6 @@ Decision:
 - Future kiosk capture validation should include input-quality thresholds,
   because user selfie images may be too small, too blurry, or poorly framed for
   garment logo/text preservation.
+- Input quality now has critical issues. `torso_detail_enough=false` should fail
+  high-detail VTON readiness even if the aggregate score is high; the next step
+  is upper-body crop or a closer front capture.

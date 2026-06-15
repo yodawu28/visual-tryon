@@ -68,6 +68,14 @@ def score_inputs(
         >= 0.10,
     }
     score = round(sum(1 for value in checks.values() if value) / len(checks), 4)
+    critical_checks = {
+        "torso_detail_enough": checks["torso_detail_enough"],
+        "garment_sharp_enough": checks["garment_sharp_enough"],
+        "garment_large_enough": checks["garment_large_enough"],
+    }
+    issues = [key for key, passed in checks.items() if not passed]
+    critical_issues = [key for key, passed in critical_checks.items() if not passed]
+    passed = score >= 0.85 and not critical_issues
     return {
         "success": True,
         "created_at": datetime.now(UTC).isoformat(),
@@ -76,11 +84,14 @@ def score_inputs(
         "background": list(background),
         "foreground_threshold": foreground_threshold,
         "score": score,
-        "passed": score >= 0.85,
+        "passed": passed,
         "checks": checks,
+        "critical_checks": critical_checks,
         "person": person_metrics,
         "garment": garment_metrics,
-        "issues": [key for key, passed in checks.items() if not passed],
+        "issues": issues,
+        "critical_issues": critical_issues,
+        "recommendation": _recommendation(critical_issues),
     }
 
 
@@ -145,6 +156,16 @@ def _blur_variance(image: Image.Image) -> float:
 
 def _brightness(image: Image.Image) -> float:
     return float(np.mean(np.asarray(image.convert("L"), dtype=np.float32)))
+
+
+def _recommendation(critical_issues: list[str]) -> str:
+    if "torso_detail_enough" in critical_issues:
+        return "Use an upper-body crop or closer front capture before judging high-detail VTON output."
+    if "garment_sharp_enough" in critical_issues:
+        return "Use a sharper garment image before judging garment fidelity."
+    if "garment_large_enough" in critical_issues:
+        return "Use a larger garment image or crop the garment foreground before VTON."
+    return "Input is ready for high-detail VTON evaluation."
 
 
 def main(argv: list[str] | None = None) -> int:

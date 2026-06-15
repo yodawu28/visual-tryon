@@ -992,3 +992,33 @@ Design decision:
   - OpenPose keypoint JSON
 - If the condition asset generator becomes too complex for MVP, pause OmniVTON
   and move to a candidate with a simpler inference contract.
+
+### VTON Input Quality And Upper-Body Crop
+
+User compared our full-body kiosk capture with the Leffa Hugging Face demo
+fixture and observed that Leffa preserves garment detail better on the demo
+person image. This suggests Leffa may be sensitive to framing and effective
+torso/logo pixel area, not only model capacity.
+
+Implemented:
+
+- Added `person_framing=full_body|upper_body` to
+  `scripts/prepare_vton_conditioned_inputs.py`.
+- Added person quality metrics to the conditioning report:
+  - `body_canvas_height_ratio`
+  - `torso_canvas_area_ratio_estimate`
+  - `estimated_logo_width_px`
+  - `vton_input_framing_score`
+  - `quality_warnings`
+- Added `scripts/score_vton_input_quality.py` for standalone source image
+  scoring before VTON.
+- Added `make runpod-vton-input-quality`.
+- Added `make runpod-leffa-upper-body-web-garment-smoke`.
+
+Decision:
+
+- Do not treat all Leffa blur as a model failure until an upper-body crop is
+  tested.
+- Future kiosk capture validation should include input-quality thresholds,
+  because user selfie images may be too small, too blurry, or poorly framed for
+  garment logo/text preservation.

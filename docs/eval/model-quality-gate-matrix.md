@@ -40,6 +40,22 @@ contrast/sharpness, and convert lossy web images to PNG, but it must not be
 allowed to hide a weak model by destroying body alignment, logo, text, color, or
 pattern fidelity.
 
+Before scoring model quality, score the input quality. A blurry output is not a
+model failure when the source capture is too small, too blurry, badly cropped,
+or does not allocate enough pixels to the torso/garment print area.
+
+- `make runpod-vton-input-quality`
+- `make runpod-vton-input-quality PERSON_IMAGE=/path/to/selfie.png GARMENT_IMAGE=/path/to/garment.webp`
+
+Important report fields:
+
+- `person.estimated_logo_width_px`: rough estimate of how many source pixels
+  are available for a chest logo/text region.
+- `person.torso_area_ratio_estimate`: rough torso area as a fraction of the
+  image.
+- `person.blur_variance` and `garment.blur_variance`: basic sharpness proxies.
+- `issues`: input-quality blockers to fix before judging the VTON model.
+
 ## Score Scale
 
 Use `1` to `5` for each visual category:
@@ -55,6 +71,7 @@ Use `1` to `5` for each visual category:
 | Gate | Minimum | Hard Fail Condition |
 | --- | ---: | --- |
 | Garment fidelity | `4.3/5` avg | Logo/text/pattern unreadable or replaced |
+| Input quality | `0.85` score | Source capture too blurry/small for detail |
 | Human preservation | `4.0/5` avg | Face/body/pose heavily changed |
 | Arm/sleeve quality | `4.0/5` avg | Severe sleeve/arm artifacts |
 | Web garment robustness | `4.0/5` avg | Fails on background/watermark/cropped garment |

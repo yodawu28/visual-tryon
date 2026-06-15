@@ -565,6 +565,34 @@ Pass criteria are stricter for these fixtures: Leffa should ignore background
 icons/watermarks from the product image while preserving the garment's main
 color, silhouette, logo/text position, and visible pattern.
 
+Score input quality before judging the model:
+
+```bash
+make runpod-vton-input-quality \
+  PERSON_IMAGE=/workspace/tryon-data/kiosk_sessions/captures/kiosk-session-v1-smoke-front.png \
+  GARMENT_IMAGE=data/garment_catalog/garment-2.webp
+```
+
+The report is written to:
+
+- `/workspace/tryon-data/vton_input_quality/report.json`
+
+If `person.estimated_logo_width_px` or `person.torso_area_ratio_estimate` is low,
+the full-body capture may not provide enough pixels for logo/text preservation.
+In that case test an upper-body VTON crop before rejecting the model:
+
+```bash
+make runpod-leffa-upper-body-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2
+```
+
+This writes:
+
+- `/workspace/tryon-data/vton_conditioned/web-garment-2-upper-person.png`
+- `/workspace/tryon-data/vton_conditioned/web-garment-2-upper-garment.png`
+- `/workspace/tryon-data/vton_conditioned/web-garment-2-upper-report.json`
+- `/workspace/tryon-data/leffa_smoke/leffa-web-garment-2-upper.png`
+- `/workspace/tryon-data/leffa_smoke/leffa-web-garment-2-upper.json`
+
 If placement is acceptable but garment text/logo detail is soft, run one
 limited detail A/B pass before moving to another model:
 
@@ -597,6 +625,22 @@ Install lightweight extra dependencies without reinstalling Torch:
 
 ```bash
 make runpod-install-omnivton-deps
+```
+
+If CUDA fails with a message like `The NVIDIA driver on your system is too old`
+or `torch.cuda.is_available() is false`, the pod is likely using a driver that
+cannot run the current CUDA 12.8 Torch wheel. Install the CUDA 12.4 Torch stack
+and retry:
+
+```bash
+make runpod-install-torch-cu124
+python - <<'PY'
+import torch
+print(torch.__version__)
+print(torch.version.cuda)
+print(torch.cuda.is_available())
+print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "no cuda")
+PY
 ```
 
 Validate that the repo can be cloned and imported:

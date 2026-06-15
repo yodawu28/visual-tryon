@@ -25,6 +25,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--person-max-size", type=int, default=1024)
     parser.add_argument("--person-canvas-size", default="768x1024")
     parser.add_argument("--person-border-ratio", type=float, default=0.06)
+    parser.add_argument(
+        "--person-framing",
+        choices=("full_body", "upper_body"),
+        default="full_body",
+        help="Condition person as full body or upper-body focused crop",
+    )
     parser.add_argument("--garment-canvas-size", type=int, default=1024)
     parser.add_argument("--garment-border-ratio", type=float, default=0.08)
     parser.add_argument(
@@ -66,6 +72,7 @@ def prepare_conditioned_inputs(
     person_max_size: int,
     person_canvas_size: tuple[int, int],
     person_border_ratio: float,
+    person_framing: str,
     garment_canvas_size: int,
     garment_border_ratio: float,
     garment_largest_component: bool,
@@ -83,6 +90,7 @@ def prepare_conditioned_inputs(
         max_size=person_max_size,
         canvas_size=person_canvas_size,
         border_ratio=person_border_ratio,
+        framing=person_framing,
         background=background,
         foreground_threshold=foreground_threshold,
         clean_background=person_clean_background,
@@ -118,6 +126,7 @@ def prepare_conditioned_inputs(
             "max_size": person_max_size,
             "canvas_size": list(person_canvas_size),
             "border_ratio": person_border_ratio,
+            "framing": person_framing,
             "background": list(background),
             "clean_background": person_clean_background,
             "foreground_threshold": foreground_threshold,
@@ -153,6 +162,7 @@ def _condition_person(
     max_size: int,
     canvas_size: tuple[int, int],
     border_ratio: float,
+    framing: str,
     background: tuple[int, int, int],
     foreground_threshold: float,
     clean_background: bool,
@@ -174,6 +184,10 @@ def _condition_person(
         if crop_box is None:
             crop_box = (0, 0, image.width, image.height)
             meta["warnings"].append("person_foreground_bbox_not_found")
+        full_body_box = crop_box
+        if framing == "upper_body":
+            crop_box = _upper_body_box(crop_box, image.size)
+            meta["upper_body_from_box"] = list(full_body_box)
         crop_box = _expand_box(crop_box, image.size, ratio=border_ratio)
         crop_mask = component_mask[crop_box[1] : crop_box[3], crop_box[0] : crop_box[2]]
         cropped = image.crop(crop_box)
@@ -192,8 +206,28 @@ def _condition_person(
         image = canvas
         meta["crop_box"] = list(crop_box)
         meta["paste_box"] = [x, y, x + paste_width, y + paste_height]
+        meta.update(
+            _person_quality_metrics(
+                original_size=image.size,
+                foreground_box=full_body_box,
+                crop_box=crop_box,
+                paste_box=(x, y, x + paste_width, y + paste_height),
+                canvas_size=canvas_size,
+                framing=framing,
+            )
+        )
     else:
         image = _resize_max(image, max_size=max_size)
+        meta.update(
+            _person_quality_metrics(
+                original_size=image.size,
+                foreground_box=(0, 0, image.width, image.height),
+                crop_box=(0, 0, image.width, image.height),
+                paste_box=(0, 0, image.width, image.height),
+                canvas_size=image.size,
+                framing=framing,
+            )
+        )
 
     if not enhance:
         return image, meta
@@ -380,6 +414,125 @@ def _expand_box(
     )
 
 
+def _upper_body_box(
+    box: tuple[int, int, int, int],
+    image_size: tuple[int, int],
+) -> tuple[int, int, int, int]:
+    left, top, right, bottom = box
+    height = bottom - top
+    upper_bottom = top + round(height * 0.58)
+    image_width, image_height = image_size
+    width = right - left
+    horizontal_pad = round(width * 0.08)
+    top_pad = round(height * 0.03)
+    bottom_pad = round(height * 0.06)
+    return (
+        max(0, left - horizontal_pad),
+        max(0, top - top_pad),
+        min(image_width, right + horizontal_pad),
+        min(image_height, upper_bottom + bottom_pad),
+    )
+
+
+def _person_quality_metrics(
+    *,
+    original_size: tuple[int, int],
+    foreground_box: tuple[int, int, int, int],
+    crop_box: tuple[int, int, int, int],
+    paste_box: tuple[int, int, int, int],
+    canvas_size: tuple[int, int],
+    framing: str,
+) -> dict[str, Any]:
+    original_width, original_height = original_size
+    canvas_width, canvas_height = canvas_size
+    fg_width = max(1, foreground_box[2] - foreground_box[0])
+    fg_height = max(1, foreground_box[3] - foreground_box[1])
+    crop_width = max(1, crop_box[2] - crop_box[0])
+    crop_height = max(1, crop_box[3] - crop_box[1])
+    paste_width = max(1, paste_box[2] - paste_box[0])
+    paste_height = max(1, paste_box[3] - paste_box[1])
+
+    torso_top = foreground_box[1] + round(fg_height * 0.22)
+    torso_bottom = foreground_box[1] + round(fg_height * 0.58)
+    torso_width = fg_width * 0.62
+    torso_height = max(1, torso_bottom - torso_top)
+    source_torso_pixels = torso_width * torso_height
+    scale_x = paste_width / crop_width
+    scale_y = paste_height / crop_height
+    output_torso_pixels = source_torso_pixels * scale_x * scale_y
+    output_torso_width = torso_width * scale_x
+    output_torso_height = torso_height * scale_y
+
+    body_canvas_height_ratio = paste_height / canvas_height
+    body_canvas_width_ratio = paste_width / canvas_width
+    torso_canvas_area_ratio = output_torso_pixels / (canvas_width * canvas_height)
+    estimated_logo_width_px = output_torso_width * 0.45
+
+    score_parts = [
+        _score_range(
+            body_canvas_height_ratio,
+            low=0.7 if framing == "full_body" else 0.72,
+            high=0.95,
+        ),
+        _score_min(
+            torso_canvas_area_ratio, target=0.13 if framing == "upper_body" else 0.055
+        ),
+        _score_min(estimated_logo_width_px, target=180),
+    ]
+    framing_score = round(sum(score_parts) / len(score_parts), 4)
+
+    return {
+        "quality_metrics": {
+            "body_canvas_height_ratio": round(body_canvas_height_ratio, 4),
+            "body_canvas_width_ratio": round(body_canvas_width_ratio, 4),
+            "source_torso_pixels_estimate": round(source_torso_pixels, 2),
+            "output_torso_pixels_estimate": round(output_torso_pixels, 2),
+            "output_torso_width_px_estimate": round(output_torso_width, 2),
+            "output_torso_height_px_estimate": round(output_torso_height, 2),
+            "torso_canvas_area_ratio_estimate": round(torso_canvas_area_ratio, 4),
+            "estimated_logo_width_px": round(estimated_logo_width_px, 2),
+            "vton_input_framing_score": framing_score,
+        },
+        "quality_warnings": _quality_warnings(
+            framing=framing,
+            body_canvas_height_ratio=body_canvas_height_ratio,
+            torso_canvas_area_ratio=torso_canvas_area_ratio,
+            estimated_logo_width_px=estimated_logo_width_px,
+        ),
+    }
+
+
+def _score_min(value: float, *, target: float) -> float:
+    return max(0.0, min(1.0, value / target))
+
+
+def _score_range(value: float, *, low: float, high: float) -> float:
+    if low <= value <= high:
+        return 1.0
+    if value < low:
+        return max(0.0, value / low)
+    return max(0.0, 1.0 - ((value - high) / max(0.001, 1 - high)))
+
+
+def _quality_warnings(
+    *,
+    framing: str,
+    body_canvas_height_ratio: float,
+    torso_canvas_area_ratio: float,
+    estimated_logo_width_px: float,
+) -> list[str]:
+    warnings: list[str] = []
+    min_torso_area = 0.13 if framing == "upper_body" else 0.055
+    min_body_height = 0.72 if framing == "upper_body" else 0.7
+    if body_canvas_height_ratio < min_body_height:
+        warnings.append("person_too_small_for_vton")
+    if torso_canvas_area_ratio < min_torso_area:
+        warnings.append("torso_region_too_small_for_garment_detail")
+    if estimated_logo_width_px < 180:
+        warnings.append("estimated_logo_region_low_resolution")
+    return warnings
+
+
 def _resize_max(image: Image.Image, *, max_size: int) -> Image.Image:
     if max(image.size) <= max_size:
         return image.copy()
@@ -445,6 +598,7 @@ def main(argv: list[str] | None = None) -> int:
         person_max_size=args.person_max_size,
         person_canvas_size=_parse_size(args.person_canvas_size),
         person_border_ratio=args.person_border_ratio,
+        person_framing=args.person_framing,
         garment_canvas_size=args.garment_canvas_size,
         garment_border_ratio=args.garment_border_ratio,
         garment_largest_component=args.garment_largest_component,

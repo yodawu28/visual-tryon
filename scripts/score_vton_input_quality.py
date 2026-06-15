@@ -138,8 +138,8 @@ def _garment_metrics(
 
 
 def _blur_variance(image: Image.Image) -> float:
-    grayscale = np.asarray(image.convert("L"), dtype=np.float32)
-    edges = np.asarray(Image.fromarray(grayscale).filter(ImageFilter.FIND_EDGES))
+    grayscale = image.convert("L")
+    edges = np.asarray(grayscale.filter(ImageFilter.FIND_EDGES), dtype=np.float32)
     return float(np.var(edges))
 
 

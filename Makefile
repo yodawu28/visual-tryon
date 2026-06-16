@@ -32,6 +32,7 @@ RUNPOD_VTON_CONDITION_GARMENT_LARGEST_COMPONENT ?= 1
 RUNPOD_VTON_CONDITION_BACKGROUND ?= 250,250,250
 RUNPOD_VTON_CONDITION_FOREGROUND_THRESHOLD ?= 28
 RUNPOD_VTON_INPUT_QUALITY_REPORT ?= $(RUNPOD_DATA_DIR)/vton_input_quality/report.json
+RUNPOD_VTON_INPUT_GARMENT_CATEGORY ?= $(RUNPOD_SMOKE_GARMENT_CATEGORY)
 RUNPOD_WEB_GARMENT_ID ?= 2
 RUNPOD_WEB_GARMENT_SOURCE ?= data/garment_catalog/garment-$(RUNPOD_WEB_GARMENT_ID).webp
 RUNPOD_WEB_GARMENT_CONDITION_PERSON_OUTPUT ?= $(RUNPOD_DATA_DIR)/vton_conditioned/web-garment-$(RUNPOD_WEB_GARMENT_ID)-person-front.png
@@ -146,7 +147,7 @@ help:
 	@echo "  make runpod-cuda-report - Print NVIDIA/PyTorch CUDA diagnostics"
 	@echo "  make runpod-qwen-edit-smoke-data - Prepare synthetic local Qwen-edit smoke inputs"
 	@echo "  make runpod-vton-smoke-data - Alias for shared Qwen/CatVTON/Leffa smoke inputs"
-	@echo "  make runpod-vton-input-quality - Score person/garment input quality before VTON"
+	@echo "  make runpod-vton-input-quality RUNPOD_VTON_INPUT_GARMENT_CATEGORY=tops - Score person/garment input quality before VTON"
 	@echo "  make runpod-vton-condition-smoke-inputs - Normalize person/garment images for VTON smoke A/B"
 	@echo "  make runpod-leffa-smoke-data - Alias for shared Qwen/CatVTON/Leffa smoke inputs"
 	@echo "  make runpod-qwen-edit-smoke - Run local Qwen-edit smoke with prepared/default inputs"
@@ -459,6 +460,7 @@ runpod-vton-input-quality: runpod-leffa-smoke-data
 		--person-image "$(PERSON_IMAGE_PATH)" \
 		--garment-image "$(GARMENT_IMAGE_PATH)" \
 		--report "$(RUNPOD_VTON_INPUT_QUALITY_REPORT)" \
+		--garment-category "$(RUNPOD_VTON_INPUT_GARMENT_CATEGORY)" \
 		--background "$(RUNPOD_VTON_CONDITION_BACKGROUND)" \
 		--foreground-threshold "$(RUNPOD_VTON_CONDITION_FOREGROUND_THRESHOLD)"
 

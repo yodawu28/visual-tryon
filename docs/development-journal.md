@@ -1025,3 +1025,6 @@ Decision:
 - Input quality now has critical issues. `torso_detail_enough=false` should fail
   high-detail VTON readiness even if the aggregate score is high; the next step
   is upper-body crop or a closer front capture.
+- Critical input gates are category-aware. Tops use torso detail, bottoms use
+  lower-body visibility/detail, and full outfits/dresses require both regions so
+  top-specific rules do not incorrectly reject pants or outfit tests.

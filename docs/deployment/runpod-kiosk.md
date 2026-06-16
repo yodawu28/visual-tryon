@@ -570,7 +570,8 @@ Score input quality before judging the model:
 ```bash
 make runpod-vton-input-quality \
   PERSON_IMAGE=/workspace/tryon-data/kiosk_sessions/captures/kiosk-session-v1-smoke-front.png \
-  GARMENT_IMAGE=data/garment_catalog/garment-2.webp
+  GARMENT_IMAGE=data/garment_catalog/garment-2.webp \
+  RUNPOD_VTON_INPUT_GARMENT_CATEGORY=tops
 ```
 
 The report is written to:
@@ -586,6 +587,11 @@ the model:
 ```bash
 make runpod-leffa-upper-body-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2
 ```
+
+For lower-body garments, set `RUNPOD_VTON_INPUT_GARMENT_CATEGORY=bottoms` and
+judge `lower_body_detail_enough` / `lower_body_visible` instead of
+`torso_detail_enough`. For full outfits or dresses, both upper and lower body
+checks are critical.
 
 This writes:
 

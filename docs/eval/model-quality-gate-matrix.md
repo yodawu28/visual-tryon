@@ -46,6 +46,7 @@ or does not allocate enough pixels to the torso/garment print area.
 
 - `make runpod-vton-input-quality`
 - `make runpod-vton-input-quality PERSON_IMAGE=/path/to/selfie.png GARMENT_IMAGE=/path/to/garment.webp`
+- `make runpod-vton-input-quality RUNPOD_VTON_INPUT_GARMENT_CATEGORY=tops`
 
 Important report fields:
 
@@ -59,6 +60,17 @@ Important report fields:
   even when the total score is high.
 - `recommendation`: next action, usually closer capture, upper-body crop, or
   sharper garment image.
+
+Category-aware critical checks:
+
+| Garment category | Critical person checks |
+| --- | --- |
+| `tops` / `upper` / `shirt` / `t_shirt` | `torso_detail_enough` |
+| `bottoms` / `lower` / `pants` / `shorts` | `lower_body_detail_enough`, `lower_body_visible` |
+| `full_outfit` / `top_and_bottom` | `torso_detail_enough`, `lower_body_detail_enough`, `lower_body_visible` |
+| `dress` | `torso_detail_enough`, `lower_body_detail_enough`, `lower_body_visible` |
+
+All categories also require `garment_sharp_enough` and `garment_large_enough`.
 
 ## Score Scale
 

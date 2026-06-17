@@ -289,7 +289,7 @@ runpod-install-catvton-deps:
 		"scipy>=1.10.1" \
 		"tqdm>=4.66.4" \
 		"packaging>=24.1" \
-		"opencv-python-headless>=4.10.0.84" \
+		"opencv-python-headless==4.10.0.84" \
 		"scikit-image>=0.24.0" \
 		"matplotlib>=3.9.1" \
 		"ninja>=1.11.1"
@@ -306,10 +306,10 @@ runpod-install-leffa-deps:
 		"imageio>=2.34.0" \
 		"iopath>=0.1.10" \
 		"matplotlib>=3.9.1" \
-		"numpy>=1.26.4" \
+		"numpy==1.26.4" \
 		"omegaconf>=2.3.0" \
 		"onnxruntime>=1.18.0" \
-		"opencv-python-headless>=4.10.0.84" \
+		"opencv-python-headless==4.10.0.84" \
 		"packaging>=24.1" \
 		"pandas>=2.2.2" \
 		"peft>=0.11.1" \
@@ -340,7 +340,7 @@ runpod-install-omnivton-deps:
 		"matplotlib>=3.9.1" \
 		"omegaconf>=2.3.0" \
 		"open_clip_torch>=2.24.0" \
-		"opencv-python-headless>=4.10.0.84" \
+		"opencv-python-headless==4.10.0.84" \
 		"packaging>=24.1" \
 		"PyYAML>=6.0.1" \
 		"safetensors>=0.4.5" \

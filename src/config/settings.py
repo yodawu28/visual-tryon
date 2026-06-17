@@ -60,7 +60,56 @@ class Settings(BaseSettings):
     kiosk_visual_preview_provider: str = Field(
         default="disabled",
         env="KIOSK_VISUAL_PREVIEW_PROVIDER",
-    )  # "disabled" for production until a self-hosted engine passes; "replicate_qwen" for benchmark/debug
+    )  # "disabled", "local_leffa" for self-hosted GPU tops preview, or "replicate_qwen" for benchmark/debug
+
+    # Local Leffa visual try-on provider
+    local_leffa_root: Path = Field(
+        default=Path(__file__).parent.parent.parent / "models" / "external" / "Leffa",
+        env="LOCAL_LEFFA_ROOT",
+    )
+    local_leffa_repo_url: str = Field(
+        default="https://github.com/franciszzj/Leffa.git",
+        env="LOCAL_LEFFA_REPO_URL",
+    )
+    local_leffa_model_repo_id: str = Field(
+        default="franciszzj/Leffa",
+        env="LOCAL_LEFFA_MODEL_REPO_ID",
+    )
+    local_leffa_checkpoint_dir: Path = Field(
+        default=Path(__file__).parent.parent.parent
+        / "models"
+        / "external"
+        / "Leffa"
+        / "ckpts",
+        env="LOCAL_LEFFA_CHECKPOINT_DIR",
+    )
+    local_leffa_hf_home: Optional[Path] = Field(
+        default=None,
+        env="LOCAL_LEFFA_HF_HOME",
+    )
+    local_leffa_torch_home: Optional[Path] = Field(
+        default=None,
+        env="LOCAL_LEFFA_TORCH_HOME",
+    )
+    local_leffa_xdg_cache_home: Optional[Path] = Field(
+        default=None,
+        env="LOCAL_LEFFA_XDG_CACHE_HOME",
+    )
+    local_leffa_no_clone: bool = Field(default=True, env="LOCAL_LEFFA_NO_CLONE")
+    local_leffa_size: str = Field(default="768x1024", env="LOCAL_LEFFA_SIZE")
+    local_leffa_device: str = Field(default="cuda", env="LOCAL_LEFFA_DEVICE")
+    local_leffa_dtype: str = Field(default="float16", env="LOCAL_LEFFA_DTYPE")
+    local_leffa_vt_model_type: str = Field(
+        default="viton_hd",
+        env="LOCAL_LEFFA_VT_MODEL_TYPE",
+    )
+    local_leffa_steps: int = Field(default=30, env="LOCAL_LEFFA_STEPS")
+    local_leffa_guidance_scale: float = Field(
+        default=2.5,
+        env="LOCAL_LEFFA_GUIDANCE_SCALE",
+    )
+    local_leffa_seed: int = Field(default=42, env="LOCAL_LEFFA_SEED")
+    local_leffa_timeout: int = Field(default=900, env="LOCAL_LEFFA_TIMEOUT")
 
     # Replicate
     replicate_api_token: Optional[str] = Field(default=None, env="REPLICATE_API_TOKEN")
@@ -161,6 +210,18 @@ class Settings(BaseSettings):
         if isinstance(v, list):
             return v
         return ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+    @field_validator(
+        "local_leffa_hf_home",
+        "local_leffa_torch_home",
+        "local_leffa_xdg_cache_home",
+        mode="before",
+    )
+    @classmethod
+    def empty_path_to_none(cls, v):
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
     @field_validator(
         "temp_storage_dir",

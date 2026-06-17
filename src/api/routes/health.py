@@ -236,6 +236,52 @@ def _check_visual_preview_provider(settings: Any) -> ReadinessCheckResponse:
                 ),
             },
         )
+    if provider in {"local_leffa", "leffa"}:
+        leffa_root = Path(getattr(settings, "local_leffa_root", ""))
+        checkpoint_dir = Path(getattr(settings, "local_leffa_checkpoint_dir", ""))
+        required_paths = {
+            "leffa_repo": leffa_root / "leffa" / "model.py",
+            "base_model": checkpoint_dir / "stable-diffusion-inpainting",
+            "virtual_tryon": checkpoint_dir / "virtual_tryon.pth",
+            "densepose": checkpoint_dir / "densepose" / "model_final_162be9.pkl",
+            "human_parsing": checkpoint_dir / "humanparsing" / "parsing_atr.onnx",
+            "openpose": checkpoint_dir / "openpose" / "body_pose_model.pth",
+        }
+        missing = [label for label, path in required_paths.items() if not path.exists()]
+        if missing:
+            return ReadinessCheckResponse(
+                status="not_ready",
+                message="Local Leffa preview is configured but model assets are missing",
+                details={
+                    "provider": provider,
+                    "missing": missing,
+                    "leffa_root": str(leffa_root),
+                    "checkpoint_dir": str(checkpoint_dir),
+                },
+            )
+        return ReadinessCheckResponse(
+            status="ready",
+            message="Local Leffa preview config is present",
+            details={
+                "provider": provider,
+                "leffa_root": str(leffa_root),
+                "checkpoint_dir": str(checkpoint_dir),
+                "size": getattr(settings, "local_leffa_size", None),
+                "device": getattr(settings, "local_leffa_device", None),
+                "supported_garment_categories": [
+                    "tops",
+                    "bottoms",
+                    "one_pieces",
+                    "full_outfit",
+                ],
+                "quality_gate_status": {
+                    "tops": "baseline_passed",
+                    "bottoms": "experimental_needs_manual_review",
+                    "one_pieces": "experimental_needs_manual_review",
+                    "full_outfit": "experimental_needs_manual_review",
+                },
+            },
+        )
     if provider != "replicate_qwen":
         return ReadinessCheckResponse(
             status="not_ready",

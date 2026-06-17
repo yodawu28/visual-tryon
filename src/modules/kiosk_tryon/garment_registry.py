@@ -16,9 +16,9 @@ from uuid import uuid4
 
 from PIL import Image
 
-GarmentCategory = Literal["tops", "bottoms", "one_pieces"]
+GarmentCategory = Literal["tops", "bottoms", "one_pieces", "full_outfit"]
 
-_CATEGORY_VALUES = {"tops", "bottoms", "one_pieces"}
+_CATEGORY_VALUES = {"tops", "bottoms", "one_pieces", "full_outfit"}
 _IMAGE_FORMATS = {
     "JPEG": ("image/jpeg", ".jpg"),
     "PNG": ("image/png", ".png"),

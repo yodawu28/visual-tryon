@@ -532,7 +532,18 @@ The repository includes two allow-listed catalog fixtures that represent common
 production risk: downloaded product images with background marks, icons, or
 watermark-like artifacts.
 
-Run each fixture separately:
+For top garments, prefer the upper-body crop target. The full-body web fixture
+target is useful as a negative control when validating that the input-quality
+gate catches insufficient torso detail.
+
+Run the recommended upper-body fixture separately:
+
+```bash
+make runpod-leffa-upper-body-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2
+make runpod-leffa-upper-body-web-garment-smoke RUNPOD_WEB_GARMENT_ID=3
+```
+
+For comparison only, run the full-body fixtures:
 
 ```bash
 make runpod-leffa-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2
@@ -563,7 +574,9 @@ garment from `data/garment_catalog`, and writes separate outputs:
 
 Pass criteria are stricter for these fixtures: Leffa should ignore background
 icons/watermarks from the product image while preserving the garment's main
-color, silhouette, logo/text position, and visible pattern.
+color, silhouette, logo/text position, and visible pattern. The current baseline
+is Leffa upper-body crop for tops; full-body top previews should not be treated
+as representative when `torso_detail_enough=false`.
 
 Score input quality before judging the model:
 
@@ -620,6 +633,74 @@ The detail pass is only a diagnostic. If the shirt still looks blurry around
 logos/text, do not tune preprocessing further; record Leffa as failing garment
 fidelity for web-style production garments and move to the next model
 candidate.
+
+## Enable Leffa In Swagger/API Flow
+
+After Leffa upper-body smoke passes and the checkpoint files are present under
+`/workspace/tryon-models`, enable the production-style Swagger flow with:
+
+```bash
+KIOSK_VISUAL_PREVIEW_PROVIDER=local_leffa
+LOCAL_LEFFA_ROOT=/workspace/tryon-models/external/Leffa
+LOCAL_LEFFA_CHECKPOINT_DIR=/workspace/tryon-models/external/Leffa/ckpts
+LOCAL_LEFFA_HF_HOME=/workspace/tryon-models/huggingface
+LOCAL_LEFFA_TORCH_HOME=/workspace/tryon-models/torch
+LOCAL_LEFFA_XDG_CACHE_HOME=/workspace/tryon-models/xdg-cache
+LOCAL_LEFFA_NO_CLONE=true
+LOCAL_LEFFA_SIZE=768x1024
+LOCAL_LEFFA_DEVICE=cuda
+LOCAL_LEFFA_DTYPE=float16
+LOCAL_LEFFA_VT_MODEL_TYPE=viton_hd
+LOCAL_LEFFA_STEPS=30
+LOCAL_LEFFA_GUIDANCE_SCALE=2.5
+LOCAL_LEFFA_SEED=42
+LOCAL_LEFFA_TIMEOUT=900
+```
+
+Then restart:
+
+```bash
+make runpod-start
+```
+
+Readiness should show `visual_preview_provider=ready` with
+`provider=local_leffa`:
+
+```bash
+make runpod-preflight
+```
+
+Swagger flow is unchanged:
+
+1. Upload/register a garment.
+2. Create a kiosk session.
+3. Upload front/side captures.
+4. Analyze captures.
+5. Trigger visual preview directly or enqueue a visual-preview job.
+
+For local Leffa, the visual preview endpoint accepts `tops`, `bottoms`,
+`one_pieces`, and `full_outfit` so the Swagger flow can exercise all production
+categories. The current quality baseline is only `tops`; `bottoms`,
+`one_pieces`, and `full_outfit` are enabled for quality-gate testing and must be
+manually reviewed before production use.
+
+The worker/API maps categories as follows:
+
+- `tops`: upper-body crop, Leffa `upper_body`
+- `bottoms`: full-body conditioning, Leffa `lower_body`
+- `one_pieces`: full-body conditioning, Leffa `dresses`
+- `full_outfit`: full-body conditioning, Leffa `dresses`
+
+The worker/API will score input quality, condition the front image and garment,
+run Leffa, and write audit artifacts under:
+
+- `/workspace/tryon-data/kiosk_tryons/leffa_work/<digest>/`
+- `/workspace/tryon-data/kiosk_tryons/images/`
+- `/workspace/tryon-data/kiosk_tryons/metadata/`
+
+The metadata JSON contains links to the input-quality report, conditioning
+report, Leffa report, conditioned inputs, and final generated image. Use this
+metadata when reviewing a failed or blurry Swagger result.
 
 ## Optional Local OmniVTON Smoke
 

@@ -46,6 +46,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "full_body",
             "top_and_bottom",
             "dress",
+            "dresses",
+            "one_piece",
+            "one_pieces",
         ),
     )
     parser.add_argument("--background", default="250,250,250")
@@ -129,6 +132,9 @@ def _normalize_garment_category(category: str) -> str:
         "full_body": "full_outfit",
         "top_and_bottom": "full_outfit",
         "dress": "dress",
+        "dresses": "dress",
+        "one_piece": "dress",
+        "one_pieces": "dress",
     }
     return aliases.get(normalized, normalized)
 

@@ -99,6 +99,20 @@ def test_list_garments_returns_newest_first(tmp_path):
     ]
 
 
+def test_create_garment_accepts_full_outfit_category(tmp_path):
+    registry = GarmentRegistry(
+        db_path=tmp_path / "garments.sqlite3",
+        image_dir=tmp_path / "images",
+    )
+
+    record = registry.create_garment(
+        image_bytes=_png_bytes(),
+        category="full_outfit",
+    )
+
+    assert record.category == "full_outfit"
+
+
 def test_create_garment_rejects_invalid_category(tmp_path):
     registry = GarmentRegistry(
         db_path=tmp_path / "garments.sqlite3",

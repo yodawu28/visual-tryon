@@ -870,7 +870,8 @@ gets an API adapter.
   - `make runpod-leffa-import-check`
   - `make runpod-leffa-smoke`
 - Do not build `LocalLeffaEngine` or wire it into the kiosk worker until Leffa
-  passes the fixed quality gate.
+  passes the fixed quality gate. This was later superseded after upper-body
+  Leffa web-garment tests passed for `tops`.
 
 ## Leffa Local Smoke Harness
 
@@ -929,7 +930,8 @@ Decision:
   Matrix.
 - Keep Qwen-edit as the quality reference only, not the production kiosk engine.
 - Run 2-3 additional Leffa fixtures before wiring a production `LocalLeffaEngine`
-  adapter.
+  adapter. This was later completed for the `tops` category through the
+  `local_leffa` provider.
 - If those fixtures hold, make input conditioning a first-class stage before
   the visual try-on engine.
 
@@ -1028,3 +1030,61 @@ Decision:
 - Critical input gates are category-aware. Tops use torso detail, bottoms use
   lower-body visibility/detail, and full outfits/dresses require both regions so
   top-specific rules do not incorrectly reject pants or outfit tests.
+
+Follow-up result:
+
+- Leffa upper-body crop was tested on web-style `garment-2` and `garment-3`
+  fixtures on NVIDIA RTX 4000 Ada Generation.
+- Both runs succeeded at `768x1024`, `30` steps, `guidance_scale=2.5`,
+  `float16`, and `upper_body` garment type.
+- Runtime was about `118s` for `garment-2` and `51s` for `garment-3`; peak CUDA
+  allocation was about `5.8GB`, reserved about `6.4GB`, on a `20GB` GPU class.
+- Visual quality improved significantly versus full-body input. Garment
+  silhouette and logo/text preservation are now acceptable enough to treat Leffa
+  upper-body crop as the current local Visual Try-on baseline for tops.
+- Remaining risk: human/face darkness and edge artifacts are still visible, and
+  Qwen-edit remains the visual reference for garment detail quality.
+
+Current decision:
+
+- Use Leffa with upper-body crop as the local baseline for tops.
+- Do not use full-body capture directly for upper-body VTON preview.
+- Kiosk visual preview can now route `tops` through local Leffa by setting
+  `KIOSK_VISUAL_PREVIEW_PROVIDER=local_leffa`.
+- The API/worker path automatically writes the original front capture and
+  garment image to a Leffa work directory, scores input quality, creates an
+  upper-body conditioned person image plus normalized garment image, runs Leffa,
+  and stores the final PNG in the existing kiosk try-on cache.
+- Metadata for each generated preview now includes `generator_metadata`,
+  `generation_metadata`, input-quality report paths, conditioning report paths,
+  and Leffa report paths so RunPod jobs can be audited after Swagger testing.
+
+Implementation notes:
+
+- Added `src/modules/image_generator/local_leffa_kiosk_generator.py`.
+- Added `local_leffa` / `leffa` support to kiosk visual preview provider wiring.
+- Updated readiness to validate required Leffa repo/checkpoint assets before
+  reporting ready.
+- Added local Leffa settings to `.env.example` and `.env.runpod.example`.
+- Kept Replicate Qwen as an explicit benchmark/debug provider only.
+
+Follow-up implementation:
+
+- Expanded the local Leffa API/worker path so Swagger can test `bottoms`,
+  `one_pieces`, and `full_outfit` in addition to `tops`.
+- Category routing now maps:
+  - `tops` to upper-body conditioning and Leffa `upper_body`
+  - `bottoms` to full-body conditioning and Leffa `lower_body`
+  - `one_pieces` / dress aliases to full-body conditioning and Leffa `dresses`
+  - `full_outfit` to full-body conditioning and Leffa `dresses`
+- Input-quality scoring now normalizes `one_pieces` / `dresses` as dress-style
+  quality checks, requiring both torso and lower-body detail.
+- Readiness now reports supported categories plus quality-gate status.
+
+Current limitation:
+
+- `tops` remains the only local Leffa baseline that has passed our current
+  visual review.
+- `bottoms`, `one_pieces`, and `full_outfit` are enabled for Swagger/API
+  evaluation, but their metadata is marked `experimental_needs_manual_review`
+  until quality-gate testing passes.

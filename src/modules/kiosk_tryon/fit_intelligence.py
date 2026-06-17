@@ -908,7 +908,14 @@ def _metrics_for_category(garment_category: str) -> list[str]:
     normalized = garment_category.strip().lower()
     if normalized in {"bottoms", "lower_body", "lower-body", "pants", "shorts"}:
         return ["waist_cm", "hip_cm", "inseam_cm"]
-    if normalized in {"one_pieces", "one-piece", "full_body", "dress", "dresses"}:
+    if normalized in {
+        "one_pieces",
+        "one-piece",
+        "full_body",
+        "full_outfit",
+        "dress",
+        "dresses",
+    }:
         return ["chest_cm", "waist_cm", "hip_cm", "shoulder_cm"]
     return ["chest_cm", "waist_cm", "shoulder_cm"]
 

@@ -13,6 +13,9 @@ from fastapi import status
 
 from src.config.settings import get_settings
 from src.modules.avatar_preview.tryon_analyzer import OllamaTryOnAnalyzer
+from src.modules.image_generator.local_leffa_kiosk_generator import (
+    LocalLeffaKioskGenerator,
+)
 from src.modules.image_generator.replicate_avatar_preview_generator import (
     ReplicateAvatarPreviewGenerator,
 )
@@ -131,7 +134,8 @@ def get_kiosk_job_service() -> JobService:
 async def upload_kiosk_garment(
     file: UploadFile = File(..., description="Garment image file"),
     category: str = Form(
-        ..., description="Garment category: tops, bottoms, one_pieces"
+        ...,
+        description="Garment category: tops, bottoms, one_pieces, full_outfit",
     ),
     name: str | None = Form(default=None, description="Optional garment display name"),
     garment_type: str | None = Form(
@@ -382,6 +386,26 @@ def _build_kiosk_visual_generator(settings: Any) -> Any:
     provider = _kiosk_visual_preview_provider(settings)
     if provider == "replicate_qwen":
         return ReplicateAvatarPreviewGenerator()
+    if provider in {"local_leffa", "leffa"}:
+        return LocalLeffaKioskGenerator(
+            work_dir=settings.temp_storage_dir / "kiosk_tryons" / "leffa_work",
+            leffa_root=settings.local_leffa_root,
+            repo_url=settings.local_leffa_repo_url,
+            model_repo_id=settings.local_leffa_model_repo_id,
+            checkpoint_dir=settings.local_leffa_checkpoint_dir,
+            hf_home=settings.local_leffa_hf_home,
+            torch_home=settings.local_leffa_torch_home,
+            xdg_cache_home=settings.local_leffa_xdg_cache_home,
+            no_clone=bool(settings.local_leffa_no_clone),
+            size=settings.local_leffa_size,
+            device=settings.local_leffa_device,
+            dtype=settings.local_leffa_dtype,
+            vt_model_type=settings.local_leffa_vt_model_type,
+            steps=int(settings.local_leffa_steps),
+            guidance_scale=float(settings.local_leffa_guidance_scale),
+            seed=int(settings.local_leffa_seed),
+            timeout_seconds=int(settings.local_leffa_timeout),
+        )
     raise RuntimeError(
         "Kiosk visual preview provider is disabled. Production kiosk visual "
         "preview requires a self-hosted GPU engine; Replicate Qwen is available "
@@ -393,14 +417,14 @@ def _build_kiosk_visual_generator(settings: Any) -> Any:
 def require_kiosk_visual_preview_enabled() -> None:
     settings = get_settings()
     provider = _kiosk_visual_preview_provider(settings)
-    if provider == "replicate_qwen":
+    if provider in {"replicate_qwen", "local_leffa", "leffa"}:
         return
     raise HTTPException(
         status_code=503,
         detail=(
             "Kiosk visual preview provider is disabled. Set "
-            "KIOSK_VISUAL_PREVIEW_PROVIDER=replicate_qwen only for benchmark/debug, "
-            "or configure a self-hosted production visual engine when available."
+            "KIOSK_VISUAL_PREVIEW_PROVIDER=local_leffa for self-hosted production "
+            "preview, or replicate_qwen only for benchmark/debug."
         ),
     )
 

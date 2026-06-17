@@ -423,7 +423,8 @@ class KioskSizeChartCreateRequest(BaseModel):
         max_length=80,
     )
     category: str = Field(
-        ..., description="Garment category: tops, bottoms, one_pieces"
+        ...,
+        description="Garment category: tops, bottoms, one_pieces, full_outfit",
     )
     garment_type: Optional[str] = Field(
         default=None,

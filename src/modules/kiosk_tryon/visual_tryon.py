@@ -131,6 +131,9 @@ class KioskVisualTryOnService:
             generator_metadata,
             "preview_input_mapping",
         )
+        generator_metadata_hash = hashlib.sha256(
+            json.dumps(generator_metadata, sort_keys=True).encode("utf-8")
+        ).hexdigest()
         user_image_sha256 = hashlib.sha256(user_image).hexdigest()
         garment_image_sha256 = hashlib.sha256(garment_image).hexdigest()
         prompt_sha256 = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
@@ -143,6 +146,8 @@ class KioskVisualTryOnService:
             model=model,
             prompt_version=prompt_version,
             input_mapping=input_mapping,
+            requested_size=size,
+            generator_metadata_hash=generator_metadata_hash,
             seed=_generator_seed(self.generator),
         )
         image_path = self._image_path(personalized_tryon_key)
@@ -152,17 +157,23 @@ class KioskVisualTryOnService:
         if cache_hit:
             generated_bytes = image_path.read_bytes()
         else:
-            generated_image = self.generator.generate_tryon_from_b64(
-                base_image_b64=base64.b64encode(user_image).decode("utf-8"),
-                garment_image_b64=base64.b64encode(garment_image).decode("utf-8"),
-                inpainting_prompt=prompt,
-                mask_b64=None,
+            generated_image = _generate_with_provider(
+                generator=self.generator,
+                user_image=user_image,
+                garment_image=garment_image,
+                prompt=prompt,
+                garment_category=garment_category,
+                garment_type=garment_type,
+                session_id=session_id,
+                garment_id=garment_id,
                 size=size,
             )
             generated_bytes = _decode_base64_payload(
                 generated_image,
                 field_name="generated_image",
             )
+            generation_metadata = _generator_generation_metadata(self.generator)
+            warnings.extend(_generator_warnings(generation_metadata))
             _write_bytes(image_path, generated_bytes)
             _write_text(
                 metadata_path,
@@ -181,6 +192,9 @@ class KioskVisualTryOnService:
                         "preview_model": model,
                         "preview_prompt_version": prompt_version,
                         "preview_input_mapping": input_mapping,
+                        "requested_size": size,
+                        "generator_metadata": generator_metadata,
+                        "generation_metadata": generation_metadata,
                         "garment_category": garment_category,
                         "garment_type": garment_type,
                         "multimodal_analysis_applied": tryon_intent is not None,
@@ -231,6 +245,8 @@ class KioskVisualTryOnService:
         model: str,
         prompt_version: str,
         input_mapping: str | None,
+        requested_size: str,
+        generator_metadata_hash: str,
         seed: int | None,
     ) -> str:
         payload = {
@@ -242,6 +258,8 @@ class KioskVisualTryOnService:
             "model": model,
             "prompt_version": prompt_version,
             "input_mapping": input_mapping,
+            "requested_size": requested_size,
+            "generator_metadata_hash": generator_metadata_hash,
             "seed": seed,
             "scope": "kiosk_personalized_visual_tryon",
             "version": KIOSK_VISUAL_TRYON_PROMPT_VERSION,
@@ -289,7 +307,7 @@ def _scope_instruction(category: str) -> str:
             "Replace only the lower-body garment on the user; keep the user's "
             "top, face, arms, shoes, and background unchanged."
         )
-    if category == "one_pieces":
+    if category in {"one_pieces", "full_outfit"}:
         return (
             "Apply the full-body or one-piece garment to the user while keeping "
             "the user's pose, face, hands, legs, and background stable."
@@ -298,6 +316,55 @@ def _scope_instruction(category: str) -> str:
         "Replace only the upper-body garment on the user; keep the user's pants, "
         "shorts, shoes, face, hands, legs, and background unchanged."
     )
+
+
+def _generate_with_provider(
+    *,
+    generator: Any,
+    user_image: bytes,
+    garment_image: bytes,
+    prompt: str,
+    garment_category: str,
+    garment_type: str | None,
+    session_id: str,
+    garment_id: str,
+    size: str,
+) -> str:
+    extended_generator = getattr(generator, "generate_kiosk_tryon", None)
+    if callable(extended_generator):
+        return extended_generator(
+            user_image=user_image,
+            garment_image=garment_image,
+            prompt=prompt,
+            garment_category=garment_category,
+            garment_type=garment_type,
+            session_id=session_id,
+            garment_id=garment_id,
+            size=size,
+        )
+
+    return generator.generate_tryon_from_b64(
+        base_image_b64=base64.b64encode(user_image).decode("utf-8"),
+        garment_image_b64=base64.b64encode(garment_image).decode("utf-8"),
+        inpainting_prompt=prompt,
+        mask_b64=None,
+        size=size,
+    )
+
+
+def _generator_generation_metadata(generator: Any) -> dict[str, Any]:
+    getter = getattr(generator, "get_last_generation_metadata", None)
+    if not callable(getter):
+        return {}
+    metadata = getter()
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _generator_warnings(metadata: dict[str, Any]) -> list[str]:
+    raw_warnings = metadata.get("warnings")
+    if not isinstance(raw_warnings, list):
+        return []
+    return [str(warning) for warning in raw_warnings if str(warning).strip()]
 
 
 def _decode_base64_payload(payload: str, *, field_name: str) -> bytes:

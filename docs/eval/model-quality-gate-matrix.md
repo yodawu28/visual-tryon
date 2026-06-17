@@ -252,16 +252,32 @@ structurally good but soft:
 - `make runpod-vton-condition-smoke-inputs`
 - `make runpod-leffa-conditioned-smoke`
 
-For web-style garment fixtures, compare the baseline and detail pass without
-overwriting outputs:
+For web-style top fixtures, the current local baseline is Leffa with an
+upper-body crop. Use the upper-body target before judging Leffa on garment
+logo/text fidelity:
 
-- `make runpod-leffa-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2`
-- `make runpod-leffa-web-garment-detail-smoke RUNPOD_WEB_GARMENT_ID=2`
-- `make runpod-leffa-web-garment-smoke RUNPOD_WEB_GARMENT_ID=3`
-- `make runpod-leffa-web-garment-detail-smoke RUNPOD_WEB_GARMENT_ID=3`
+- `make runpod-vton-input-quality RUNPOD_VTON_INPUT_GARMENT_CATEGORY=tops`
+- `make runpod-leffa-upper-body-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2`
+- `make runpod-leffa-upper-body-web-garment-smoke RUNPOD_WEB_GARMENT_ID=3`
 
-If the detail pass is still blurry around garment text/logos, treat that as a
-model limitation rather than a preprocessing issue.
+The full-body Leffa web-style fixtures are not representative for top garments
+when `torso_detail_enough=false`; use them only as a negative control.
+
+If the upper-body crop is still blurry around garment text/logos, treat that as
+a model limitation rather than a preprocessing issue.
+
+Production-style API routing:
+
+- Current local Swagger/worker baseline for `tops` is `local_leffa`.
+- Enable with `KIOSK_VISUAL_PREVIEW_PROVIDER=local_leffa` after the Leffa repo
+  and checkpoints are present on the GPU server.
+- The API path applies category-aware input scoring and category-specific
+  conditioning before invoking Leffa.
+- Swagger/API can now route `bottoms`, `one_pieces`, and `full_outfit` for
+  evaluation: `bottoms -> lower_body/full_body`, `one_pieces -> dresses/full_body`,
+  `full_outfit -> dresses/full_body`.
+- Treat `bottoms`, `one_pieces`, and `full_outfit` as experimental until they
+  have their own quality-gate pass.
 
 For OmniVTON, run a cost-safe preflight before any quality run:
 

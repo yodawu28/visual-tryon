@@ -44,6 +44,52 @@ class FakeGenerator:
         return base64.b64encode(b"generated-image").decode("utf-8")
 
 
+class FakeKioskGenerator(FakeGenerator):
+    def __init__(self) -> None:
+        super().__init__()
+        self.last_metadata = {}
+
+    def get_runtime_metadata(self):
+        return {
+            "preview_model": "Leffa:fake",
+            "preview_prompt_version": "local-leffa-category-conditioned-v1",
+            "preview_input_mapping": "category_conditioned_leffa",
+        }
+
+    def generate_kiosk_tryon(
+        self,
+        *,
+        user_image,
+        garment_image,
+        prompt,
+        garment_category,
+        garment_type,
+        session_id,
+        garment_id,
+        size,
+    ):
+        self.calls.append(
+            {
+                "user_image": user_image,
+                "garment_image": garment_image,
+                "prompt": prompt,
+                "garment_category": garment_category,
+                "garment_type": garment_type,
+                "session_id": session_id,
+                "garment_id": garment_id,
+                "size": size,
+            }
+        )
+        self.last_metadata = {
+            "provider": "local_leffa",
+            "warnings": ["input quality gate warning: use upper-body crop"],
+        }
+        return base64.b64encode(b"leffa-image").decode("utf-8")
+
+    def get_last_generation_metadata(self):
+        return self.last_metadata
+
+
 class FakeAnalyzer:
     def __init__(self, *, fail: bool = False) -> None:
         self.fail = fail
@@ -159,3 +205,30 @@ def test_kiosk_visual_tryon_recreates_output_dirs_before_writing(tmp_path):
     assert result.generated_image == base64.b64encode(b"generated-image").decode(
         "utf-8"
     )
+
+
+def test_kiosk_visual_tryon_uses_extended_local_generator_hook(tmp_path):
+    generator = FakeKioskGenerator()
+    service = KioskVisualTryOnService(
+        tryon_dir=tmp_path,
+        generator=generator,
+        tryon_analyzer=None,
+    )
+
+    result = service.generate_tryon(
+        session_id="kiosk-session:v1:abc",
+        garment_id="garment:v1:def",
+        user_image=b"user-image",
+        garment_image=b"garment-image",
+        garment_category="tops",
+        garment_type="t-shirt",
+        use_multimodal_analysis=False,
+        size="768x1024",
+    )
+
+    assert result.generated_image == base64.b64encode(b"leffa-image").decode("utf-8")
+    assert generator.calls[0]["garment_category"] == "tops"
+    assert generator.calls[0]["garment_type"] == "t-shirt"
+    assert generator.calls[0]["size"] == "768x1024"
+    assert result.input_mapping == "category_conditioned_leffa"
+    assert result.warnings == ["input quality gate warning: use upper-body crop"]

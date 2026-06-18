@@ -12,6 +12,9 @@ import logging
 
 from src.config.settings import get_settings
 from src.modules.avatar_preview.tryon_analyzer import OllamaTryOnAnalyzer
+from src.modules.image_generator.local_leffa_kiosk_generator import (
+    LocalLeffaKioskGenerator,
+)
 from src.modules.image_generator.replicate_avatar_preview_generator import (
     ReplicateAvatarPreviewGenerator,
 )
@@ -116,6 +119,27 @@ def _build_kiosk_visual_generator(settings):
     )
     if provider == "replicate_qwen":
         return ReplicateAvatarPreviewGenerator()
+    if provider in {"local_leffa", "leffa"}:
+        return LocalLeffaKioskGenerator(
+            work_dir=settings.temp_storage_dir / "kiosk_tryons" / "leffa_work",
+            leffa_root=settings.local_leffa_root,
+            repo_url=settings.local_leffa_repo_url,
+            model_repo_id=settings.local_leffa_model_repo_id,
+            checkpoint_dir=settings.local_leffa_checkpoint_dir,
+            python_executable=settings.local_leffa_python,
+            hf_home=settings.local_leffa_hf_home,
+            torch_home=settings.local_leffa_torch_home,
+            xdg_cache_home=settings.local_leffa_xdg_cache_home,
+            no_clone=bool(settings.local_leffa_no_clone),
+            size=settings.local_leffa_size,
+            device=settings.local_leffa_device,
+            dtype=settings.local_leffa_dtype,
+            vt_model_type=settings.local_leffa_vt_model_type,
+            steps=int(settings.local_leffa_steps),
+            guidance_scale=float(settings.local_leffa_guidance_scale),
+            seed=int(settings.local_leffa_seed),
+            timeout_seconds=int(settings.local_leffa_timeout),
+        )
     raise RuntimeError(
         "Kiosk visual preview provider is disabled. Production kiosk visual "
         "preview requires a self-hosted GPU engine; Replicate Qwen is available "

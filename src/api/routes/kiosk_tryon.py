@@ -393,6 +393,7 @@ def _build_kiosk_visual_generator(settings: Any) -> Any:
             repo_url=settings.local_leffa_repo_url,
             model_repo_id=settings.local_leffa_model_repo_id,
             checkpoint_dir=settings.local_leffa_checkpoint_dir,
+            python_executable=settings.local_leffa_python,
             hf_home=settings.local_leffa_hf_home,
             torch_home=settings.local_leffa_torch_home,
             xdg_cache_home=settings.local_leffa_xdg_cache_home,

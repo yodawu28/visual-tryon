@@ -71,6 +71,8 @@ RUNPOD_CATVTON_QUALITY_OUTPUT ?= $(RUNPOD_DATA_DIR)/catvton_smoke/catvton-qualit
 RUNPOD_CATVTON_QUALITY_REPORT ?= $(RUNPOD_DATA_DIR)/catvton_smoke/catvton-quality-smoke.json
 RUNPOD_LEFFA_REPO_URL ?= https://github.com/franciszzj/Leffa.git
 RUNPOD_LEFFA_ROOT ?= $(RUNPOD_MODEL_DIR)/external/Leffa
+RUNPOD_LEFFA_VENV ?= $(RUNPOD_MODEL_DIR)/venvs/leffa
+RUNPOD_LEFFA_PYTHON ?= $(RUNPOD_LEFFA_VENV)/bin/python
 RUNPOD_LEFFA_MODEL_REPO_ID ?= franciszzj/Leffa
 RUNPOD_LEFFA_CHECKPOINT_DIR ?= $(RUNPOD_LEFFA_ROOT)/ckpts
 RUNPOD_LEFFA_SIZE ?= 768x1024
@@ -155,7 +157,7 @@ help:
 	@echo "  make runpod-catvton-import-check - Validate CatVTON imports without loading models"
 	@echo "  make runpod-catvton-smoke - Run cheap local CatVTON canary with prepared/default inputs"
 	@echo "  make runpod-catvton-quality-smoke - Run full CatVTON quality smoke after canary passes"
-	@echo "  make runpod-install-leffa-deps - Install extra deps for local Leffa smoke"
+	@echo "  make runpod-install-leffa-deps - Install local Leffa deps into isolated model venv"
 	@echo "  make runpod-leffa-import-check - Validate Leffa imports without loading models"
 	@echo "  make runpod-leffa-smoke - Run local Leffa smoke with prepared/default inputs"
 	@echo "  make runpod-leffa-conditioned-smoke - Run Leffa with normalized smoke inputs"
@@ -295,7 +297,10 @@ runpod-install-catvton-deps:
 		"ninja>=1.11.1"
 
 runpod-install-leffa-deps:
-	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install -U \
+	mkdir -p "$(RUNPOD_LEFFA_VENV)" "$(RUNPOD_PIP_CACHE_DIR)"
+	python -m venv "$(RUNPOD_LEFFA_VENV)"
+	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_LEFFA_PYTHON)" -m pip install -U pip setuptools wheel
+	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_LEFFA_PYTHON)" -m pip install -U \
 		"accelerate>=0.31.0" \
 		"av>=12.0.0" \
 		"cloudpickle>=3.0.0" \
@@ -329,6 +334,8 @@ runpod-install-leffa-deps:
 		"tqdm>=4.66.4" \
 		"transformers>=4.43.0" \
 		"yacs>=0.1.8"
+	@echo "Leffa runtime installed at $(RUNPOD_LEFFA_VENV)"
+	@echo "Set LOCAL_LEFFA_PYTHON=$(RUNPOD_LEFFA_PYTHON) before make runpod-start"
 
 runpod-install-omnivton-deps:
 	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install -U \
@@ -372,7 +379,7 @@ runpod-leffa-import-check:
 	HUGGINGFACE_HUB_CACHE="$(RUNPOD_HF_HOME)/hub" \
 	TORCH_HOME="$(RUNPOD_TORCH_HOME)" \
 	XDG_CACHE_HOME="$(RUNPOD_MODEL_DIR)/xdg-cache" \
-	python -m scripts.local_leffa_smoke \
+	"$(RUNPOD_LEFFA_PYTHON)" -m scripts.local_leffa_smoke \
 		--person-image "$(RUNPOD_LEFFA_PERSON_IMAGE)" \
 		--garment-image "$(RUNPOD_LEFFA_GARMENT_IMAGE)" \
 		--output "$(RUNPOD_LEFFA_OUTPUT)" \
@@ -559,7 +566,7 @@ runpod-leffa-smoke:
 	TORCH_HOME="$(RUNPOD_TORCH_HOME)" \
 	XDG_CACHE_HOME="$(RUNPOD_MODEL_DIR)/xdg-cache" \
 	PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" \
-	python -m scripts.local_leffa_smoke \
+	"$(RUNPOD_LEFFA_PYTHON)" -m scripts.local_leffa_smoke \
 		--person-image "$(PERSON_IMAGE_PATH)" \
 		--garment-image "$(GARMENT_IMAGE_PATH)" \
 		--output "$(RUNPOD_LEFFA_OUTPUT)" \

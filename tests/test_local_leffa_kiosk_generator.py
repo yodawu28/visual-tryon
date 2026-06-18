@@ -47,6 +47,21 @@ def test_local_leffa_kiosk_generator_maps_full_outfit_to_dresses(
     assert _fake_condition_calls[-1]["person_framing"] == "full_body"
 
 
+def test_local_leffa_kiosk_generator_uses_configured_python(
+    monkeypatch,
+    tmp_path,
+):
+    leffa_python = tmp_path / "venvs" / "leffa" / "bin" / "python"
+    command = _run_fake_generation(
+        monkeypatch,
+        tmp_path,
+        garment_category="tops",
+        python_executable=leffa_python,
+    )
+
+    assert command[0] == str(leffa_python)
+
+
 def test_local_leffa_kiosk_generator_rejects_unknown_category(monkeypatch, tmp_path):
     generator = _generator(tmp_path)
 
@@ -70,7 +85,13 @@ def test_local_leffa_kiosk_generator_rejects_unknown_category(monkeypatch, tmp_p
 _fake_condition_calls = []
 
 
-def _run_fake_generation(monkeypatch, tmp_path, *, garment_category: str) -> list[str]:
+def _run_fake_generation(
+    monkeypatch,
+    tmp_path,
+    *,
+    garment_category: str,
+    python_executable: Path | None = None,
+) -> list[str]:
     commands = []
     _fake_condition_calls.clear()
 
@@ -103,7 +124,9 @@ def _run_fake_generation(monkeypatch, tmp_path, *, garment_category: str) -> lis
     monkeypatch.setattr(leffa_module, "_condition_inputs", fake_condition_inputs)
     monkeypatch.setattr(leffa_module.subprocess, "run", fake_run)
 
-    result = _generator(tmp_path).generate_kiosk_tryon(
+    result = _generator(
+        tmp_path, python_executable=python_executable
+    ).generate_kiosk_tryon(
         user_image=b"user-image",
         garment_image=b"garment-image",
         prompt="try on",
@@ -119,13 +142,18 @@ def _run_fake_generation(monkeypatch, tmp_path, *, garment_category: str) -> lis
     return commands[0]
 
 
-def _generator(tmp_path) -> LocalLeffaKioskGenerator:
+def _generator(
+    tmp_path,
+    *,
+    python_executable: Path | None = None,
+) -> LocalLeffaKioskGenerator:
     return LocalLeffaKioskGenerator(
         work_dir=tmp_path / "work",
         leffa_root=tmp_path / "Leffa",
         repo_url="https://example.com/Leffa.git",
         model_repo_id="fake/Leffa",
         checkpoint_dir=tmp_path / "ckpts",
+        python_executable=python_executable,
         no_clone=True,
     )
 

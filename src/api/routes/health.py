@@ -239,6 +239,7 @@ def _check_visual_preview_provider(settings: Any) -> ReadinessCheckResponse:
     if provider in {"local_leffa", "leffa"}:
         leffa_root = Path(getattr(settings, "local_leffa_root", ""))
         checkpoint_dir = Path(getattr(settings, "local_leffa_checkpoint_dir", ""))
+        leffa_python = getattr(settings, "local_leffa_python", None)
         required_paths = {
             "leffa_repo": leffa_root / "leffa" / "model.py",
             "base_model": checkpoint_dir / "stable-diffusion-inpainting",
@@ -247,6 +248,8 @@ def _check_visual_preview_provider(settings: Any) -> ReadinessCheckResponse:
             "human_parsing": checkpoint_dir / "humanparsing" / "parsing_atr.onnx",
             "openpose": checkpoint_dir / "openpose" / "body_pose_model.pth",
         }
+        if leffa_python:
+            required_paths["leffa_python"] = Path(leffa_python)
         missing = [label for label, path in required_paths.items() if not path.exists()]
         if missing:
             return ReadinessCheckResponse(
@@ -257,6 +260,7 @@ def _check_visual_preview_provider(settings: Any) -> ReadinessCheckResponse:
                     "missing": missing,
                     "leffa_root": str(leffa_root),
                     "checkpoint_dir": str(checkpoint_dir),
+                    "leffa_python": str(leffa_python) if leffa_python else None,
                 },
             )
         return ReadinessCheckResponse(
@@ -266,6 +270,7 @@ def _check_visual_preview_provider(settings: Any) -> ReadinessCheckResponse:
                 "provider": provider,
                 "leffa_root": str(leffa_root),
                 "checkpoint_dir": str(checkpoint_dir),
+                "leffa_python": str(leffa_python) if leffa_python else None,
                 "size": getattr(settings, "local_leffa_size", None),
                 "device": getattr(settings, "local_leffa_device", None),
                 "supported_garment_categories": [

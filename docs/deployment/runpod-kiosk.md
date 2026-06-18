@@ -316,7 +316,7 @@ adapter.
 Install the extra dependencies used by the CatVTON smoke script:
 
 ```bash
-cd /workspace/tryon-visual-project
+cd /workspace/visual-tryon
 source venv/bin/activate
 make runpod-cuda-report
 make runpod-install-catvton-deps
@@ -440,10 +440,15 @@ make runpod-install-leffa-deps
 make runpod-leffa-import-check
 ```
 
-`make runpod-install-leffa-deps` intentionally does not reinstall `torch` or
-`torchvision`. It assumes the RunPod PyTorch template already has a compatible
-CUDA-enabled torch stack. If CUDA is not healthy, fix the pod or torch stack
-before running Leffa.
+`make runpod-install-leffa-deps` installs Leffa dependencies into an isolated
+model runtime at `/workspace/tryon-models/venvs/leffa`. Do not install Leffa
+dependencies into the app venv; Leffa and the FastAPI/MediaPipe app have
+different dependency pressure, especially around `numpy`, `opencv`, `torch`,
+and `diffusers`.
+
+The isolated Leffa runtime still assumes the RunPod PyTorch template or selected
+torch wheel has a compatible CUDA-enabled torch stack. If CUDA is not healthy,
+fix the pod or torch stack before running Leffa.
 
 `make runpod-leffa-import-check` clones/uses the Leffa repo and validates
 Python imports only. It does not download model weights or generate an image.
@@ -646,6 +651,7 @@ LOCAL_LEFFA_CHECKPOINT_DIR=/workspace/tryon-models/external/Leffa/ckpts
 LOCAL_LEFFA_HF_HOME=/workspace/tryon-models/huggingface
 LOCAL_LEFFA_TORCH_HOME=/workspace/tryon-models/torch
 LOCAL_LEFFA_XDG_CACHE_HOME=/workspace/tryon-models/xdg-cache
+LOCAL_LEFFA_PYTHON=/workspace/tryon-models/venvs/leffa/bin/python
 LOCAL_LEFFA_NO_CLONE=true
 LOCAL_LEFFA_SIZE=768x1024
 LOCAL_LEFFA_DEVICE=cuda

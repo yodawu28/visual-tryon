@@ -30,6 +30,7 @@ class LocalLeffaKioskGenerator(ImageGeneratorBase):
         repo_url: str,
         model_repo_id: str,
         checkpoint_dir: Path,
+        python_executable: Path | None = None,
         hf_home: Path | None = None,
         torch_home: Path | None = None,
         xdg_cache_home: Path | None = None,
@@ -48,6 +49,7 @@ class LocalLeffaKioskGenerator(ImageGeneratorBase):
         self.repo_url = repo_url
         self.model_repo_id = model_repo_id
         self.checkpoint_dir = Path(checkpoint_dir)
+        self.python_executable = Path(python_executable) if python_executable else None
         self.hf_home = Path(hf_home) if hf_home else None
         self.torch_home = Path(torch_home) if torch_home else None
         self.xdg_cache_home = Path(xdg_cache_home) if xdg_cache_home else None
@@ -185,7 +187,7 @@ class LocalLeffaKioskGenerator(ImageGeneratorBase):
         )
 
         command = [
-            sys.executable,
+            str(self.python_executable or sys.executable),
             "-m",
             "scripts.local_leffa_smoke",
             "--person-image",

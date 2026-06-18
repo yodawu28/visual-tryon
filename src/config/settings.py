@@ -95,6 +95,10 @@ class Settings(BaseSettings):
         default=None,
         env="LOCAL_LEFFA_XDG_CACHE_HOME",
     )
+    local_leffa_python: Optional[Path] = Field(
+        default=None,
+        env="LOCAL_LEFFA_PYTHON",
+    )
     local_leffa_no_clone: bool = Field(default=True, env="LOCAL_LEFFA_NO_CLONE")
     local_leffa_size: str = Field(default="768x1024", env="LOCAL_LEFFA_SIZE")
     local_leffa_device: str = Field(default="cuda", env="LOCAL_LEFFA_DEVICE")
@@ -215,6 +219,7 @@ class Settings(BaseSettings):
         "local_leffa_hf_home",
         "local_leffa_torch_home",
         "local_leffa_xdg_cache_home",
+        "local_leffa_python",
         mode="before",
     )
     @classmethod

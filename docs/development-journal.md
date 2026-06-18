@@ -1088,3 +1088,34 @@ Current limitation:
 - `bottoms`, `one_pieces`, and `full_outfit` are enabled for Swagger/API
   evaluation, but their metadata is marked `experimental_needs_manual_review`
   until quality-gate testing passes.
+
+### 2026-06-17 - Isolate Leffa Runtime Dependencies
+
+Issue:
+
+- Installing Leffa dependencies into the main API/worker venv can conflict with
+  application dependencies, especially `mediapipe`, `numpy`, `opencv`, `torch`,
+  `diffusers`, and transitive packages.
+- This is risky for kiosk deployment because the API, MediaPipe capture
+  analysis, Fit Engine, SQLite registry, job queue, and model runtime should not
+  all depend on one mutable Python environment.
+
+Decision:
+
+- Keep the main `/workspace/visual-tryon/venv` for the FastAPI app and worker.
+- Install Leffa into an isolated model venv at
+  `/workspace/tryon-models/venvs/leffa`.
+- Configure the app with
+  `LOCAL_LEFFA_PYTHON=/workspace/tryon-models/venvs/leffa/bin/python` so the
+  local Leffa generator runs `scripts.local_leffa_smoke` as a subprocess through
+  the model runtime, not the app runtime.
+
+Implementation:
+
+- Added `LOCAL_LEFFA_PYTHON` setting.
+- Updated API and worker `local_leffa` provider wiring to pass the configured
+  Python executable to `LocalLeffaKioskGenerator`.
+- Updated `make runpod-install-leffa-deps` to create and install into the
+  isolated Leffa venv.
+- Updated Leffa smoke/import-check targets to use the isolated Leffa Python.
+- Updated readiness to report missing `leffa_python` when configured but absent.

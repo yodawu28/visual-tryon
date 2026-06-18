@@ -121,6 +121,8 @@ Record one row per model and fixture set:
 | CatVTON | RTX 4000 Ada | `768x1024` | `30` | `34-41s` | `<4GB` | soft | weak | TBD | TBD | fail | pause |
 | Leffa conditioned | RTX 4000 Ada | `768x1024` | `30` | TBD | TBD | acceptable | acceptable | acceptable | acceptable | provisional pass | continue evaluation |
 | Leffa web garments | RTX 4000 Ada | `768x1024` | `30` | TBD | TBD | soft | mixed | acceptable | acceptable | fail | tune or next candidate |
+| Leffa API job | L4 | `768x1024` | `30` | `883s` | TBD | TBD | TBD | TBD | TBD | integration pass, latency fail | use only as minimum smoke |
+| Leffa API job | RTX 3090 | `768x1024` effective | `30` | `258s total / 161s core`; `150s` warm follow-up | `5.8GB allocated` | acceptable | acceptable | acceptable | acceptable | provisional pass | viable baseline, optimize latency/input |
 | OmniVTON | TBD | `384x512` smoke | `30` | TBD | TBD | TBD | TBD | TBD | TBD | pending | preflight first |
 
 ## Candidate ROI Order
@@ -278,6 +280,9 @@ Production-style API routing:
   `full_outfit -> dresses/full_body`.
 - Treat `bottoms`, `one_pieces`, and `full_outfit` as experimental until they
   have their own quality-gate pass.
+- RunPod L4 proved the async Swagger/worker/API path end-to-end, but one Leffa
+  job took `883s`. Use L4 only as a minimum smoke GPU; use RTX 4000 Ada or
+  stronger for practical evaluation.
 
 For OmniVTON, run a cost-safe preflight before any quality run:
 

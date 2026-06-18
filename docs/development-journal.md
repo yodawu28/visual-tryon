@@ -1119,3 +1119,57 @@ Implementation:
   isolated Leffa venv.
 - Updated Leffa smoke/import-check targets to use the isolated Leffa Python.
 - Updated readiness to report missing `leffa_python` when configured but absent.
+
+### 2026-06-18 - Self-Hosted Leffa Kiosk Preview Proven End-to-End
+
+Context:
+
+- We needed to prove that the kiosk visual preview path can run without
+  Replicate/Qwen remote generation.
+- The target production-style path is async:
+  `POST /api/v1/kiosk/sessions/{session_id}/visual-preview/jobs`, then poll
+  `GET /api/v1/kiosk/jobs/{job_id}`.
+- The synchronous `/visual-preview` endpoint is not suitable behind RunPod's
+  120-second proxy timeout.
+
+Result:
+
+- The API enqueued kiosk visual preview jobs successfully.
+- The local worker picked up `gpu.visual_preview` jobs.
+- The worker invoked local Leffa through the isolated Leffa Python runtime.
+- Generated images were stored under `/workspace/tryon-data/kiosk_tryons/images`.
+- Sessions advanced to `personalized_tryon_ready`.
+- No Replicate dependency was used for the visual preview generation path.
+
+Benchmarks:
+
+| GPU | Job Runtime | Leffa Core Runtime | Peak VRAM | Result |
+| --- | ---: | ---: | ---: | --- |
+| NVIDIA L4 | `883s` | `806s` direct smoke | ~`5.8GB` allocated | succeeded, latency too slow |
+| RTX 3090 | `258s` | `161s` | `5.8GB` allocated | succeeded, viable baseline |
+| RTX 3090 warm follow-up | `150s` | effective Leffa size still `768x1024` | TBD | succeeded, promising |
+
+Quality notes:
+
+- The RTX 3090 output is acceptable for the current kiosk MVP baseline.
+- Shirt placement, human preservation, and sleeve handling are good enough to
+  continue production-style API work.
+- Garment logo/text fidelity is visible but still not fully sharp.
+- The input quality gate correctly warned `torso_detail_enough=false`; for
+  high-detail logos/text, the user capture should be closer or upper-body
+  framed before Leffa inference.
+
+Decision:
+
+- Treat local Leffa as the current self-hosted kiosk Visual Try-On Engine
+  baseline for tops.
+- Treat L4 as a minimum smoke GPU only.
+- Prefer RTX 3090, RTX 4000 Ada, or stronger for continued evaluation.
+- Keep `LOCAL_LEFFA_TIMEOUT=1800` for cold-start/L4 safety.
+
+Follow-up:
+
+- Compare RTX 3090 against RTX 4000 Ada and RTX 4090 using the same fixtures.
+- Improve capture guidance and input conditioning for upper-body detail.
+- Track runtime and quality in the model quality gate matrix before committing
+  to a production GPU recommendation.

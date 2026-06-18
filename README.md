@@ -1,236 +1,278 @@
-# Virtual Try-On MVP
+# Virtual Try-On Kiosk MVP
 
-Privacy-first virtual try-on system cho phép người dùng visualize việc mặc quần áo từ Shopee thông qua AI-powered analysis.
+Self-hosted virtual try-on backend for a kiosk flow: garment upload, front/side
+user capture, pose and input-quality analysis, Fit Intelligence, and optional
+GPU visual preview.
 
-## Features
+The current production direction is a single GPU server or pod that runs the API,
+local worker, local data stores, Ollama multimodal analyzer, and the visual
+try-on engine. Remote image-generation providers are kept only for benchmark or
+debug paths.
 
-- **Privacy Guard (Module 1)**: Face anonymization local với InsightFace trước khi upload
-- **Semantic Parser (Module 2)**: AI analysis với OpenAI GPT-4o Vision
-- **FastAPI Backend**: Async API server với type safety
-- **Memory Management**: Auto-cleanup để prevent memory leaks
-- **Error Handling**: Retry logic cho API calls và graceful degradation
+## Current Status
+
+- FastAPI kiosk API with Swagger on port `8080`.
+- Local SQLite registries for garments and size charts.
+- Front and optional side capture upload via `multipart/form-data`.
+- MediaPipe-based capture quality and pose analysis.
+- Fit Intelligence API skeleton with size-chart based recommendations.
+- Local JSON job queue with worker abstraction for future Redis/Kafka backends.
+- Optional async visual preview job flow for long GPU jobs.
+- Self-hosted Leffa visual try-on baseline integrated behind the worker.
+- RunPod single-pod deployment path documented and smoke-tested.
+
+Recent GPU baseline:
+
+- RunPod L4 proved the end-to-end API/worker/Leffa path, but latency was too
+  high for practical use.
+- RTX 3090 completed the same Leffa API job successfully and is the current
+  practical baseline for continued evaluation.
+- Input conditioning improved output quality, but logo/text sharpness still
+  depends heavily on capture framing and garment image quality.
+
+See [docs/development-journal.md](docs/development-journal.md) and
+[docs/eval/model-quality-gate-matrix.md](docs/eval/model-quality-gate-matrix.md)
+for the latest benchmark notes.
 
 ## Architecture
 
+```mermaid
+flowchart LR
+    A[Upload garment] --> B[Create kiosk session]
+    B --> C[Upload front and optional side captures]
+    C --> D[Capture pose and quality analysis]
+    D --> E[Fit Intelligence]
+    E --> F[Size recommendation]
+    E --> G{User wants visual preview?}
+    G -- Yes --> H[Queue visual-preview job]
+    H --> I[GPU worker]
+    I --> J[Self-hosted Leffa engine]
+    J --> K[Personalized try-on image]
+    G -- No --> L[Review fit result]
 ```
-User Image → Face Detection → Face Anonymization → Metadata Strip → API Ready
-                                    ↓
-Product Image + Anonymized User Image → OpenAI GPT-4o Vision → Analysis
-                                                                    ↓
-                                    {clothing_description, body_pose, inpainting_prompt}
-```
+
+Primary docs:
+
+- [Kiosk GPU flow](docs/architecture/kiosk-gpu-flow.md)
+- [Swagger workflow](docs/kiosk-swagger-workflow.md)
+- [RunPod deployment runbook](docs/deployment/runpod-kiosk.md)
+- [RunPod roadmap](docs/deployment/runpod-roadmap.md)
 
 ## Requirements
 
+Local control-plane development:
+
 - Python 3.11+
-- OpenAI API key
-- MacBook (Apple Silicon optimized) hoặc Linux/Windows
+- `make`
+- Writable local `data/` directory
 
-## Quick Start
+GPU visual-preview deployment:
 
-### 1. Setup Environment
+- Linux GPU host or RunPod pod
+- CUDA-compatible PyTorch runtime
+- Persistent storage mounted at `/workspace`
+- Ollama with `qwen2.5vl:7b-q4_K_M` for multimodal analysis
+- Leffa assets installed under `/workspace/tryon-models`
+
+## Quick Start: Local API
 
 ```bash
-# Clone repository
-cd tryon-visual-project
-
-# Run setup script
 make setup
-
-# Or manually:
-python3 scripts/setup_env.py
-```
-
-### 2. Configure API Keys
-
-Edit `.env` file:
-
-```bash
-OPENAI_API_KEY=sk-your-actual-api-key-here
-```
-
-### 3. Run Server
-
-```bash
-# Activate virtual environment
-source venv/bin/activate  # Linux/Mac
-# or
-.\\venv\\Scripts\\activate  # Windows
-
-# Start server
+cp .env.example .env
 make run
-
-# Or manually:
-python -m uvicorn src.main:app --reload
 ```
 
-Server will start at `http://127.0.0.1:8000`
+Open Swagger:
 
-API Documentation: `http://127.0.0.1:8000/docs`
+```text
+http://127.0.0.1:8080/docs
+```
 
-## API Usage
-
-### 1. Anonymize User Image
+For the kiosk-only Swagger surface:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/v1/privacy/anonymize \\
-  -F "file=@user_photo.jpg" \\
-  -F "return_format=base64" \\
-  > anonymized_response.json
+API_PROFILE=kiosk make run
 ```
 
-Response:
-```json
-{
-  "success": true,
-  "faces_detected": 1,
-  "anonymized_image": "base64_encoded_image...",
-  "format": "base64",
-  "message": "Image anonymized successfully. All metadata removed."
-}
-```
-
-### 2. Analyze VTO Context
+For async visual-preview jobs, run the worker in another terminal:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/v1/analysis/vto-context \\
-  -H "X-User-Consent: true" \\
-  -H "X-Image-Anonymized: true" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "anonymized_user_image": "base64...",
-    "product_image": "base64..."
-  }'
+make worker
 ```
 
-Response:
-```json
-{
-  "success": true,
-  "analysis": {
-    "clothing_description": "A navy blue cotton t-shirt with crew neck...",
-    "body_pose": "Standing straight with arms at sides...",
-    "inpainting_prompt": "A navy blue cotton t-shirt worn by a person...",
-    "confidence_score": 0.95
-  },
-  "message": "Analysis completed successfully"
-}
-```
-
-## Development
-
-### Available Commands
+Or run API and worker together:
 
 ```bash
-make setup      # Setup environment và download models
-make run        # Run FastAPI server
-make test       # Run tests với coverage
-make lint       # Run linters (ruff + mypy)
-make format     # Format code (black + ruff)
-make check      # Run all checks (format + lint + test)
-make clean      # Clean temporary files
+make run-kiosk-all
 ```
 
-### Running Tests
+## Quick Start: RunPod MVP
+
+Inside the pod:
 
 ```bash
-# Run all tests
+cd /workspace
+git clone <repo-url> tryon-visual-project
+cd /workspace/tryon-visual-project
+
+python3 -m venv venv
+source venv/bin/activate
+make runpod-install
+```
+
+Configure `.env` from `.env.runpod.example`, then start the all-in-one kiosk
+process:
+
+```bash
+make runpod-start-with-ollama
+```
+
+Open:
+
+```text
+https://<pod-id>-8080.proxy.runpod.net/docs
+```
+
+Preflight:
+
+```bash
+make runpod-preflight
+python -m scripts.kiosk_preflight --json
+```
+
+Reset demo state when needed:
+
+```bash
+make runpod-reset
+```
+
+## Swagger Workflow
+
+Use this order for manual end-to-end testing:
+
+1. `GET /api/v1/readiness`
+2. `GET /api/v1/kiosk/size-charts`
+3. `POST /api/v1/kiosk/garments`
+4. `POST /api/v1/kiosk/sessions`
+5. `POST /api/v1/kiosk/sessions/{session_id}/captures`
+6. `POST /api/v1/kiosk/sessions/{session_id}/captures/analyze`
+7. `POST /api/v1/kiosk/sessions/{session_id}/fit/analyze`
+8. Optional: `POST /api/v1/kiosk/sessions/{session_id}/visual-preview/jobs`
+9. Poll: `GET /api/v1/kiosk/jobs/{job_id}`
+
+Use the async visual-preview job endpoint on RunPod. The synchronous visual
+preview endpoint can exceed the RunPod/Cloudflare proxy timeout for GPU jobs.
+
+## Key Configuration
+
+Start from `.env.example` locally or `.env.runpod.example` on RunPod.
+
+Important variables:
+
+```bash
+API_PROFILE=kiosk
+DEBUG=true
+TEMP_STORAGE_DIR=/workspace/tryon-data
+JOB_QUEUE_BACKEND=local
+JOB_QUEUE_DIR=/workspace/tryon-data/jobs
+
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+TRYON_ANALYZER_OLLAMA_MODEL=qwen2.5vl:7b-q4_K_M
+
+KIOSK_VISUAL_PREVIEW_PROVIDER=local_leffa
+LOCAL_LEFFA_TIMEOUT=1800
+```
+
+For production-style kiosk testing, prefer `KIOSK_VISUAL_PREVIEW_PROVIDER=local_leffa`.
+Replicate/Qwen settings are benchmark/debug paths only.
+
+## Development Commands
+
+```bash
+make setup          # Prepare local environment
+make install        # Install Python dependencies
+make run            # Run API on 127.0.0.1:8080
+make run-kiosk      # Run kiosk API on 0.0.0.0:8080
+make run-kiosk-all  # Run API + worker in one foreground process
+make worker         # Run kiosk worker loop
+make worker-once    # Process one queued job
+make kiosk-preflight
+
 make test
-
-# Run specific test file
-pytest tests/test_privacy_guard.py -v
-
-# Run with coverage
-pytest --cov=src --cov-report=html
+make lint
+make format
+make check
 ```
 
-### Code Quality
+RunPod helper commands:
 
 ```bash
-# Format code
-make format
+make runpod-help
+make runpod-install
+make runpod-pull-ollama
+make runpod-start-with-ollama
+make runpod-preflight
+make runpod-reset
+make runpod-cuda-report
+make runpod-disk-report
+```
 
-# Run linters
-make lint
+Model smoke commands:
 
-# Run all checks
-make check
+```bash
+make runpod-leffa-smoke-data
+make runpod-vton-input-quality RUNPOD_VTON_INPUT_GARMENT_CATEGORY=tops
+make runpod-vton-condition-smoke-inputs
+make runpod-leffa-conditioned-smoke
+make runpod-leffa-upper-body-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2
 ```
 
 ## Project Structure
 
-```
-tryon-visual-project/
-├── src/
-│   ├── main.py                          # FastAPI entry point
-│   ├── config/settings.py               # Configuration management
-│   ├── modules/
-│   │   ├── privacy_guard/               # Face anonymization
-│   │   │   ├── face_detector.py
-│   │   │   ├── face_anonymizer.py
-│   │   │   └── metadata_stripper.py
-│   │   └── semantic_parser/             # AI analysis
-│   │       ├── openai_client.py
-│   │       └── prompt_builder.py
-│   ├── api/routes/                      # API endpoints
-│   ├── schemas/                         # Pydantic models
-│   └── utils/                           # Utilities
-├── tests/                               # Test suite
-├── scripts/                             # Setup scripts
-├── requirements.txt                     # Dependencies
-└── Makefile                             # Dev commands
-```
+```text
+src/
+  main.py                         FastAPI entry point
+  api/routes/                     HTTP routes
+  api/router_registry.py          API profile routing
+  config/settings.py              Environment-driven settings
+  modules/
+    kiosk_tryon/                  Kiosk sessions, captures, fit, jobs
+    image_generator/              Visual preview providers
+    jobs/                         Queue backend and worker
+    privacy_guard/                Local privacy utilities
+    semantic_parser/              Legacy/evaluation analysis paths
+  schemas/                        Pydantic schemas
 
-## Privacy & Security
-
-- **Local Face Anonymization**: All face processing happens locally before any network calls
-- **Metadata Stripping**: EXIF data removed from all images
-- **User Consent**: Explicit consent required via API headers
-- **Memory Cleanup**: Automatic cleanup after each request
-- **No Data Storage**: All processing in-memory only
-
-## Technology Stack
-
-- **FastAPI**: Async web framework
-- **InsightFace**: Face detection và swapping (buffalo_l + inswapper_128)
-- **OpenAI GPT-4o Vision**: Semantic analysis
-- **Pydantic**: Type validation và settings management
-- **ONNX Runtime**: ML model inference (CPU-optimized)
-
-## Troubleshooting
-
-### InsightFace Model Download Fails
-
-```bash
-# Manually download models
-python scripts/download_models.py
+scripts/                          Operational and smoke-test scripts
+docs/                             Architecture, deployment, and workflow docs
+tests/                            Pytest suite
+data/                             Local runtime data and sample fixtures
+models/                           Local model placeholders
 ```
 
-### OpenAI API Rate Limits
+## Privacy And Data
 
-The system has built-in retry logic với exponential backoff. Check logs for retry attempts.
+- Runtime user captures, generated images, queues, SQLite files, and model
+  caches should stay under `data/` locally or `/workspace/tryon-data` on RunPod.
+- Do not commit `.env`, API tokens, runtime images, SQLite databases, or model
+  weights.
+- The kiosk production direction is self-hosted GPU inference. Any external
+  provider path should be treated as an explicit benchmark/debug mode.
 
-### Memory Issues
+## Known Limitations
 
-Adjust upload size limit trong `.env`:
-
-```bash
-MAX_UPLOAD_SIZE_MB=5
-```
-
-## Future Enhancements
-
-- **Module 3**: Image Generation với DALL-E 3 / Imagen 3
-- **Module 4**: Go Backend Gateway với worker pools
-- **Neutral Face Library**: Multiple AI-generated neutral faces
-- **Docker Support**: Containerization cho production deployment
+- Fit Intelligence is still a baseline implementation. It needs stronger
+  measurement estimation and calibrated size-chart scoring before production
+  size recommendations.
+- Leffa currently works best for upper-body garments. Bottoms, one-pieces, and
+  full outfits need additional quality-gate testing before being treated as
+  production-ready.
+- Logo/text sharpness depends on garment image cleanliness and the visible
+  torso area in the user capture. Use closer upper-body framing for high-detail
+  top previews.
+- The local queue is suitable for single-node MVP deployment. Redis or Kafka can
+  be added behind the existing queue backend contract later.
 
 ## License
 
-Private project - All rights reserved
-
-## Support
-
-For issues and questions, check:
-- API Documentation: `http://127.0.0.1:8000/docs`
-- Implementation Plan: `.claude/plans/glittery-inventing-toucan.md`
+Private project - all rights reserved.

@@ -113,7 +113,7 @@ class Settings(BaseSettings):
         env="LOCAL_LEFFA_GUIDANCE_SCALE",
     )
     local_leffa_seed: int = Field(default=42, env="LOCAL_LEFFA_SEED")
-    local_leffa_timeout: int = Field(default=900, env="LOCAL_LEFFA_TIMEOUT")
+    local_leffa_timeout: int = Field(default=1800, env="LOCAL_LEFFA_TIMEOUT")
 
     # Replicate
     replicate_api_token: Optional[str] = Field(default=None, env="REPLICATE_API_TOKEN")

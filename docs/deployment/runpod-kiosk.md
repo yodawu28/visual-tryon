@@ -450,6 +450,17 @@ The isolated Leffa runtime still assumes the RunPod PyTorch template or selected
 torch wheel has a compatible CUDA-enabled torch stack. If CUDA is not healthy,
 fix the pod or torch stack before running Leffa.
 
+If the pod reports a driver such as `12070` and Leffa fails with
+`torch.cuda.is_available() is false`, repair only the isolated Leffa runtime:
+
+```bash
+make runpod-install-leffa-torch-cu124
+make runpod-leffa-import-check
+```
+
+This installs `torch==2.6.0`, `torchvision==0.21.0`, and `torchaudio==2.6.0`
+from the PyTorch `cu124` index into `/workspace/tryon-models/venvs/leffa`.
+
 `make runpod-leffa-import-check` clones/uses the Leffa repo and validates
 Python imports only. It does not download model weights or generate an image.
 Use this check to catch DensePose, SCHP, OpenPose, or dependency issues before
@@ -660,7 +671,7 @@ LOCAL_LEFFA_VT_MODEL_TYPE=viton_hd
 LOCAL_LEFFA_STEPS=30
 LOCAL_LEFFA_GUIDANCE_SCALE=2.5
 LOCAL_LEFFA_SEED=42
-LOCAL_LEFFA_TIMEOUT=900
+LOCAL_LEFFA_TIMEOUT=1800
 ```
 
 Then restart:
@@ -668,6 +679,13 @@ Then restart:
 ```bash
 make runpod-start
 ```
+
+`LOCAL_LEFFA_TIMEOUT=1800` is intentionally conservative for L4-style pods.
+In API/worker mode Leffa runs as a subprocess and reloads model state per job;
+on slower or cold pods a single preview can exceed 900 seconds. Faster GPUs
+such as RTX 4000 Ada, RTX 4090, or A5000 should normally complete much sooner,
+but the Swagger flow should still use `/visual-preview/jobs` and poll
+`/kiosk/jobs/{job_id}` instead of the synchronous `/visual-preview` endpoint.
 
 Readiness should show `visual_preview_provider=ready` with
 `provider=local_leffa`:

@@ -120,7 +120,7 @@ RUNPOD_TORCHVISION_CU124_VERSION ?= 0.21.0
 RUNPOD_TORCHAUDIO_CU124_VERSION ?= 2.6.0
 RUNPOD_TORCH_CU124_INDEX ?= https://download.pytorch.org/whl/cu124
 
-.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-install-torch-cu124 runpod-install-catvton-deps runpod-install-leffa-deps runpod-install-omnivton-deps runpod-catvton-import-check runpod-leffa-import-check runpod-omnivton-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-vton-input-quality runpod-vton-condition-smoke-inputs runpod-leffa-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke runpod-catvton-quality-smoke runpod-leffa-smoke runpod-leffa-conditioned-smoke runpod-leffa-web-garment-smoke runpod-leffa-web-garment-detail-smoke runpod-leffa-upper-body-web-garment-smoke runpod-omnivton-smoke runpod-omnivton-outpainting-smoke runpod-omnivton-web-garment-smoke test clean lint format check
+.PHONY: help setup install run run-kiosk run-kiosk-all worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-install-torch-cu124 runpod-install-catvton-deps runpod-install-leffa-torch-cu124 runpod-install-leffa-deps runpod-install-omnivton-deps runpod-catvton-import-check runpod-leffa-import-check runpod-omnivton-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-vton-input-quality runpod-vton-condition-smoke-inputs runpod-leffa-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke runpod-catvton-quality-smoke runpod-leffa-smoke runpod-leffa-conditioned-smoke runpod-leffa-web-garment-smoke runpod-leffa-web-garment-detail-smoke runpod-leffa-upper-body-web-garment-smoke runpod-omnivton-smoke runpod-omnivton-outpainting-smoke runpod-omnivton-web-garment-smoke test clean lint format check
 
 help:
 	@echo "Virtual Try-On MVP - Makefile commands"
@@ -158,6 +158,7 @@ help:
 	@echo "  make runpod-catvton-smoke - Run cheap local CatVTON canary with prepared/default inputs"
 	@echo "  make runpod-catvton-quality-smoke - Run full CatVTON quality smoke after canary passes"
 	@echo "  make runpod-install-leffa-deps - Install local Leffa deps into isolated model venv"
+	@echo "  make runpod-install-leffa-torch-cu124 - Fix Leffa venv Torch for CUDA 12.4/12.7 drivers"
 	@echo "  make runpod-leffa-import-check - Validate Leffa imports without loading models"
 	@echo "  make runpod-leffa-smoke - Run local Leffa smoke with prepared/default inputs"
 	@echo "  make runpod-leffa-conditioned-smoke - Run Leffa with normalized smoke inputs"
@@ -279,6 +280,16 @@ runpod-install-torch-cu124:
 		torchaudio==$(RUNPOD_TORCHAUDIO_CU124_VERSION) \
 		--index-url $(RUNPOD_TORCH_CU124_INDEX)
 
+runpod-install-leffa-torch-cu124:
+	mkdir -p "$(RUNPOD_LEFFA_VENV)" "$(RUNPOD_PIP_CACHE_DIR)"
+	python -m venv "$(RUNPOD_LEFFA_VENV)"
+	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_LEFFA_PYTHON)" -m pip install -U pip setuptools wheel
+	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_LEFFA_PYTHON)" -m pip install --force-reinstall \
+		torch==$(RUNPOD_TORCH_CU124_VERSION) \
+		torchvision==$(RUNPOD_TORCHVISION_CU124_VERSION) \
+		torchaudio==$(RUNPOD_TORCHAUDIO_CU124_VERSION) \
+		--index-url $(RUNPOD_TORCH_CU124_INDEX)
+
 runpod-install-catvton-deps:
 	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install -U \
 		"huggingface_hub>=0.23.4" \
@@ -300,6 +311,7 @@ runpod-install-leffa-deps:
 	mkdir -p "$(RUNPOD_LEFFA_VENV)" "$(RUNPOD_PIP_CACHE_DIR)"
 	python -m venv "$(RUNPOD_LEFFA_VENV)"
 	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_LEFFA_PYTHON)" -m pip install -U pip setuptools wheel
+	$(MAKE) runpod-install-leffa-torch-cu124
 	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_LEFFA_PYTHON)" -m pip install -U \
 		"accelerate>=0.31.0" \
 		"av>=12.0.0" \

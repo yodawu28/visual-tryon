@@ -188,6 +188,7 @@ class LocalLeffaKioskGenerator(ImageGeneratorBase):
 
         command = [
             str(self.python_executable or sys.executable),
+            "-u",
             "-m",
             "scripts.local_leffa_smoke",
             "--person-image",
@@ -229,15 +230,26 @@ class LocalLeffaKioskGenerator(ImageGeneratorBase):
         if self.no_clone:
             command.append("--no-clone")
 
-        completed = subprocess.run(
-            command,
-            cwd=_project_root(),
-            env=self._subprocess_env(),
-            text=True,
-            capture_output=True,
-            timeout=self.timeout_seconds,
-            check=False,
-        )
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=_project_root(),
+                env=self._subprocess_env(),
+                text=True,
+                capture_output=True,
+                timeout=self.timeout_seconds,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            stdout = _decode_process_output(exc.stdout)
+            stderr = _decode_process_output(exc.stderr)
+            raise RuntimeError(
+                "Local Leffa generation timed out "
+                f"after {self.timeout_seconds} seconds. "
+                f"work_dir={work_dir} "
+                f"report={leffa_report} "
+                f"stdout={stdout[-1200:]} stderr={stderr[-1200:]}"
+            ) from exc
         if completed.returncode != 0:
             raise RuntimeError(
                 "Local Leffa generation failed "
@@ -428,6 +440,14 @@ def _decode_base64(payload: str, *, field_name: str) -> bytes:
     if normalized.startswith("data:"):
         normalized = normalized.split("base64,", 1)[1]
     return base64.b64decode(normalized, validate=True)
+
+
+def _decode_process_output(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return value.decode("utf-8", errors="replace")
 
 
 def _read_json(path: Path) -> dict[str, Any]:

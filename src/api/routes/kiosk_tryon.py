@@ -4,12 +4,14 @@ Kiosk try-on session API endpoints.
 
 from __future__ import annotations
 
+import json
 from dataclasses import is_dataclass
 from functools import lru_cache
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi import status
+from fastapi.responses import FileResponse
 
 from src.config.settings import get_settings
 from src.modules.avatar_preview.tryon_analyzer import OllamaTryOnAnalyzer
@@ -331,6 +333,20 @@ async def add_kiosk_user_capture(
         default=None,
         description="Optional side-facing user capture from the kiosk webcam",
     ),
+    capture_source: str | None = Form(
+        default=None,
+        description=(
+            "Optional capture source metadata such as guided_mobile_web, "
+            "kiosk_webcam, or file_upload."
+        ),
+    ),
+    capture_metadata_json: str | None = Form(
+        default=None,
+        description=(
+            "Optional JSON object with guided capture metadata, usually keyed "
+            "by front/side and including burst frame selection scores."
+        ),
+    ),
     service: KioskTryOnService = Depends(get_kiosk_tryon_service),
 ) -> KioskSessionResponse:
     settings = get_settings()
@@ -353,6 +369,8 @@ async def add_kiosk_user_capture(
             session_id=session_id,
             front_image=front_image_bytes,
             side_image=side_image_bytes,
+            capture_source=capture_source,
+            capture_metadata=_parse_capture_metadata_json(capture_metadata_json),
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -558,6 +576,33 @@ async def generate_kiosk_personalized_tryon(
         service=service,
         registry=registry,
         visual_tryon_service=visual_tryon_service,
+    )
+
+
+@router.get(
+    "/visual-previews/{personalized_tryon_key}/image",
+    response_class=FileResponse,
+    summary="Read generated kiosk visual preview image",
+)
+async def get_kiosk_visual_preview_image(
+    personalized_tryon_key: str,
+    visual_tryon_service: KioskVisualTryOnService = Depends(
+        get_kiosk_visual_tryon_service
+    ),
+) -> FileResponse:
+    try:
+        image_path = visual_tryon_service.get_generated_image_path(
+            personalized_tryon_key
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return FileResponse(
+        image_path,
+        media_type="image/png",
+        filename=f"{personalized_tryon_key.replace(':', '-')}.png",
     )
 
 
@@ -855,6 +900,7 @@ def _personalized_tryon_response(
         tryon_intent=payload.get("tryon_intent"),
         analyzer_model=payload.get("analyzer_model"),
         analyzer_prompt_version=payload.get("analyzer_prompt_version"),
+        output_quality_gate=payload.get("output_quality_gate"),
         warnings=list(payload.get("warnings", [])),
         message=message,
     )
@@ -881,6 +927,7 @@ def _fit_analysis_response(
         size_recommendation=dict(payload["size_recommendation"]),
         fit_report=dict(payload.get("fit_report", {})),
         confidence_score=float(payload.get("confidence_score", 0.0)),
+        confidence_breakdown=dict(payload.get("confidence_breakdown", {})),
         warnings=list(payload.get("warnings", [])),
         message=message,
     )
@@ -911,6 +958,18 @@ def _require_capture_analysis_passed(session: Any) -> None:
     analysis = payload.get("capture_analysis")
     if not isinstance(analysis, dict) or analysis.get("passed") is not True:
         raise ValueError("capture analysis must pass before visual preview")
+
+
+def _parse_capture_metadata_json(value: str | None) -> dict[str, Any] | None:
+    if value is None or not value.strip():
+        return None
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise ValueError("capture_metadata_json must be valid JSON") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("capture_metadata_json must be a JSON object")
+    return parsed
 
 
 async def _read_capture_upload(

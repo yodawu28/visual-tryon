@@ -1173,3 +1173,209 @@ Follow-up:
 - Improve capture guidance and input conditioning for upper-body detail.
 - Track runtime and quality in the model quality gate matrix before committing
   to a production GPU recommendation.
+
+### 2026-06-19 - Fit Intelligence V1 And Category Quality Gates
+
+Context:
+
+- Leffa is now usable end-to-end through the kiosk async visual-preview job
+  flow, but output quality depends heavily on capture framing and garment image
+  quality.
+- Swagger demos need product-facing guidance, not only model smoke-test status.
+
+Implementation:
+
+- Capture analysis now emits `quality_gates.category_visual_preview` when the
+  session garment category is known.
+- Category gates distinguish `tops`, `bottoms`, `one_pieces`, and
+  `full_outfit` framing requirements.
+- Fit Intelligence now returns `fit_report.quality_gate`, combining capture
+  readiness, garment image decode/size/sharpness, size-chart availability, and
+  measurement basis availability.
+- Size recommendation now includes
+  `size_recommendation.shopper_recommendation` for a concise demo/product
+  message.
+
+Decision:
+
+- Keep the original capture `passed` logic stable. Category gates are currently
+  metadata and warnings, so we can improve Leffa inputs without blocking the
+  existing Swagger flow too aggressively.
+
+### 2026-06-21 - Separate Kiosk Demo UI Folder
+
+Context:
+
+- We need a coach-facing demo surface that follows the production Swagger/API
+  workflow without mixing frontend files into the backend modules.
+
+Implementation:
+
+- Added `ui/kiosk-demo` as a static HTML/CSS/JS app.
+- Added `make ui-kiosk` to serve the UI locally on `127.0.0.1:5173`.
+- Added a cached preview image endpoint:
+  `GET /api/v1/kiosk/visual-previews/{personalized_tryon_key}/image`.
+
+Decision:
+
+- Keep the UI static for now. This avoids a Node/Vite dependency before the
+  coach demo while preserving a clean folder boundary for a future richer app.
+
+### 2026-06-23 - Pose Signals In Fit Intelligence UI Flow
+
+Context:
+
+- The UI `Check Quality` action felt too manual for a shopper-facing
+  application because capture analysis is a backend detail.
+- MediaPipe pose landmarks are already available from capture analysis and are
+  useful for fit context, but they are not calibrated body measurements.
+
+Implementation:
+
+- The kiosk UI now automatically runs capture quality analysis after shopper
+  photos are uploaded. The button remains as `Recheck Quality` for retakes and
+  debugging.
+- Fit Intelligence now exposes `landmark_fit_signals` in `fit_assessment` and
+  `fit_report`.
+- Shopper recommendation now includes advisory landmark fit hints.
+- Fit analysis cache keys now include a capture-analysis signature so retakes
+  or pose changes do not reuse stale fit output.
+- Fit Intelligence now returns `confidence_breakdown`, separating conservative
+  overall confidence from size-match confidence and measurement-basis
+  confidence.
+
+Decision:
+
+- MediaPipe landmark ratios are advisory fit signals only.
+- Do not use landmark ratios to choose size until the kiosk camera setup has a
+  calibrated measurement estimator with confidence intervals.
+- Do not inflate overall confidence above 85% when sizing is still based on
+  height/weight estimates or uncalibrated landmark ratios.
+
+### 2026-06-23 - Guided Mobile Web Capture
+
+Context:
+
+- A phone-based web UI is closer to the 3DLOOK-style shopper capture flow than
+  manual file upload.
+- We still need conservative confidence because browser camera photos are not
+  calibrated measurements by themselves.
+
+Implementation:
+
+- Added browser camera capture to `ui/kiosk-demo` for front and side shopper
+  photos, with file upload kept as the fallback path.
+- Camera captures upload with `capture_source=guided_mobile_web`.
+- Kiosk session captures now persist optional `source` metadata per capture.
+- Capture analysis echoes `capture_source` and `capture_source_quality`, and Fit
+  Intelligence includes this in landmark quality/debug signals.
+
+Decision:
+
+- Treat guided mobile capture as input provenance and quality context only.
+- Keep size confidence conservative until we add a calibrated camera/reference
+  object flow or validated measurement estimator.
+
+### 2026-06-24 - Guided Capture Burst And Confidence Gates
+
+Context:
+
+- The coach demo needs the UI to feel closer to a product capture flow, not a
+  manual Swagger wrapper.
+- The main product goal is still high confidence and better Leffa input quality,
+  so we need to capture and expose quality signals instead of hiding them.
+
+Implementation:
+
+- Added countdown, scan overlay, burst capture, and selected-frame scoring to
+  the kiosk demo UI.
+- Added optional `capture_metadata_json` to the capture upload endpoint and
+  persisted sanitized front/side metadata in kiosk sessions.
+- Capture analysis now echoes guided burst protocol quality when present.
+- Category visual preview gates now include `category_quality_score` and
+  `target_confidence_ready`.
+- Fit Intelligence now reports capture, garment, size-chart, and measurement
+  confidence components plus `target_confidence_blocking_factors`.
+- Leffa visual preview responses and metadata now include an
+  `output_quality_gate` for generated image decode, size, sharpness, and
+  brightness.
+
+Decision:
+
+- Do not claim >85% fit confidence from phone/webcam captures alone.
+- Use guided burst capture as a quality-improvement signal and a product UX
+  improvement, while keeping measurement confidence gated by calibrated or
+  detailed measurements.
+
+### 2026-06-24 - Category-Aware Capture Retake Guidance
+
+Context:
+
+- Laptop/webcam testing for upper-body garments was failing on
+  `feet_not_visible`, which is too strict for the Leffa tops flow.
+- The UI countdown also felt too short for users to prepare before capture.
+
+Implementation:
+
+- Increased guided camera countdown from 3 seconds to 5 seconds.
+- Capture analysis now filters top-level issues by garment category.
+- For `tops`, missing feet/full-body visibility is no longer a hard failure or
+  displayed issue. For bottoms, one-pieces, and full outfits, lower/full-body
+  visibility remains required.
+
+Decision:
+
+- Keep raw checks in the payload for debugging, but make shopper-facing pass
+  logic and guidance match the garment category being tested.
+
+### 2026-06-26 - Fit Confidence Semantics And Relaxed Tops Scoring
+
+Context:
+
+- A demo case with `height=170cm`, `weight=94kg`, and `preferred_fit=relaxed`
+  returned a high size match but very low overall confidence, which made the UI
+  look contradictory.
+- For relaxed tops, the generic chart case was also too tolerant of a snug waist
+  when choosing between adjacent sizes.
+
+Implementation:
+
+- Fit Engine cache version was bumped to avoid reusing older fit analysis
+  payloads.
+- Tops scoring now weights `waist_cm` more heavily for relaxed/loose fit
+  preferences, so waist ease can break close XL vs XXL ties.
+- Overall confidence is now a weighted data-confidence score instead of direct
+  multiplication of size match and measurement confidence.
+- UI copy now labels this as `Data confidence` and keeps size match separate.
+
+Decision:
+
+- Keep `measurement_confidence` low for height/weight-derived estimates.
+- Present a stronger size recommendation when the chart match is strong, while
+  still requiring detailed measurements or calibrated capture before claiming
+  target production confidence.
+
+### 2026-06-26 - Fit Agent Orchestrator
+
+Context:
+
+- Fit Intelligence had grown into one service method that mixed validation,
+  measurement context, AI context, deterministic scoring, confidence reporting,
+  and persistence.
+- We want an agent-style design without letting an LLM hallucinate the final
+  size.
+
+Implementation:
+
+- Added `KioskFitAgent` as the orchestrator for measurement estimation,
+  optional multimodal fit context, deterministic size-chart scoring, quality
+  gates, and shopper recommendation composition.
+- Kept `KioskFitIntelligenceService` responsible for request validation, cache
+  keys, metadata persistence, and response loading.
+- Added `fit_report.agent` metadata so demo/report payloads can explain that
+  the agent coordinates tools while the deterministic scorer owns size choice.
+
+Decision:
+
+- Treat the agent as workflow orchestration, not as a decision-making LLM.
+- Keep the public API payload stable and only enrich the report metadata.

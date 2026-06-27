@@ -58,6 +58,27 @@ def test_capture_analyzer_passes_clear_full_body_front_capture():
     assert result.metrics["shoulder_width_ratio"] == 0.24
     assert result.metrics["hip_width_ratio"] == 0.16
     assert result.metrics["shoulder_to_hip_ratio"] == 1.5
+    assert result.quality_gates == {}
+
+
+def test_capture_analyzer_adds_category_quality_gate_for_tops():
+    analyzer = KioskCaptureAnalyzer(
+        pose_estimator=lambda _image: _good_landmarks(),
+        min_blur_variance=5.0,
+    )
+
+    result = analyzer.analyze_front_capture(_image_bytes(), garment_category="tops")
+
+    gate = result.quality_gates["category_visual_preview"]
+    assert result.passed is True
+    assert gate["status"] == "warning"
+    assert gate["garment_category"] == "tops"
+    assert gate["recommended_framing"] == "upper_body"
+    assert gate["category_quality_score"] < 1.0
+    assert gate["target_confidence_ready"] is False
+    assert gate["detail_checks"]["torso_detail_enough"] is False
+    assert gate["metrics"]["estimated_torso_width_px"] == 122.88
+    assert "torso_detail_enough" in gate["issues"]
 
 
 def test_capture_analyzer_fails_when_pose_is_missing():
@@ -93,6 +114,27 @@ def test_capture_analyzer_fails_when_feet_are_missing_and_arms_cover_torso():
     assert "arms_covering_torso" in result.issues
     assert result.checks["full_body_visible"] is False
     assert result.checks["arms_not_blocking_torso"] is False
+
+
+def test_capture_analyzer_allows_tops_when_feet_are_missing():
+    landmarks = _good_landmarks()
+    landmarks["left_ankle"] = LandmarkPoint(x=0.44, y=0.92, visibility=0.1)
+    landmarks["right_ankle"] = LandmarkPoint(x=0.56, y=0.92, visibility=0.1)
+    analyzer = KioskCaptureAnalyzer(
+        pose_estimator=lambda _image: landmarks,
+        min_blur_variance=5.0,
+    )
+
+    result = analyzer.analyze_front_capture(
+        _image_bytes(),
+        garment_category="tops",
+    )
+
+    assert result.passed is True
+    assert result.checks["ankles_or_feet_visible"] is False
+    assert result.checks["full_body_visible"] is False
+    assert "feet_not_visible" not in result.issues
+    assert result.quality_gates["category_visual_preview"]["status"] == "warning"
 
 
 def test_capture_analyzer_fails_blurry_image_even_when_pose_passes():

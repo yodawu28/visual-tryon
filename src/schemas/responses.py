@@ -320,6 +320,7 @@ class KioskPersonalizedTryOnResponse(BaseModel):
     tryon_intent: Optional[dict[str, Any]] = None
     analyzer_model: Optional[str] = None
     analyzer_prompt_version: Optional[str] = None
+    output_quality_gate: Optional[dict[str, Any]] = None
     warnings: list[str] = Field(default_factory=list)
     message: str
 
@@ -342,6 +343,7 @@ class KioskFitAnalysisResponse(BaseModel):
     size_recommendation: dict[str, Any]
     fit_report: dict[str, Any] = Field(default_factory=dict)
     confidence_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    confidence_breakdown: dict[str, Any] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
     message: str
 

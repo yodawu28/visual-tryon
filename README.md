@@ -12,7 +12,9 @@ debug paths.
 ## Current Status
 
 - FastAPI kiosk API with Swagger on port `8080`.
+- User-facing static kiosk app UI under `ui/kiosk-demo`.
 - Local SQLite registries for garments and size charts.
+- Default generic size charts are seeded at API startup when missing.
 - Front and optional side capture upload via `multipart/form-data`.
 - MediaPipe-based capture quality and pose analysis.
 - Fit Intelligence API skeleton with size-chart based recommendations.
@@ -106,6 +108,35 @@ Or run API and worker together:
 make run-kiosk-all
 ```
 
+Serve the kiosk application UI in a separate terminal:
+
+```bash
+make ui-kiosk
+```
+
+Open:
+
+```text
+http://127.0.0.1:5173
+```
+
+The UI follows the production kiosk flow instead of mirroring Swagger: upload a
+garment with a region size chart, create a session, upload shopper photos, run
+capture quality analysis, get Fit Intelligence advice, then optionally queue a
+GPU visual-preview job.
+
+Seed the default local kiosk size charts without resetting other data:
+
+```bash
+make kiosk-seed-size-charts
+```
+
+Reset local runtime test data and import the default size charts again:
+
+```bash
+make kiosk-reset
+```
+
 ## Quick Start: RunPod MVP
 
 Inside the pod:
@@ -162,6 +193,17 @@ Use this order for manual end-to-end testing:
 
 Use the async visual-preview job endpoint on RunPod. The synchronous visual
 preview endpoint can exceed the RunPod/Cloudflare proxy timeout for GPU jobs.
+Default size charts are idempotently imported at backend startup, so Swagger and
+the demo UI can select a `size_chart_id` before uploading a garment.
+
+Useful response fields for the current kiosk baseline:
+
+- `capture_analysis.quality_gates.category_visual_preview` explains whether the
+  capture framing is good enough for the selected garment category.
+- `fit_report.quality_gate` summarizes capture, garment image, size chart, and
+  measurement readiness for product-style sizing.
+- `size_recommendation.shopper_recommendation` contains the concise shopper
+  size message, confidence label, and quality-gate status.
 
 ## Key Configuration
 
@@ -175,6 +217,7 @@ DEBUG=true
 TEMP_STORAGE_DIR=/workspace/tryon-data
 JOB_QUEUE_BACKEND=local
 JOB_QUEUE_DIR=/workspace/tryon-data/jobs
+SEED_DEFAULT_SIZE_CHARTS_ON_STARTUP=true
 
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 TRYON_ANALYZER_OLLAMA_MODEL=qwen2.5vl:7b-q4_K_M

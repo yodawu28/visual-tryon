@@ -37,6 +37,7 @@ class KioskVisualTryOnResult:
     tryon_intent: dict[str, Any] | None
     analyzer_model: str | None
     analyzer_prompt_version: str | None
+    output_quality_gate: dict[str, Any] | None
     warnings: list[str]
 
 
@@ -156,6 +157,7 @@ class KioskVisualTryOnService:
 
         if cache_hit:
             generated_bytes = image_path.read_bytes()
+            output_quality_gate = _read_output_quality_gate(metadata_path)
         else:
             generated_image = _generate_with_provider(
                 generator=self.generator,
@@ -174,6 +176,11 @@ class KioskVisualTryOnService:
             )
             generation_metadata = _generator_generation_metadata(self.generator)
             warnings.extend(_generator_warnings(generation_metadata))
+            output_quality_gate = _visual_output_quality_gate(
+                generated_bytes,
+                requested_size=size,
+            )
+            warnings.extend(_visual_output_quality_warnings(output_quality_gate))
             _write_bytes(image_path, generated_bytes)
             _write_text(
                 metadata_path,
@@ -195,6 +202,7 @@ class KioskVisualTryOnService:
                         "requested_size": size,
                         "generator_metadata": generator_metadata,
                         "generation_metadata": generation_metadata,
+                        "output_quality_gate": output_quality_gate,
                         "garment_category": garment_category,
                         "garment_type": garment_type,
                         "multimodal_analysis_applied": tryon_intent is not None,
@@ -231,8 +239,19 @@ class KioskVisualTryOnService:
             ),
             analyzer_model=analyzer_metadata.get("model"),
             analyzer_prompt_version=analyzer_metadata.get("analyzer_prompt_version"),
+            output_quality_gate=output_quality_gate,
             warnings=warnings,
         )
+
+    def get_generated_image_path(self, personalized_tryon_key: str) -> Path:
+        if not personalized_tryon_key.startswith(self.TRYON_PREFIX):
+            raise ValueError("personalized_tryon_key is not a kiosk try-on key")
+        image_path = self._image_path(personalized_tryon_key)
+        if not image_path.exists():
+            raise FileNotFoundError(
+                f"Kiosk visual preview image not found: {personalized_tryon_key}"
+            )
+        return image_path
 
     def _build_cache_key(
         self,
@@ -365,6 +384,102 @@ def _generator_warnings(metadata: dict[str, Any]) -> list[str]:
     if not isinstance(raw_warnings, list):
         return []
     return [str(warning) for warning in raw_warnings if str(warning).strip()]
+
+
+def _read_output_quality_gate(metadata_path: Path) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(metadata_path.read_text("utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    gate = payload.get("output_quality_gate")
+    return gate if isinstance(gate, dict) else None
+
+
+def _visual_output_quality_gate(
+    image_bytes: bytes,
+    *,
+    requested_size: str,
+) -> dict[str, Any]:
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        return {
+            "status": "unknown",
+            "requested_size": requested_size,
+            "checks": {
+                "output_decode_ok": False,
+                "output_large_enough": False,
+                "output_sharp_enough": False,
+                "output_brightness_ok": False,
+            },
+            "metrics": {},
+            "guidance": ["Install image quality dependencies to score VTON output."],
+        }
+
+    encoded = np.frombuffer(image_bytes, dtype=np.uint8)
+    image = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+    if image is None:
+        return {
+            "status": "failed",
+            "requested_size": requested_size,
+            "checks": {
+                "output_decode_ok": False,
+                "output_large_enough": False,
+                "output_sharp_enough": False,
+                "output_brightness_ok": False,
+            },
+            "metrics": {},
+            "guidance": ["Generated image could not be decoded."],
+        }
+
+    height, width = image.shape[:2]
+    grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    blur_variance = float(cv2.Laplacian(grayscale, cv2.CV_64F).var())
+    brightness = float(grayscale.mean())
+    checks = {
+        "output_decode_ok": True,
+        "output_large_enough": min(width, height) >= 512,
+        "output_sharp_enough": blur_variance >= 18.0,
+        "output_brightness_ok": 18.0 <= brightness <= 245.0,
+    }
+    issues = [key for key, passed in checks.items() if not passed]
+    status = "passed" if not issues else "warning"
+    return {
+        "status": status,
+        "requested_size": requested_size,
+        "checks": checks,
+        "issues": issues,
+        "metrics": {
+            "width": width,
+            "height": height,
+            "blur_variance": round(blur_variance, 4),
+            "brightness": round(brightness, 4),
+        },
+        "guidance": _visual_output_quality_guidance(issues),
+    }
+
+
+def _visual_output_quality_guidance(issues: list[str]) -> list[str]:
+    guidance: list[str] = []
+    if "output_large_enough" in issues:
+        guidance.append("Generate at 768x1024 or higher before product review.")
+    if "output_sharp_enough" in issues:
+        guidance.append("Use a closer upper-body capture and cleaner garment image.")
+    if "output_brightness_ok" in issues:
+        guidance.append("Retake capture with even front lighting.")
+    return guidance
+
+
+def _visual_output_quality_warnings(
+    output_quality_gate: dict[str, Any] | None,
+) -> list[str]:
+    if not output_quality_gate:
+        return []
+    if output_quality_gate.get("status") in {"passed", "unknown"}:
+        return []
+    issues = ", ".join(output_quality_gate.get("issues") or [])
+    return [f"output quality gate warning: {issues}"]
 
 
 def _decode_base64_payload(payload: str, *, field_name: str) -> bytes:

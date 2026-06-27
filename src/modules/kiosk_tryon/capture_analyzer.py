@@ -34,6 +34,7 @@ class CaptureAnalysisResult:
     guidance: list[str]
     checks: dict[str, bool]
     metrics: dict[str, float] = field(default_factory=dict)
+    quality_gates: dict[str, Any] = field(default_factory=dict)
 
 
 class KioskCaptureAnalyzer:
@@ -52,10 +53,16 @@ class KioskCaptureAnalyzer:
         self.min_brightness = min_brightness
         self.max_brightness = max_brightness
 
-    def analyze_front_capture(self, image_bytes: bytes) -> CaptureAnalysisResult:
+    def analyze_front_capture(
+        self,
+        image_bytes: bytes,
+        *,
+        garment_category: str | None = None,
+    ) -> CaptureAnalysisResult:
         image = _decode_image(image_bytes)
         blur_variance = _blur_variance(image)
         brightness = float(np.mean(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)))
+        image_height, image_width = image.shape[:2]
 
         checks: dict[str, bool] = {
             "image_not_blurry": blur_variance >= self.min_blur_variance,
@@ -66,6 +73,8 @@ class KioskCaptureAnalyzer:
         metrics = {
             "blur_variance": round(blur_variance, 4),
             "brightness": round(brightness, 4),
+            "image_width_px": float(image_width),
+            "image_height_px": float(image_height),
         }
 
         landmarks = self.pose_estimator(image)
@@ -84,16 +93,31 @@ class KioskCaptureAnalyzer:
                     "front_facing": False,
                 }
             )
-            return self._result(checks=checks, metrics=metrics)
+            return self._result(
+                checks=checks,
+                metrics=metrics,
+                garment_category=garment_category,
+            )
 
-        pose_checks, pose_metrics = self._score_pose(landmarks)
+        pose_checks, pose_metrics = self._score_pose(
+            landmarks,
+            image_width=image_width,
+            image_height=image_height,
+        )
         checks.update(pose_checks)
         metrics.update(pose_metrics)
-        return self._result(checks=checks, metrics=metrics)
+        return self._result(
+            checks=checks,
+            metrics=metrics,
+            garment_category=garment_category,
+        )
 
     def _score_pose(
         self,
         landmarks: dict[str, LandmarkPoint],
+        *,
+        image_width: int,
+        image_height: int,
     ) -> tuple[dict[str, bool], dict[str, float]]:
         head_visible = self._visible(landmarks, "nose")
         shoulders_visible = self._visible_pair(
@@ -130,6 +154,13 @@ class KioskCaptureAnalyzer:
             "front_facing_score": round(front_facing_score, 4),
         }
         metrics.update(self._pose_ratio_metrics(landmarks))
+        metrics.update(
+            _pose_pixel_detail_metrics(
+                metrics=metrics,
+                image_width=image_width,
+                image_height=image_height,
+            )
+        )
         return checks, metrics
 
     def _visible(self, landmarks: dict[str, LandmarkPoint], name: str) -> bool:
@@ -242,17 +273,30 @@ class KioskCaptureAnalyzer:
         *,
         checks: dict[str, bool],
         metrics: dict[str, float],
+        garment_category: str | None,
     ) -> CaptureAnalysisResult:
-        issues = _issues_for_checks(checks)
-        guidance = _guidance_for_issues(issues)
         score = round(sum(1 for passed in checks.values() if passed) / len(checks), 4)
+        quality_gates = _quality_gates_for_category(
+            garment_category=garment_category,
+            checks=checks,
+            metrics=metrics,
+        )
+        issues = _issues_for_checks(checks, garment_category=garment_category)
+        guidance = _guidance_for_issues(issues)
+        passed = _capture_passed_for_category(
+            checks=checks,
+            issues=issues,
+            score=score,
+            quality_gates=quality_gates,
+        )
         return CaptureAnalysisResult(
-            passed=not issues and score >= 0.85,
+            passed=passed,
             score=score,
             issues=issues,
             guidance=guidance,
             checks=checks,
             metrics=metrics,
+            quality_gates=quality_gates,
         )
 
 
@@ -320,7 +364,258 @@ def _blur_variance(image: np.ndarray) -> float:
     return float(cv2.Laplacian(gray, cv2.CV_64F).var())
 
 
-def _issues_for_checks(checks: dict[str, bool]) -> list[str]:
+def _pose_pixel_detail_metrics(
+    *,
+    metrics: dict[str, float],
+    image_width: int,
+    image_height: int,
+) -> dict[str, float]:
+    shoulder_width_ratio = metrics.get("shoulder_width_ratio")
+    torso_height_ratio = metrics.get("torso_height_ratio")
+    body_height_ratio = metrics.get("body_height_ratio")
+
+    detail_metrics: dict[str, float] = {}
+    if shoulder_width_ratio is not None:
+        detail_metrics["estimated_torso_width_px"] = round(
+            float(shoulder_width_ratio) * image_width,
+            2,
+        )
+    if torso_height_ratio is not None:
+        detail_metrics["estimated_torso_height_px"] = round(
+            float(torso_height_ratio) * image_height,
+            2,
+        )
+    if body_height_ratio is not None:
+        detail_metrics["estimated_body_height_px"] = round(
+            float(body_height_ratio) * image_height,
+            2,
+        )
+        if torso_height_ratio is not None:
+            lower_body_ratio = max(
+                0.0,
+                float(body_height_ratio) - float(torso_height_ratio),
+            )
+            detail_metrics["estimated_lower_body_height_px"] = round(
+                lower_body_ratio * image_height,
+                2,
+            )
+    return detail_metrics
+
+
+def _quality_gates_for_category(
+    *,
+    garment_category: str | None,
+    checks: dict[str, bool],
+    metrics: dict[str, float],
+) -> dict[str, Any]:
+    category = _normalize_garment_category(garment_category)
+    if category is None:
+        return {}
+
+    profile = _capture_profile_for_category(category)
+    required_checks = profile["required_checks"]
+    missing_required = [
+        check_name for check_name in required_checks if not checks.get(check_name, False)
+    ]
+
+    detail_checks = _capture_detail_checks_for_category(category, metrics)
+    detail_issues = [
+        check_name for check_name, passed in detail_checks.items() if not passed
+    ]
+
+    if missing_required:
+        status = "failed"
+    elif detail_issues:
+        status = "warning"
+    else:
+        status = "passed"
+
+    category_quality_score = _category_quality_score(
+        required_checks=required_checks,
+        detail_checks=detail_checks,
+        checks=checks,
+    )
+    issues = [f"missing_{item}" for item in missing_required] + detail_issues
+    return {
+        "category_visual_preview": {
+            "status": status,
+            "garment_category": category,
+            "category_quality_score": category_quality_score,
+            "target_confidence_ready": (
+                status == "passed" and category_quality_score >= 0.9
+            ),
+            "recommended_framing": profile["recommended_framing"],
+            "required_checks": required_checks,
+            "detail_checks": detail_checks,
+            "issues": issues,
+            "guidance": _category_gate_guidance(category=category, issues=issues),
+            "metrics": {
+                key: metrics[key]
+                for key in sorted(
+                    {
+                        "estimated_torso_width_px",
+                        "estimated_torso_height_px",
+                        "estimated_body_height_px",
+                        "estimated_lower_body_height_px",
+                        "body_height_ratio",
+                        "torso_height_ratio",
+                        "shoulder_width_ratio",
+                    }
+                )
+                if key in metrics
+            },
+        }
+    }
+
+
+def _capture_passed_for_category(
+    *,
+    checks: dict[str, bool],
+    issues: list[str],
+    score: float,
+    quality_gates: dict[str, Any],
+) -> bool:
+    category_gate = quality_gates.get("category_visual_preview")
+    if isinstance(category_gate, dict):
+        hard_input_ready = (
+            checks.get("image_not_blurry", True)
+            and checks.get("image_brightness_ok", True)
+            and checks.get("person_detected", True)
+        )
+        return hard_input_ready and category_gate.get("status") in {
+            "passed",
+            "warning",
+        }
+    return not issues and score >= 0.85
+
+
+def _category_quality_score(
+    *,
+    required_checks: list[str],
+    detail_checks: dict[str, bool],
+    checks: dict[str, bool],
+) -> float:
+    required_total = max(1, len(required_checks))
+    required_passed = sum(1 for check_name in required_checks if checks.get(check_name))
+    required_score = required_passed / required_total
+    if detail_checks:
+        detail_score = sum(1 for passed in detail_checks.values() if passed) / len(
+            detail_checks
+        )
+    else:
+        detail_score = 1.0
+    return round(required_score * 0.7 + detail_score * 0.3, 4)
+
+
+def _normalize_garment_category(garment_category: str | None) -> str | None:
+    if garment_category is None:
+        return None
+    normalized = garment_category.strip().lower().replace("-", "_")
+    if normalized in {"top", "tops", "upper", "upper_body"}:
+        return "tops"
+    if normalized in {"bottom", "bottoms", "lower", "lower_body", "pants", "shorts"}:
+        return "bottoms"
+    if normalized in {"one_piece", "one_pieces", "dress", "dresses"}:
+        return "one_pieces"
+    if normalized in {"full_body", "full_outfit", "outfit"}:
+        return "full_outfit"
+    return normalized or None
+
+
+def _capture_profile_for_category(category: str) -> dict[str, Any]:
+    if category == "tops":
+        return {
+            "recommended_framing": "upper_body",
+            "required_checks": [
+                "person_detected",
+                "head_visible",
+                "shoulders_visible",
+                "hips_visible",
+                "arms_not_blocking_torso",
+                "body_centered",
+                "front_facing",
+            ],
+        }
+    if category == "bottoms":
+        return {
+            "recommended_framing": "lower_body",
+            "required_checks": [
+                "person_detected",
+                "hips_visible",
+                "knees_visible",
+                "ankles_or_feet_visible",
+                "body_centered",
+                "front_facing",
+            ],
+        }
+    return {
+        "recommended_framing": "full_body",
+        "required_checks": [
+            "person_detected",
+            "head_visible",
+            "shoulders_visible",
+            "hips_visible",
+            "knees_visible",
+            "ankles_or_feet_visible",
+            "full_body_visible",
+            "body_centered",
+            "front_facing",
+        ],
+    }
+
+
+def _capture_detail_checks_for_category(
+    category: str,
+    metrics: dict[str, float],
+) -> dict[str, bool]:
+    if category == "tops":
+        return {
+            "torso_detail_enough": (
+                metrics.get("estimated_torso_width_px", 0.0) >= 160
+                and metrics.get("estimated_torso_height_px", 0.0) >= 180
+            )
+        }
+    if category == "bottoms":
+        return {
+            "lower_body_detail_enough": (
+                metrics.get("estimated_lower_body_height_px", 0.0) >= 320
+            )
+        }
+    return {
+        "full_body_detail_enough": (
+            metrics.get("estimated_body_height_px", 0.0) >= 700
+        )
+    }
+
+
+def _category_gate_guidance(*, category: str, issues: list[str]) -> list[str]:
+    guidance: list[str] = []
+    if category == "tops" and "torso_detail_enough" in issues:
+        guidance.append(
+            "Use a closer upper-body capture so chest logo, neckline, and sleeve details are clearer."
+        )
+    if category == "bottoms" and "lower_body_detail_enough" in issues:
+        guidance.append(
+            "Use a closer lower-body capture so waist, hip, and leg fit can be judged."
+        )
+    if category in {"one_pieces", "full_outfit"} and "full_body_detail_enough" in issues:
+        guidance.append(
+            "Use a full-body capture with the shopper larger in frame before judging outfit fit."
+        )
+    for issue in issues:
+        if issue.startswith("missing_"):
+            check_name = issue.removeprefix("missing_")
+            guidance.append(
+                f"Retake the capture so {check_name.replace('_', ' ')} passes for this garment category."
+            )
+    return guidance
+
+
+def _issues_for_checks(
+    checks: dict[str, bool],
+    *,
+    garment_category: str | None = None,
+) -> list[str]:
     issues: list[str] = []
     if not checks.get("image_not_blurry", True):
         issues.append("image_blurry")
@@ -329,23 +624,57 @@ def _issues_for_checks(checks: dict[str, bool]) -> list[str]:
     if not checks.get("person_detected", True):
         issues.append("person_not_detected")
         return issues
+
+    relevant_pose_checks = _issue_relevant_pose_checks(garment_category)
     if not checks.get("head_visible", True):
-        issues.append("head_not_visible")
+        _append_if_relevant(issues, "head_not_visible", "head_visible", relevant_pose_checks)
     if not checks.get("shoulders_visible", True):
-        issues.append("shoulders_not_visible")
+        _append_if_relevant(
+            issues,
+            "shoulders_not_visible",
+            "shoulders_visible",
+            relevant_pose_checks,
+        )
     if not checks.get("hips_visible", True):
-        issues.append("hips_not_visible")
+        _append_if_relevant(issues, "hips_not_visible", "hips_visible", relevant_pose_checks)
     if not checks.get("knees_visible", True):
-        issues.append("knees_not_visible")
+        _append_if_relevant(issues, "knees_not_visible", "knees_visible", relevant_pose_checks)
     if not checks.get("ankles_or_feet_visible", True):
-        issues.append("feet_not_visible")
+        _append_if_relevant(
+            issues,
+            "feet_not_visible",
+            "ankles_or_feet_visible",
+            relevant_pose_checks,
+        )
     if not checks.get("arms_not_blocking_torso", True):
-        issues.append("arms_covering_torso")
+        _append_if_relevant(
+            issues,
+            "arms_covering_torso",
+            "arms_not_blocking_torso",
+            relevant_pose_checks,
+        )
     if not checks.get("body_centered", True):
-        issues.append("body_not_centered")
+        _append_if_relevant(issues, "body_not_centered", "body_centered", relevant_pose_checks)
     if not checks.get("front_facing", True):
-        issues.append("not_front_facing")
+        _append_if_relevant(issues, "not_front_facing", "front_facing", relevant_pose_checks)
     return issues
+
+
+def _issue_relevant_pose_checks(garment_category: str | None) -> set[str] | None:
+    category = _normalize_garment_category(garment_category)
+    if category is None:
+        return None
+    return set(_capture_profile_for_category(category)["required_checks"])
+
+
+def _append_if_relevant(
+    issues: list[str],
+    issue: str,
+    check_name: str,
+    relevant_pose_checks: set[str] | None,
+) -> None:
+    if relevant_pose_checks is None or check_name in relevant_pose_checks:
+        issues.append(issue)
 
 
 def _guidance_for_issues(issues: list[str]) -> list[str]:

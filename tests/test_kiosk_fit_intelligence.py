@@ -1,3 +1,6 @@
+import cv2
+import numpy as np
+
 from src.modules.kiosk_tryon.fit_intelligence import KioskFitIntelligenceService
 
 
@@ -21,6 +24,23 @@ class FakeFitAnalyzer:
             "measurement_uncertainty": ["front capture only cannot estimate depth"],
             "recommendation_explanation_draft": "Use scorer output for size.",
         }
+
+
+def _valid_garment_image_bytes() -> bytes:
+    image = np.full((640, 640, 3), 245, dtype=np.uint8)
+    cv2.rectangle(image, (120, 120), (520, 540), (80, 120, 210), -1)
+    cv2.putText(
+        image,
+        "LOGO",
+        (210, 340),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        2.0,
+        (255, 255, 255),
+        5,
+    )
+    success, buffer = cv2.imencode(".png", image)
+    assert success
+    return buffer.tobytes()
 
 
 def test_kiosk_fit_intelligence_scores_size_with_measurements_and_ai_advice(tmp_path):
@@ -88,10 +108,22 @@ def test_kiosk_fit_intelligence_scores_size_with_measurements_and_ai_advice(tmp_
     assert first.size_recommendation["status"] == "recommended"
     assert first.size_recommendation["recommended_size"] == "L"
     assert first.size_recommendation["source"] == "deterministic_scorer"
+    assert first.confidence_breakdown["size_match_confidence"] == first.size_recommendation["confidence"]
+    assert first.confidence_breakdown["measurement_confidence"] == first.measurement_estimate["confidence"]
+    assert first.fit_report["confidence_breakdown"] == first.confidence_breakdown
+    assert first.fit_report["agent"]["name"] == "KioskFitAgent"
+    assert first.fit_report["agent"]["policy"] == (
+        "agent_orchestrates_deterministic_scorer_decides"
+    )
     assert first.size_recommendation["candidates"][0]["size"] == "L"
     assert first.fit_assessment["region_fit"]["chest_cm"]["fit_label"] == "aligned"
     assert first.fit_report["recommended_size"] == "L"
     assert first.fit_report["region_assessments"]["waist_cm"]["ease_cm"] == 6.0
+    assert first.fit_report["quality_gate"]["status"] == "warning"
+    assert (
+        first.size_recommendation["shopper_recommendation"]["quality_gate_status"]
+        == "warning"
+    )
     assert first.fit_report["next_actions"] == [
         "Show recommended size and region fit breakdown to the shopper."
     ]
@@ -187,9 +219,98 @@ def test_kiosk_fit_intelligence_estimates_size_from_height_and_weight(tmp_path):
     assert result.measurement_estimate["confidence"] == 0.45
     assert result.size_recommendation["status"] == "recommended"
     assert result.size_recommendation["recommended_size"] == "L"
-    assert "height/weight-derived measurement estimates" in " ".join(
-        result.warnings
+    assert "height/weight-derived measurement estimates" in " ".join(result.warnings)
+
+
+def test_kiosk_fit_intelligence_weights_relaxed_tops_waist_fit(tmp_path):
+    service = KioskFitIntelligenceService(fit_dir=tmp_path)
+
+    result = service.analyze_fit(
+        session_id="kiosk-session:v1:relaxed",
+        garment_id="garment:v1:tops",
+        garment_category="tops",
+        garment_type="t-shirt",
+        capture_analysis={"passed": True},
+        front_image=b"front-image",
+        side_image=b"side-image",
+        size_chart=[
+            {"size": "S", "chest_cm": 88, "waist_cm": 76, "shoulder_cm": 40},
+            {"size": "M", "chest_cm": 96, "waist_cm": 84, "shoulder_cm": 43},
+            {"size": "L", "chest_cm": 104, "waist_cm": 92, "shoulder_cm": 46},
+            {"size": "XL", "chest_cm": 112, "waist_cm": 100, "shoulder_cm": 49},
+            {"size": "XXL", "chest_cm": 120, "waist_cm": 108, "shoulder_cm": 52},
+        ],
+        body_measurements={"height_cm": 170, "weight_kg": 94},
+        preferred_fit="relaxed",
+        use_ai_analysis=False,
     )
+
+    candidates = {
+        candidate["size"]: candidate
+        for candidate in result.size_recommendation["candidates"]
+    }
+    assert result.measurement_estimate["status"] == "height_weight_estimate"
+    assert result.measurement_estimate["confidence"] == 0.45
+    assert result.size_recommendation["recommended_size"] == "XXL"
+    assert candidates["XXL"]["confidence"] > candidates["XL"]["confidence"]
+    assert result.fit_report["region_assessments"]["waist_cm"]["fit_label"] == (
+        "aligned"
+    )
+    assert result.confidence_score > 0.7
+    assert result.confidence_breakdown["measurement_confidence_label"] == "low"
+    assert "measurement_confidence_below_target" in (
+        result.confidence_breakdown["target_confidence_blocking_factors"]
+    )
+
+
+def test_kiosk_fit_intelligence_reports_passed_quality_gate_for_ready_inputs(tmp_path):
+    service = KioskFitIntelligenceService(fit_dir=tmp_path)
+
+    result = service.analyze_fit(
+        session_id="kiosk-session:v1:abc",
+        garment_id="garment:v1:def",
+        garment_category="tops",
+        garment_type="jersey",
+        capture_analysis={
+            "passed": True,
+            "score": 0.94,
+            "quality_gates": {
+                "category_visual_preview": {
+                    "status": "passed",
+                    "category_quality_score": 0.96,
+                    "target_confidence_ready": True,
+                    "recommended_framing": "upper_body",
+                    "issues": [],
+                    "guidance": [],
+                    "metrics": {"estimated_torso_width_px": 240},
+                }
+            },
+        },
+        front_image=b"front-image",
+        side_image=b"side-image",
+        garment_image=_valid_garment_image_bytes(),
+        size_chart=[
+            {"size": "M", "chest_cm": 96, "waist_cm": 84},
+            {"size": "L", "chest_cm": 102, "waist_cm": 90},
+        ],
+        body_measurements={"height_cm": 178, "weight_kg": 74},
+        preferred_fit="regular",
+        use_ai_analysis=False,
+    )
+
+    gate = result.fit_report["quality_gate"]
+    shopper = result.size_recommendation["shopper_recommendation"]
+    assert gate["status"] == "passed"
+    assert gate["capture_quality"]["status"] == "passed"
+    assert gate["capture_quality"]["category_quality_score"] == 0.96
+    assert gate["garment_image_quality"]["status"] == "passed"
+    assert gate["measurement_quality"]["confidence_label"] == "low"
+    assert result.confidence_breakdown["target_confidence"] == 0.85
+    assert "measurement_confidence_below_target" in (
+        result.confidence_breakdown["target_confidence_blocking_factors"]
+    )
+    assert shopper["primary_size"] == "L"
+    assert shopper["quality_gate_status"] == "passed"
 
 
 def test_kiosk_fit_intelligence_records_landmark_signals_without_scoring(tmp_path):
@@ -236,6 +357,20 @@ def test_kiosk_fit_intelligence_records_landmark_signals_without_scoring(tmp_pat
     assert result.size_recommendation["status"] == "insufficient_measurements"
     assert result.size_recommendation["recommended_size"] is None
     assert result.fit_report["measurement_status"] == "landmark_based_preview"
+    landmark_signals = result.fit_report["landmark_fit_signals"]
+    assert landmark_signals["status"] == "available"
+    assert landmark_signals["sizing_policy"] == "not_used_for_size_recommendation"
+    assert landmark_signals["risk_flags"] == ["shoulder_fit_attention"]
+    assert "Shoulders appear wider than hips" in landmark_signals["body_shape_hints"][0]
+    assert (
+        result.fit_assessment["landmark_fit_signals"]["signals"][
+            "shoulder_to_hip_ratio"
+        ]
+        == 1.5
+    )
+    assert result.size_recommendation["shopper_recommendation"][
+        "landmark_fit_hints"
+    ] == landmark_signals["body_shape_hints"]
 
 
 def test_kiosk_fit_intelligence_scores_bottoms_with_inseam(tmp_path):

@@ -10,6 +10,8 @@ The kiosk flow is intentionally staged:
 from __future__ import annotations
 
 import json
+import inspect
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,7 +27,7 @@ class KioskTryOnSession:
     avatar_cache_key: str | None = None
     avatar_preview_cache_key: str | None = None
     capture_keys: list[str] = field(default_factory=list)
-    captures: dict[str, dict[str, str]] = field(default_factory=dict)
+    captures: dict[str, dict[str, Any]] = field(default_factory=dict)
     capture_analysis: dict[str, Any] | None = None
     personalized_tryon_key: str | None = None
     fit_analysis_key: str | None = None
@@ -97,11 +99,15 @@ class KioskTryOnService:
         session_id: str,
         front_image: bytes,
         side_image: bytes | None = None,
+        capture_source: str | None = None,
+        capture_metadata: dict[str, Any] | None = None,
     ) -> KioskTryOnSession:
         session = self.get_session(session_id)
         safe_session_id = _safe_filename(session.session_id)
+        normalized_capture_source = _normalize_capture_source(capture_source)
+        normalized_capture_metadata = _normalize_capture_metadata(capture_metadata)
 
-        captures: dict[str, dict[str, str]] = dict(session.captures)
+        captures: dict[str, dict[str, Any]] = dict(session.captures)
         capture_keys: list[str] = []
 
         front_path = self._write_capture(
@@ -109,7 +115,11 @@ class KioskTryOnService:
             image_bytes=front_image,
             field_name="front_image",
         )
-        captures["front"] = {"path": self._relative_path(front_path)}
+        captures["front"] = _capture_payload(
+            path=self._relative_path(front_path),
+            capture_source=normalized_capture_source,
+            capture_metadata=normalized_capture_metadata.get("front"),
+        )
         capture_keys.append("front")
 
         if side_image is not None:
@@ -118,7 +128,11 @@ class KioskTryOnService:
                 image_bytes=side_image,
                 field_name="side_image",
             )
-            captures["side"] = {"path": self._relative_path(side_path)}
+            captures["side"] = _capture_payload(
+                path=self._relative_path(side_path),
+                capture_source=normalized_capture_source,
+                capture_metadata=normalized_capture_metadata.get("side"),
+            )
             capture_keys.append("side")
 
         updated = KioskTryOnSession(
@@ -149,9 +163,33 @@ class KioskTryOnService:
 
         front_path = self.session_dir / front_capture["path"]
         image_bytes = front_path.read_bytes()
+        garment_category = self._garment_category_for_session(session)
         analysis = _normalize_analysis_result(
-            self.capture_analyzer.analyze_front_capture(image_bytes)
+            _analyze_front_capture(
+                self.capture_analyzer,
+                image_bytes=image_bytes,
+                garment_category=garment_category,
+            )
         )
+        capture_source = _capture_source_from_session(session)
+        capture_metadata = _capture_metadata_from_session(session, "front")
+        if capture_source:
+            analysis = {
+                **analysis,
+                "capture_source": capture_source,
+                "capture_source_quality": _capture_source_quality(
+                    capture_source,
+                    capture_metadata=capture_metadata,
+                ),
+            }
+        if capture_metadata:
+            analysis = {
+                **analysis,
+                "capture_metadata": capture_metadata,
+                "capture_protocol_quality": _capture_protocol_quality(
+                    capture_metadata
+                ),
+            }
         status = (
             "capture_analysis_passed"
             if bool(analysis.get("passed"))
@@ -284,9 +322,146 @@ class KioskTryOnService:
     def _relative_path(self, path: Path) -> str:
         return str(path.relative_to(self.session_dir))
 
+    def _garment_category_for_session(self, session: KioskTryOnSession) -> str | None:
+        if not session.garment_id or self.garment_registry is None:
+            return None
+        get_garment = getattr(self.garment_registry, "get_garment", None)
+        if get_garment is None:
+            return None
+        garment = get_garment(session.garment_id)
+        if garment is None:
+            return None
+        if isinstance(garment, dict):
+            category = garment.get("category")
+        else:
+            category = getattr(garment, "category", None)
+        return str(category) if category else None
+
 
 def _safe_filename(value: str) -> str:
     return "".join(char if char.isalnum() or char in "-_." else "-" for char in value)
+
+
+def _capture_payload(
+    *,
+    path: str,
+    capture_source: str | None,
+    capture_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"path": path}
+    if capture_source:
+        payload["source"] = capture_source
+    if capture_metadata:
+        payload["metadata"] = capture_metadata
+    return payload
+
+
+def _normalize_capture_source(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = re.sub(r"[^a-z0-9_.-]+", "_", value.strip().lower()).strip("_")
+    return normalized[:64] or None
+
+
+def _capture_source_from_session(session: KioskTryOnSession) -> str | None:
+    front_capture = session.captures.get("front") or {}
+    source = front_capture.get("source")
+    return str(source) if source else None
+
+
+def _capture_metadata_from_session(
+    session: KioskTryOnSession,
+    capture_key: str,
+) -> dict[str, Any] | None:
+    capture = session.captures.get(capture_key) or {}
+    metadata = capture.get("metadata")
+    return metadata if isinstance(metadata, dict) else None
+
+
+def _capture_source_quality(
+    capture_source: str,
+    *,
+    capture_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    guided = capture_source in {"guided_mobile_web", "kiosk_webcam"}
+    protocol_quality = (
+        _capture_protocol_quality(capture_metadata) if capture_metadata else {}
+    )
+    return {
+        "guided_capture": guided,
+        "protocol_quality": protocol_quality,
+        "confidence_policy": (
+            "Capture source is trace metadata only; size confidence still requires "
+            "calibrated measurements or a validated estimator."
+        ),
+    }
+
+
+def _normalize_capture_metadata(
+    metadata: dict[str, Any] | None,
+) -> dict[str, dict[str, Any]]:
+    if not isinstance(metadata, dict):
+        return {}
+
+    normalized: dict[str, dict[str, Any]] = {}
+    for key in ("front", "side"):
+        value = metadata.get(key)
+        if isinstance(value, dict):
+            normalized[key] = _sanitize_capture_metadata(value)
+    return normalized
+
+
+def _sanitize_capture_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    allowed_scalar_keys = {
+        "slot",
+        "source",
+        "protocol_version",
+        "capture_mode",
+        "burst_count",
+        "selected_frame_index",
+        "selected_frame_score",
+        "video_width",
+        "video_height",
+        "captured_at",
+    }
+    sanitized: dict[str, Any] = {}
+    for key in allowed_scalar_keys:
+        value = metadata.get(key)
+        if isinstance(value, str):
+            sanitized[key] = value[:128]
+        elif isinstance(value, int | float | bool):
+            sanitized[key] = value
+
+    metrics = metadata.get("selected_frame_metrics")
+    if isinstance(metrics, dict):
+        sanitized["selected_frame_metrics"] = {
+            str(key)[:64]: value
+            for key, value in metrics.items()
+            if isinstance(value, int | float | bool | str)
+        }
+    return sanitized
+
+
+def _capture_protocol_quality(metadata: dict[str, Any]) -> dict[str, Any]:
+    mode = str(metadata.get("capture_mode") or "")
+    burst_count = _safe_float(metadata.get("burst_count"))
+    selected_frame_score = _safe_float(metadata.get("selected_frame_score"))
+    guided_burst = mode == "countdown_scan_burst" and burst_count >= 3
+    selected_frame_ready = selected_frame_score >= 0.75
+    return {
+        "guided_burst_capture": guided_burst,
+        "selected_frame_ready": selected_frame_ready,
+        "selected_frame_score": round(selected_frame_score, 4),
+        "burst_count": int(burst_count) if burst_count else 0,
+        "target_confidence_signal": guided_burst and selected_frame_ready,
+    }
+
+
+def _safe_float(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _normalize_analysis_result(result: Any) -> dict[str, Any]:
@@ -297,6 +472,22 @@ def _normalize_analysis_result(result: Any) -> dict[str, Any]:
     if is_dataclass_instance(result):
         return dict(asdict(result))
     raise TypeError(f"Unsupported capture analysis result type: {type(result)}")
+
+
+def _analyze_front_capture(
+    capture_analyzer: Any,
+    *,
+    image_bytes: bytes,
+    garment_category: str | None,
+) -> Any:
+    method = capture_analyzer.analyze_front_capture
+    try:
+        parameters = inspect.signature(method).parameters
+    except (TypeError, ValueError):
+        parameters = {}
+    if "garment_category" in parameters:
+        return method(image_bytes, garment_category=garment_category)
+    return method(image_bytes)
 
 
 def is_dataclass_instance(value: Any) -> bool:

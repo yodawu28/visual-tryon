@@ -29,7 +29,15 @@ class Settings(BaseSettings):
 
     # CORS
     cors_origins: Union[str, List[str]] = Field(
-        default=["http://localhost:3000", "http://127.0.0.1:3000"], env="CORS_ORIGINS"
+        default=[
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:5174",
+            "http://127.0.0.1:5174",
+        ],
+        env="CORS_ORIGINS",
     )
 
     # Semantic Parser
@@ -199,6 +207,10 @@ class Settings(BaseSettings):
     job_queue_dir: Path = Field(
         default=Path(__file__).parent.parent.parent / "data" / "jobs",
         env="JOB_QUEUE_DIR",
+    )
+    seed_default_size_charts_on_startup: bool = Field(
+        default=True,
+        env="SEED_DEFAULT_SIZE_CHARTS_ON_STARTUP",
     )
 
     # Memory Management

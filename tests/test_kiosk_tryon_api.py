@@ -1,4 +1,5 @@
 from dataclasses import replace
+from pathlib import Path
 from types import SimpleNamespace
 
 from fastapi import FastAPI
@@ -92,17 +93,40 @@ class FakeKioskTryOnService:
             )
         return self.session
 
-    def add_user_capture(self, *, session_id, front_image, side_image=None):
+    def add_user_capture(
+        self,
+        *,
+        session_id,
+        front_image,
+        side_image=None,
+        capture_source=None,
+        capture_metadata=None,
+    ):
         if front_image == b"":
             raise ValueError("front_image must not be empty")
+        source_payload = {"source": capture_source} if capture_source else {}
+        metadata_payload = (
+            {"metadata": capture_metadata.get("front")}
+            if isinstance(capture_metadata, dict) and capture_metadata.get("front")
+            else {}
+        )
         self.session = replace(
             self.session,
             status="user_captured",
             capture_keys=["front", "side"] if side_image is not None else ["front"],
             captures={
-                "front": {"path": "captures/kiosk-session-v1-test-front.png"},
+                "front": {
+                    "path": "captures/kiosk-session-v1-test-front.png",
+                    **source_payload,
+                    **metadata_payload,
+                },
                 **(
-                    {"side": {"path": "captures/kiosk-session-v1-test-side.png"}}
+                    {
+                        "side": {
+                            "path": "captures/kiosk-session-v1-test-side.png",
+                            **source_payload,
+                        }
+                    }
                     if side_image is not None
                     else {}
                 ),
@@ -309,6 +333,15 @@ class FakeKioskVisualTryOnService:
             "analyzer_prompt_version": "avatar-tryon-analyzer-v1",
             "warnings": [],
         }
+
+    def get_generated_image_path(self, personalized_tryon_key):
+        if personalized_tryon_key == "kiosk-tryon:v1:missing":
+            raise FileNotFoundError(
+                "Kiosk visual preview image not found: kiosk-tryon:v1:missing"
+            )
+        if not personalized_tryon_key.startswith("kiosk-tryon:v1:"):
+            raise ValueError("personalized_tryon_key is not a kiosk try-on key")
+        return Path(__file__)
 
 
 class FakeKioskFitIntelligenceService:
@@ -855,6 +888,27 @@ def test_enqueue_visual_preview_job_returns_503_when_provider_is_disabled(
 
     assert response.status_code == 503
     assert "visual preview provider is disabled" in response.json()["detail"]
+
+
+def test_get_visual_preview_image_endpoint_returns_png():
+    client = _client()
+
+    response = client.get(
+        "/api/v1/kiosk/visual-previews/kiosk-tryon:v1:test/image"
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.content
+
+
+def test_get_visual_preview_image_endpoint_returns_422_for_invalid_key():
+    client = _client()
+
+    response = client.get("/api/v1/kiosk/visual-previews/not-a-key/image")
+
+    assert response.status_code == 422
+    assert "not a kiosk try-on key" in response.json()["detail"]
 
 
 def test_get_kiosk_job_endpoint_returns_job_status():

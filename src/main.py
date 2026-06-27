@@ -84,6 +84,25 @@ async def startup_event():
     except Exception as e:
         logger.error(f"❌ Failed to initialize face detector: {e}")
 
+    if settings.seed_default_size_charts_on_startup:
+        try:
+            from src.modules.kiosk_tryon.size_chart_seeding import (
+                seed_default_size_charts,
+            )
+
+            seed_result = seed_default_size_charts(
+                db_path=settings.temp_storage_dir
+                / "size_charts"
+                / "size_charts.sqlite3"
+            )
+            logger.info(
+                "📏 Default size charts ready "
+                f"(created={seed_result['created_count']}, "
+                f"skipped={seed_result['skipped_count']})"
+            )
+        except Exception as e:
+            logger.error(f"❌ Failed to seed default size charts: {e}")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():

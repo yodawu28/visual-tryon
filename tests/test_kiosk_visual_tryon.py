@@ -1,4 +1,5 @@
 import base64
+import json
 import shutil
 
 from src.modules.avatar_preview.profile import (
@@ -150,8 +151,11 @@ def test_kiosk_visual_tryon_uses_multimodal_prompt_and_cache(tmp_path):
     assert first.tryon_intent["garment_type"] == "jersey"
     assert "flag patch" in generator.calls[0]["inpainting_prompt"]
     assert first.cache_hit is False
+    assert first.output_quality_gate is not None
+    assert first.output_quality_gate["status"] == "failed"
     assert second.cache_hit is True
     assert second.personalized_tryon_key == first.personalized_tryon_key
+    assert second.output_quality_gate == first.output_quality_gate
     assert len(generator.calls) == 1
 
 
@@ -231,4 +235,7 @@ def test_kiosk_visual_tryon_uses_extended_local_generator_hook(tmp_path):
     assert generator.calls[0]["garment_type"] == "t-shirt"
     assert generator.calls[0]["size"] == "768x1024"
     assert result.input_mapping == "category_conditioned_leffa"
-    assert result.warnings == ["input quality gate warning: use upper-body crop"]
+    assert "input quality gate warning: use upper-body crop" in result.warnings
+    assert any("output quality gate warning" in item for item in result.warnings)
+    metadata = json.loads(result.metadata_path.read_text("utf-8"))
+    assert metadata["output_quality_gate"]["status"] == "failed"

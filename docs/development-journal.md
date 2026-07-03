@@ -1379,3 +1379,54 @@ Decision:
 
 - Treat the agent as workflow orchestration, not as a decision-making LLM.
 - Keep the public API payload stable and only enrich the report metadata.
+
+### 2026-07-02 - Idempotent Leffa Runtime Install
+
+Context:
+
+- RunPod setup was spending too much time in `make runpod-install-leffa-deps`
+  because the target always called the Leffa torch repair step.
+- The repair step used `pip install --force-reinstall` for the torch stack, so
+  even a valid cached `/workspace/tryon-models/venvs/leffa` runtime was rebuilt.
+
+Implementation:
+
+- Added `scripts/check_leffa_runtime.py` to validate the isolated Leffa venv
+  without loading model weights.
+- Updated `make runpod-install-leffa-deps` to skip dependency installation when
+  the Leffa runtime is already ready.
+- Updated `make runpod-install-leffa-torch-cu124` to skip torch reinstall unless
+  the cached torch stack is missing/incompatible.
+- Added `make runpod-leffa-deps-check` for an explicit no-install runtime check.
+- Added `RUNPOD_LEFFA_FORCE_REINSTALL=1` as the explicit escape hatch when a
+  full Leffa runtime rebuild is required.
+
+Decision:
+
+- Keep Leffa in the isolated persistent model venv under
+  `/workspace/tryon-models/venvs/leffa`.
+- Prefer reuse of the persistent RunPod volume; only force reinstall when the
+  runtime is corrupted or the target torch stack changes.
+
+### 2026-07-02 - Lightweight RunPod Kiosk Requirements
+
+Context:
+
+- `make runpod-install` used the full development `requirements.txt`, which
+  included legacy/local model dependencies such as torch.
+- The RunPod kiosk profile only mounts health and kiosk APIs; visual generation
+  uses the worker plus isolated model runtimes such as Leffa.
+
+Implementation:
+
+- Added `requirements-kiosk.txt` for the API/worker app venv.
+- Updated `make runpod-install` to install `requirements-kiosk.txt` by default.
+- Added `make install-kiosk`.
+- Added `RUNPOD_REQUIREMENTS=requirements.txt make runpod-install` as an
+  explicit full/legacy override.
+
+Decision:
+
+- Keep the app venv small and stable for kiosk deployment.
+- Keep self-hosted visual model dependencies in isolated model runtimes under
+  `/workspace/tryon-models`.

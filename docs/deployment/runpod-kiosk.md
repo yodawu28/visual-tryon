@@ -33,9 +33,22 @@ source venv/bin/activate
 make runpod-install
 ```
 
+`make runpod-install` installs the lightweight kiosk runtime from
+`requirements-kiosk.txt`. It intentionally does not install torch, diffusers,
+or other visual-model stacks into the app venv. Keep those in the optional
+model-specific targets such as `make runpod-install-leffa-deps`.
+
+If you intentionally need the full legacy/debug API dependency set on a pod,
+override the requirements file:
+
+```bash
+RUNPOD_REQUIREMENTS=requirements.txt make runpod-install
+```
+
 Edit `.env`:
 
-- Set `REPLICATE_API_TOKEN`.
+- Set `REPLICATE_API_TOKEN` only when using the Replicate Qwen benchmark/debug
+  provider.
 - Set `CORS_ORIGINS` to include `https://<pod-id>-8080.proxy.runpod.net` after
   the pod is created.
 - Set `DEBUG=true` for the Phase 1 Swagger smoke test. Set it back to `false`
@@ -446,6 +459,22 @@ dependencies into the app venv; Leffa and the FastAPI/MediaPipe app have
 different dependency pressure, especially around `numpy`, `opencv`, `torch`,
 and `diffusers`.
 
+The install is idempotent. If `/workspace/tryon-models/venvs/leffa` already has
+the expected Leffa runtime, the target skips dependency installation instead of
+reinstalling the torch stack. To check the cached runtime without installing
+anything:
+
+```bash
+make runpod-leffa-deps-check
+```
+
+Only force a rebuild when the Leffa venv is corrupted or you intentionally want
+to replace the torch/dependency stack:
+
+```bash
+RUNPOD_LEFFA_FORCE_REINSTALL=1 make runpod-install-leffa-deps
+```
+
 The isolated Leffa runtime still assumes the RunPod PyTorch template or selected
 torch wheel has a compatible CUDA-enabled torch stack. If CUDA is not healthy,
 fix the pod or torch stack before running Leffa.
@@ -459,7 +488,12 @@ make runpod-leffa-import-check
 ```
 
 This installs `torch==2.6.0`, `torchvision==0.21.0`, and `torchaudio==2.6.0`
-from the PyTorch `cu124` index into `/workspace/tryon-models/venvs/leffa`.
+from the PyTorch `cu124` index into `/workspace/tryon-models/venvs/leffa` only
+when the cached torch stack is missing or incompatible. To force this repair:
+
+```bash
+RUNPOD_LEFFA_FORCE_REINSTALL=1 make runpod-install-leffa-torch-cu124
+```
 
 `make runpod-leffa-import-check` clones/uses the Leffa repo and validates
 Python imports only. It does not download model weights or generate an image.

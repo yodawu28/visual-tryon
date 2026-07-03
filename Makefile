@@ -2,6 +2,7 @@ RUNPOD_DATA_DIR ?= /workspace/tryon-data
 RUNPOD_MODEL_DIR ?= /workspace/tryon-models
 LOCAL_DATA_DIR ?= ./data
 UI_PORT ?= 5173
+RUNPOD_REQUIREMENTS ?= requirements-kiosk.txt
 RUNPOD_ANALYZER_MODEL ?= qwen2.5vl:7b-q4_K_M
 RUNPOD_QWEN_EDIT_MODEL ?= Qwen/Qwen-Image-Edit-2509
 RUNPOD_QWEN_EDIT_STEPS ?= 8
@@ -121,14 +122,16 @@ RUNPOD_TORCH_CU124_VERSION ?= 2.6.0
 RUNPOD_TORCHVISION_CU124_VERSION ?= 0.21.0
 RUNPOD_TORCHAUDIO_CU124_VERSION ?= 2.6.0
 RUNPOD_TORCH_CU124_INDEX ?= https://download.pytorch.org/whl/cu124
+RUNPOD_LEFFA_FORCE_REINSTALL ?= 0
 
-.PHONY: help setup install run run-kiosk run-kiosk-all ui-kiosk kiosk-seed-size-charts kiosk-reset worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-install-torch-cu124 runpod-install-catvton-deps runpod-install-leffa-torch-cu124 runpod-install-leffa-deps runpod-install-omnivton-deps runpod-catvton-import-check runpod-leffa-import-check runpod-omnivton-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-vton-input-quality runpod-vton-condition-smoke-inputs runpod-leffa-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke runpod-catvton-quality-smoke runpod-leffa-smoke runpod-leffa-conditioned-smoke runpod-leffa-web-garment-smoke runpod-leffa-web-garment-detail-smoke runpod-leffa-upper-body-web-garment-smoke runpod-omnivton-smoke runpod-omnivton-outpainting-smoke runpod-omnivton-web-garment-smoke test clean lint format check
+.PHONY: help setup install install-kiosk run run-kiosk run-kiosk-all ui-kiosk kiosk-seed-size-charts kiosk-reset worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-install-torch-cu124 runpod-install-catvton-deps runpod-install-leffa-torch-cu124 runpod-install-leffa-deps runpod-leffa-deps-check runpod-install-omnivton-deps runpod-catvton-import-check runpod-leffa-import-check runpod-omnivton-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-vton-input-quality runpod-vton-condition-smoke-inputs runpod-leffa-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke runpod-catvton-quality-smoke runpod-leffa-smoke runpod-leffa-conditioned-smoke runpod-leffa-web-garment-smoke runpod-leffa-web-garment-detail-smoke runpod-leffa-upper-body-web-garment-smoke runpod-omnivton-smoke runpod-omnivton-outpainting-smoke runpod-omnivton-web-garment-smoke test clean lint format check
 
 help:
 	@echo "Virtual Try-On MVP - Makefile commands"
 	@echo ""
 	@echo "  make setup      - Setup environment và download models"
 	@echo "  make install    - Install dependencies only"
+	@echo "  make install-kiosk - Install lightweight kiosk API dependencies"
 	@echo "  make run        - Run FastAPI server"
 	@echo "  make run-kiosk  - Run kiosk API on 0.0.0.0:8080 for deployed pods"
 	@echo "  make run-kiosk-all - Run kiosk API + worker in one foreground process"
@@ -142,7 +145,7 @@ help:
 	@echo "RunPod phase 1:"
 	@echo "  make runpod-help - Show the minimum RunPod smoke-test commands"
 	@echo "  make runpod-init - Create .env from template and runtime directories"
-	@echo "  make runpod-install - Install Python dependencies and initialize paths"
+	@echo "  make runpod-install - Install kiosk API dependencies and initialize paths"
 	@echo "  make runpod-pull-ollama - Pull the configured Ollama analyzer model"
 	@echo "  make runpod-start - Run kiosk API + worker"
 	@echo "  make runpod-start-with-ollama - Run kiosk API + worker + ollama serve"
@@ -164,6 +167,7 @@ help:
 	@echo "  make runpod-catvton-quality-smoke - Run full CatVTON quality smoke after canary passes"
 	@echo "  make runpod-install-leffa-deps - Install local Leffa deps into isolated model venv"
 	@echo "  make runpod-install-leffa-torch-cu124 - Fix Leffa venv Torch for CUDA 12.4/12.7 drivers"
+	@echo "  make runpod-leffa-deps-check - Check cached Leffa runtime without reinstalling"
 	@echo "  make runpod-leffa-import-check - Validate Leffa imports without loading models"
 	@echo "  make runpod-leffa-smoke - Run local Leffa smoke with prepared/default inputs"
 	@echo "  make runpod-leffa-conditioned-smoke - Run Leffa with normalized smoke inputs"
@@ -186,6 +190,11 @@ setup:
 install:
 	pip install -U pip
 	pip install -r requirements.txt
+
+install-kiosk:
+	pip install -U pip
+	mkdir -p "$(RUNPOD_PIP_CACHE_DIR)"
+	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install -r $(RUNPOD_REQUIREMENTS)
 
 run:
 	python -m uvicorn src.main:app --reload --host 127.0.0.1 --port 8080
@@ -219,7 +228,7 @@ runpod-help:
 	@echo ""
 	@echo "One-time setup:"
 	@echo "  make runpod-install"
-	@echo "  edit .env and set REPLICATE_API_TOKEN/CORS_ORIGINS if needed"
+	@echo "  edit .env and set CORS_ORIGINS; set REPLICATE_API_TOKEN only for Replicate debug"
 	@echo "  start Ollama in one shell: ollama serve"
 	@echo "  make runpod-pull-ollama"
 	@echo ""
@@ -252,6 +261,7 @@ runpod-help:
 	@echo ""
 	@echo "Optional local Leffa smoke:"
 	@echo "  make runpod-install-leffa-deps"
+	@echo "  make runpod-leffa-deps-check"
 	@echo "  make runpod-leffa-import-check"
 	@echo "  make runpod-leffa-smoke-data"
 	@echo "  make runpod-vton-condition-smoke-inputs"
@@ -278,7 +288,7 @@ runpod-init:
 	@echo "  HF_HOME: $(RUNPOD_HF_HOME)"
 	@echo "Review .env before starting the app."
 
-runpod-install: install runpod-init
+runpod-install: runpod-init install-kiosk
 
 runpod-install-qwen-edit-deps:
 	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install --force-reinstall \
@@ -296,13 +306,20 @@ runpod-install-torch-cu124:
 
 runpod-install-leffa-torch-cu124:
 	mkdir -p "$(RUNPOD_LEFFA_VENV)" "$(RUNPOD_PIP_CACHE_DIR)"
-	python -m venv "$(RUNPOD_LEFFA_VENV)"
-	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_LEFFA_PYTHON)" -m pip install -U pip setuptools wheel
-	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_LEFFA_PYTHON)" -m pip install --force-reinstall \
-		torch==$(RUNPOD_TORCH_CU124_VERSION) \
-		torchvision==$(RUNPOD_TORCHVISION_CU124_VERSION) \
-		torchaudio==$(RUNPOD_TORCHAUDIO_CU124_VERSION) \
-		--index-url $(RUNPOD_TORCH_CU124_INDEX)
+	@if [ ! -x "$(RUNPOD_LEFFA_PYTHON)" ]; then \
+		python -m venv "$(RUNPOD_LEFFA_VENV)"; \
+		PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_LEFFA_PYTHON)" -m pip install -U pip setuptools wheel; \
+	fi
+	@if [ "$(RUNPOD_LEFFA_FORCE_REINSTALL)" != "1" ] && "$(RUNPOD_LEFFA_PYTHON)" -m scripts.check_leffa_runtime --torch-only; then \
+		echo "Leffa Torch stack already ready; skipping reinstall."; \
+	else \
+		echo "Installing Leffa Torch stack into $(RUNPOD_LEFFA_VENV)"; \
+		PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_LEFFA_PYTHON)" -m pip install --force-reinstall \
+			torch==$(RUNPOD_TORCH_CU124_VERSION) \
+			torchvision==$(RUNPOD_TORCHVISION_CU124_VERSION) \
+			torchaudio==$(RUNPOD_TORCHAUDIO_CU124_VERSION) \
+			--index-url $(RUNPOD_TORCH_CU124_INDEX); \
+	fi
 
 runpod-install-catvton-deps:
 	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install -U \
@@ -321,47 +338,51 @@ runpod-install-catvton-deps:
 		"matplotlib>=3.9.1" \
 		"ninja>=1.11.1"
 
-runpod-install-leffa-deps:
-	mkdir -p "$(RUNPOD_LEFFA_VENV)" "$(RUNPOD_PIP_CACHE_DIR)"
-	python -m venv "$(RUNPOD_LEFFA_VENV)"
-	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_LEFFA_PYTHON)" -m pip install -U pip setuptools wheel
-	$(MAKE) runpod-install-leffa-torch-cu124
-	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_LEFFA_PYTHON)" -m pip install -U \
-		"accelerate>=0.31.0" \
-		"av>=12.0.0" \
-		"cloudpickle>=3.0.0" \
-		"diffusers>=0.29.2" \
-		"einops>=0.8.0" \
-		"fvcore>=0.1.5.post20221221" \
-		"huggingface_hub>=0.23.4" \
-		"imageio>=2.34.0" \
-		"iopath>=0.1.10" \
-		"matplotlib>=3.9.1" \
-		"numpy==1.26.4" \
-		"omegaconf>=2.3.0" \
-		"onnxruntime>=1.18.0" \
-		"opencv-python-headless==4.10.0.84" \
-		"packaging>=24.1" \
-		"pandas>=2.2.2" \
-		"peft>=0.11.1" \
-		"pillow>=10.4.0" \
-		"psutil>=6.0.0" \
-		"pycocotools>=2.0.8" \
-		"PyYAML>=6.0.1" \
-		"regex==2024.5.15" \
-		"safetensors>=0.4.5" \
-		"scikit-image>=0.24.0" \
-		"scipy>=1.10.1" \
-		"tabulate>=0.9.0" \
-		"termcolor>=2.4.0" \
-		"timm>=1.0.7" \
-		"tokenizers>=0.19.1" \
-		"torchmetrics>=1.4.0" \
-		"tqdm>=4.66.4" \
-		"transformers>=4.43.0" \
-		"yacs>=0.1.8"
+runpod-install-leffa-deps: runpod-install-leffa-torch-cu124
+	@if [ "$(RUNPOD_LEFFA_FORCE_REINSTALL)" != "1" ] && "$(RUNPOD_LEFFA_PYTHON)" -m scripts.check_leffa_runtime; then \
+		echo "Leffa runtime already ready; skipping dependency install."; \
+	else \
+		PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_LEFFA_PYTHON)" -m pip install \
+			"accelerate>=0.31.0" \
+			"av>=12.0.0" \
+			"cloudpickle>=3.0.0" \
+			"diffusers>=0.29.2" \
+			"einops>=0.8.0" \
+			"fvcore>=0.1.5.post20221221" \
+			"huggingface_hub>=0.23.4" \
+			"imageio>=2.34.0" \
+			"iopath>=0.1.10" \
+			"matplotlib>=3.9.1" \
+			"numpy==1.26.4" \
+			"omegaconf>=2.3.0" \
+			"onnxruntime>=1.18.0" \
+			"opencv-python-headless==4.10.0.84" \
+			"packaging>=24.1" \
+			"pandas>=2.2.2" \
+			"peft>=0.11.1" \
+			"pillow>=10.4.0" \
+			"psutil>=6.0.0" \
+			"pycocotools>=2.0.8" \
+			"PyYAML>=6.0.1" \
+			"regex==2024.5.15" \
+			"safetensors>=0.4.5" \
+			"scikit-image>=0.24.0" \
+			"scipy>=1.10.1" \
+			"tabulate>=0.9.0" \
+			"termcolor>=2.4.0" \
+			"timm>=1.0.7" \
+			"tokenizers>=0.19.1" \
+			"torchmetrics>=1.4.0" \
+			"tqdm>=4.66.4" \
+			"transformers>=4.43.0" \
+			"yacs>=0.1.8"; \
+	fi
 	@echo "Leffa runtime installed at $(RUNPOD_LEFFA_VENV)"
 	@echo "Set LOCAL_LEFFA_PYTHON=$(RUNPOD_LEFFA_PYTHON) before make runpod-start"
+
+runpod-leffa-deps-check:
+	@test -x "$(RUNPOD_LEFFA_PYTHON)" || (echo "Missing Leffa runtime: $(RUNPOD_LEFFA_PYTHON). Run make runpod-install-leffa-deps first."; exit 1)
+	"$(RUNPOD_LEFFA_PYTHON)" -m scripts.check_leffa_runtime
 
 runpod-install-omnivton-deps:
 	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install -U \

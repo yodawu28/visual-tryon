@@ -1,0 +1,29 @@
+# Kiosk API/runtime dependencies for RunPod deployment.
+# Keep heavyweight model stacks in isolated optional runtimes, not in the app venv.
+
+# Web Framework
+fastapi==0.115.5
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+
+# Kiosk capture, privacy, and image handling
+insightface==0.7.3
+mediapipe==0.10.21
+onnxruntime==1.21.1
+opencv-python-headless==4.10.0.84
+numpy==1.26.4
+Pillow==10.4.0
+
+# Optional debug/avatar provider imported by kiosk router
+replicate==1.0.4
+
+# Configuration and API contracts
+pydantic==2.10.3
+pydantic-settings==2.7.0
+python-dotenv==1.0.1
+
+# Utilities
+aiofiles==23.2.1
+httpx==0.28.1
+tenacity==9.0.0
+psutil==6.1.0

@@ -52,9 +52,7 @@ class KioskVisualPreviewJobHandler:
             garment_image=self.garment_registry.read_image(garment.garment_id),
             garment_category=garment.category,
             garment_type=garment.garment_type,
-            use_multimodal_analysis=bool(
-                payload.get("use_multimodal_analysis", True)
-            ),
+            use_multimodal_analysis=bool(payload.get("use_multimodal_analysis", True)),
             size=str(payload.get("size", "1024x1024")),
         )
         result_payload = _result_to_dict(result)
@@ -78,6 +76,13 @@ class KioskVisualPreviewJobHandler:
             "generation_time_seconds": result_payload.get("generation_time_seconds"),
             "multimodal_analysis_applied": bool(
                 result_payload.get("multimodal_analysis_applied", False)
+            ),
+            "output_quality_gate": result_payload.get("output_quality_gate"),
+            "diagnostic_artifacts": _dict_or_empty(
+                result_payload.get("diagnostic_artifacts")
+            ),
+            "generation_metadata": _dict_or_empty(
+                result_payload.get("generation_metadata")
             ),
             "warnings": list(result_payload.get("warnings", [])),
         }
@@ -104,3 +109,7 @@ def _result_to_dict(result: Any) -> dict[str, Any]:
     if hasattr(result, "model_dump"):
         return result.model_dump(mode="json")
     raise TypeError(f"Unsupported kiosk job result type: {type(result)}")
+
+
+def _dict_or_empty(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}

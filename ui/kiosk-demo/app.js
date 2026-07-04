@@ -27,6 +27,11 @@ const state = {
   warnings: [],
 };
 
+const PREVIEW_POLL_INTERVAL_MS = 5000;
+const ACTIVE_PREVIEW_JOB_STATUSES = new Set(["queued", "running"]);
+let previewPollTimer = null;
+let previewPollInFlight = false;
+
 function resolveDefaultApiBase() {
   const storedApiBase = localStorage.getItem("kioskApiBase");
   if (storedApiBase) {
@@ -92,6 +97,7 @@ const els = {
   queuePreviewButton: byId("queuePreviewButton"),
   pollJobButton: byId("pollJobButton"),
   previewStatus: byId("previewStatus"),
+  previewFrame: byId("previewFrame"),
   previewOutput: byId("previewOutput"),
   previewPlaceholder: byId("previewPlaceholder"),
   summaryGarment: byId("summaryGarment"),
@@ -144,11 +150,12 @@ function init() {
   els.analyzeCapturesButton.addEventListener("click", () => analyzeCaptures());
   els.fitAnalyzeButton.addEventListener("click", analyzeFit);
   els.queuePreviewButton.addEventListener("click", queuePreviewJob);
-  els.pollJobButton.addEventListener("click", pollJob);
+  els.pollJobButton.addEventListener("click", () => pollJob({ auto: false }));
 
   checkApi();
   loadSizeCharts();
   render();
+  restorePreviewPolling();
 }
 
 function byId(id) {
@@ -420,6 +427,7 @@ async function captureCameraPhoto(slot, options = {}) {
 }
 
 function markCapturesDirty() {
+  stopPreviewPolling();
   state.captureUploaded = false;
   state.capturePassed = false;
   state.fitReady = false;
@@ -542,6 +550,7 @@ async function uploadGarment() {
     return;
   }
 
+  stopPreviewPolling();
   setStatus(els.garmentStatus, "running", "Uploading");
   const form = new FormData();
   form.append("file", file);
@@ -581,6 +590,7 @@ async function createSession() {
     return null;
   }
 
+  stopPreviewPolling();
   try {
     const payload = await request("/api/v1/kiosk/sessions", {
       method: "POST",
@@ -618,6 +628,7 @@ async function uploadCaptures() {
   }
   if (!(await ensureSession())) return;
 
+  stopPreviewPolling();
   setStatus(els.captureStatus, "running", "Uploading");
   const form = new FormData();
   form.append("front_image", front);
@@ -726,7 +737,17 @@ async function queuePreviewJob() {
     return;
   }
 
-  setStatus(els.previewStatus, "running", "Queued");
+  stopPreviewPolling();
+  state.previewKey = "";
+  state.jobId = "";
+  state.jobStatus = "";
+  resetImage(
+    els.previewOutput,
+    els.previewPlaceholder,
+    "Queueing visual preview job.",
+  );
+  setPreviewLoading("Queueing visual preview job.");
+  setStatus(els.previewStatus, "running", "Queueing");
   try {
     const payload = await request(`/api/v1/kiosk/sessions/${encodeURIComponent(state.sessionId)}/visual-preview/jobs`, {
       method: "POST",
@@ -739,40 +760,69 @@ async function queuePreviewJob() {
     });
     state.jobId = payload.job_id;
     state.jobStatus = payload.status;
+    state.previewKey = "";
     persist();
+    setPreviewLoading(previewLoadingMessage(state.jobStatus));
     logEvent("Visual preview job queued", payload);
+    startPreviewPolling({ immediate: true });
   } catch (error) {
+    stopPreviewPolling();
+    els.previewFrame.classList.remove("is-loading");
     setStatus(els.previewStatus, "error", "Failed");
     logEvent("Visual preview queue failed", { error: error.message });
   }
   render();
 }
 
-async function pollJob() {
+async function pollJob({ auto = false } = {}) {
   if (!state.jobId) {
-    showWarning("Queue a visual preview job first.");
+    if (!auto) {
+      showWarning("Queue a visual preview job first.");
+    }
+    stopPreviewPolling();
+    return;
+  }
+  if (previewPollInFlight) {
     return;
   }
 
-  setStatus(els.previewStatus, "running", "Checking");
+  previewPollInFlight = true;
+  const previousStatus = state.jobStatus;
+  if (!auto) {
+    setStatus(els.previewStatus, "running", "Checking");
+  }
   try {
     const payload = await request(`/api/v1/kiosk/jobs/${encodeURIComponent(state.jobId)}`);
     state.jobStatus = payload.status;
     if (payload.status === "succeeded" && payload.result) {
+      stopPreviewPolling();
       state.previewKey = payload.result.personalized_tryon_key || "";
       state.warnings = payload.result.warnings || [];
       loadPreviewImage();
       setStatus(els.previewStatus, "success", "Ready");
+      els.previewFrame.classList.remove("is-loading");
     } else if (payload.status === "failed") {
+      stopPreviewPolling();
+      els.previewFrame.classList.remove("is-loading");
+      setPreviewPlaceholder("Visual preview job failed. Check the worker log.");
       setStatus(els.previewStatus, "error", "Failed");
     } else {
+      setPreviewLoading(previewLoadingMessage(payload.status));
       setStatus(els.previewStatus, "running", payload.status || "Running");
     }
     persist();
-    logEvent("Visual preview job", payload);
+    if (!auto || payload.status !== previousStatus || isTerminalPreviewJob(payload.status)) {
+      logEvent("Visual preview job", payload);
+    }
+    const diagnostics = buildPreviewDiagnostics(payload.result);
+    if (diagnostics) {
+      logEvent("Visual preview diagnostics", diagnostics);
+    }
   } catch (error) {
-    setStatus(els.previewStatus, "error", "Failed");
+    setStatus(els.previewStatus, auto ? "warning" : "error", auto ? "Retrying" : "Check failed");
     logEvent("Visual preview poll failed", { error: error.message });
+  } finally {
+    previewPollInFlight = false;
   }
   render();
 }
@@ -780,9 +830,65 @@ async function pollJob() {
 function loadPreviewImage() {
   if (!state.previewKey) return;
   const path = `/api/v1/kiosk/visual-previews/${encodeURIComponent(state.previewKey)}/image?ts=${Date.now()}`;
+  els.previewFrame.classList.remove("is-loading");
   els.previewOutput.src = apiUrl(path);
   els.previewOutput.hidden = false;
   els.previewPlaceholder.hidden = true;
+}
+
+function restorePreviewPolling() {
+  if (!state.jobId || state.previewKey || state.jobStatus === "failed") {
+    return;
+  }
+  if (!state.jobStatus || isActivePreviewJob(state.jobStatus)) {
+    startPreviewPolling({ immediate: true });
+  }
+}
+
+function startPreviewPolling({ immediate = false } = {}) {
+  if (!state.jobId || state.previewKey) {
+    return;
+  }
+  stopPreviewPolling();
+  setPreviewLoading(previewLoadingMessage(state.jobStatus || "queued"));
+  previewPollTimer = window.setInterval(() => {
+    pollJob({ auto: true });
+  }, PREVIEW_POLL_INTERVAL_MS);
+  if (immediate) {
+    pollJob({ auto: true });
+  }
+}
+
+function stopPreviewPolling() {
+  if (!previewPollTimer) {
+    return;
+  }
+  window.clearInterval(previewPollTimer);
+  previewPollTimer = null;
+}
+
+function setPreviewLoading(message) {
+  els.previewFrame.classList.add("is-loading");
+  els.previewOutput.hidden = true;
+  setPreviewPlaceholder(message);
+}
+
+function setPreviewPlaceholder(message) {
+  els.previewPlaceholder.textContent = message;
+  els.previewPlaceholder.hidden = false;
+}
+
+function previewLoadingMessage(status) {
+  const label = status ? String(status).replaceAll("_", " ") : "queued";
+  return `Generating visual preview. Job status: ${label}.`;
+}
+
+function isActivePreviewJob(status) {
+  return ACTIVE_PREVIEW_JOB_STATUSES.has(String(status || "").toLowerCase());
+}
+
+function isTerminalPreviewJob(status) {
+  return ["succeeded", "failed"].includes(String(status || "").toLowerCase());
 }
 
 function renderFitResult(payload) {
@@ -835,6 +941,7 @@ function render() {
   const hasGarment = Boolean(state.garmentId);
   const hasSession = Boolean(state.sessionId);
   const hasJob = Boolean(state.jobId);
+  const previewJobActive = hasJob && !state.previewKey && isActivePreviewJob(state.jobStatus);
   const cameraRunning = Boolean(state.cameraStream);
   const cameraBusy = Boolean(state.cameraBusy || state.cameraSequenceRunning);
 
@@ -843,8 +950,10 @@ function render() {
   els.uploadCapturesButton.disabled = !hasGarment || !hasFrontFile;
   els.analyzeCapturesButton.disabled = !hasSession || !state.captureUploaded;
   els.fitAnalyzeButton.disabled = !hasSession || !state.capturePassed;
-  els.queuePreviewButton.disabled = !hasSession || !state.capturePassed;
-  els.pollJobButton.disabled = !hasJob;
+  els.queuePreviewButton.disabled = !hasSession || !state.capturePassed || previewJobActive;
+  els.pollJobButton.disabled = !hasJob || previewPollInFlight;
+  els.queuePreviewButton.textContent = previewJobActive ? "Generating Preview" : "Queue Preview Job";
+  els.pollJobButton.textContent = previewJobActive ? "Polling Job" : "Refresh Job";
   els.startCameraButton.disabled = cameraRunning || cameraBusy;
   els.captureSequenceButton.disabled = !cameraRunning || cameraBusy;
   els.captureFrontButton.disabled = !cameraRunning || cameraBusy;
@@ -860,7 +969,11 @@ function render() {
   if (state.previewKey) {
     setStatus(els.previewStatus, "success", "Ready");
     loadPreviewImage();
+  } else if (previewJobActive) {
+    setPreviewLoading(previewLoadingMessage(state.jobStatus));
+    setStatus(els.previewStatus, "running", state.jobStatus || "Running");
   } else if (state.jobStatus) {
+    els.previewFrame.classList.remove("is-loading");
     setStatus(els.previewStatus, state.jobStatus === "failed" ? "error" : "running", state.jobStatus);
   }
 
@@ -913,6 +1026,36 @@ function renderWarnings() {
   }
   els.warningBox.hidden = false;
   els.warningBox.innerHTML = state.warnings.map((warning) => `<div>${escapeHtml(String(warning))}</div>`).join("");
+}
+
+function buildPreviewDiagnostics(result) {
+  if (!result) return null;
+  const artifacts = result.diagnostic_artifacts || {};
+  const qualityGate = result.output_quality_gate || null;
+  const generation = result.generation_metadata || {};
+  const diagnostics = {
+    output_quality_status: qualityGate && qualityGate.status
+      ? qualityGate.status
+      : null,
+    output_quality_issues: qualityGate && Array.isArray(qualityGate.issues)
+      ? qualityGate.issues
+      : [],
+    work_dir: artifacts.work_dir || generation.work_dir || null,
+    conditioned_person:
+      artifacts.conditioned_person || generation.conditioned_person || null,
+    conditioned_garment:
+      artifacts.conditioned_garment || generation.conditioned_garment || null,
+    leffa_report: artifacts.leffa_report || generation.leffa_report || null,
+    input_quality_report:
+      artifacts.input_quality_report || generation.input_quality_report || null,
+    conditioning_report:
+      artifacts.conditioning_report || generation.conditioning_report || null,
+  };
+  return Object.values(diagnostics).some((value) =>
+    Array.isArray(value) ? value.length > 0 : Boolean(value)
+  )
+    ? diagnostics
+    : null;
 }
 
 function renderInlineList(items) {
@@ -987,6 +1130,7 @@ function setOrRemove(key, value) {
 }
 
 function resetUiState() {
+  stopPreviewPolling();
   for (const key of [
     "kioskGarmentId",
     "kioskGarmentName",

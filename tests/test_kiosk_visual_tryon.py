@@ -83,6 +83,19 @@ class FakeKioskGenerator(FakeGenerator):
         )
         self.last_metadata = {
             "provider": "local_leffa",
+            "work_dir": "/workspace/tryon-data/kiosk_tryons/leffa_work/test",
+            "conditioned_person": (
+                "/workspace/tryon-data/kiosk_tryons/leffa_work/test/"
+                "person-conditioned.png"
+            ),
+            "conditioned_garment": (
+                "/workspace/tryon-data/kiosk_tryons/leffa_work/test/"
+                "garment-conditioned.png"
+            ),
+            "leffa_report": (
+                "/workspace/tryon-data/kiosk_tryons/leffa_work/test/"
+                "leffa-report.json"
+            ),
             "warnings": ["input quality gate warning: use upper-body crop"],
         }
         return base64.b64encode(b"leffa-image").decode("utf-8")
@@ -156,6 +169,8 @@ def test_kiosk_visual_tryon_uses_multimodal_prompt_and_cache(tmp_path):
     assert second.cache_hit is True
     assert second.personalized_tryon_key == first.personalized_tryon_key
     assert second.output_quality_gate == first.output_quality_gate
+    assert second.generation_metadata == {}
+    assert second.diagnostic_artifacts == {}
     assert len(generator.calls) == 1
 
 
@@ -229,13 +244,42 @@ def test_kiosk_visual_tryon_uses_extended_local_generator_hook(tmp_path):
         use_multimodal_analysis=False,
         size="768x1024",
     )
+    cached = service.generate_tryon(
+        session_id="kiosk-session:v1:abc",
+        garment_id="garment:v1:def",
+        user_image=b"user-image",
+        garment_image=b"garment-image",
+        garment_category="tops",
+        garment_type="t-shirt",
+        use_multimodal_analysis=False,
+        size="768x1024",
+    )
 
     assert result.generated_image == base64.b64encode(b"leffa-image").decode("utf-8")
     assert generator.calls[0]["garment_category"] == "tops"
     assert generator.calls[0]["garment_type"] == "t-shirt"
     assert generator.calls[0]["size"] == "768x1024"
     assert result.input_mapping == "category_conditioned_leffa"
+    assert result.generation_metadata["provider"] == "local_leffa"
+    assert result.diagnostic_artifacts == {
+        "work_dir": "/workspace/tryon-data/kiosk_tryons/leffa_work/test",
+        "conditioned_person": (
+            "/workspace/tryon-data/kiosk_tryons/leffa_work/test/"
+            "person-conditioned.png"
+        ),
+        "conditioned_garment": (
+            "/workspace/tryon-data/kiosk_tryons/leffa_work/test/"
+            "garment-conditioned.png"
+        ),
+        "leffa_report": (
+            "/workspace/tryon-data/kiosk_tryons/leffa_work/test/" "leffa-report.json"
+        ),
+    }
     assert "input quality gate warning: use upper-body crop" in result.warnings
     assert any("output quality gate warning" in item for item in result.warnings)
     metadata = json.loads(result.metadata_path.read_text("utf-8"))
     assert metadata["output_quality_gate"]["status"] == "failed"
+    assert metadata["diagnostic_artifacts"] == result.diagnostic_artifacts
+    assert cached.cache_hit is True
+    assert cached.generation_metadata == result.generation_metadata
+    assert cached.diagnostic_artifacts == result.diagnostic_artifacts

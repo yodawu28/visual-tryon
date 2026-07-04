@@ -901,6 +901,8 @@ def _personalized_tryon_response(
         analyzer_model=payload.get("analyzer_model"),
         analyzer_prompt_version=payload.get("analyzer_prompt_version"),
         output_quality_gate=payload.get("output_quality_gate"),
+        generation_metadata=_dict_or_empty(payload.get("generation_metadata")),
+        diagnostic_artifacts=_dict_or_empty(payload.get("diagnostic_artifacts")),
         warnings=list(payload.get("warnings", [])),
         message=message,
     )
@@ -994,3 +996,7 @@ def _result_to_dict(result: Any) -> dict[str, Any]:
     if hasattr(result, "model_dump"):
         return result.model_dump(mode="json")
     raise TypeError(f"Unsupported kiosk session result type: {type(result)}")
+
+
+def _dict_or_empty(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}

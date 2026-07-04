@@ -38,6 +38,8 @@ class KioskVisualTryOnResult:
     analyzer_model: str | None
     analyzer_prompt_version: str | None
     output_quality_gate: dict[str, Any] | None
+    generation_metadata: dict[str, Any]
+    diagnostic_artifacts: dict[str, str]
     warnings: list[str]
 
 
@@ -154,10 +156,15 @@ class KioskVisualTryOnService:
         image_path = self._image_path(personalized_tryon_key)
         metadata_path = self._metadata_path(personalized_tryon_key)
         cache_hit = image_path.exists() and metadata_path.exists()
+        generation_metadata: dict[str, Any] = {}
+        diagnostic_artifacts: dict[str, str] = {}
 
         if cache_hit:
             generated_bytes = image_path.read_bytes()
-            output_quality_gate = _read_output_quality_gate(metadata_path)
+            cached_metadata = _read_metadata_payload(metadata_path)
+            output_quality_gate = _output_quality_gate_from_metadata(cached_metadata)
+            generation_metadata = _generation_metadata_from_payload(cached_metadata)
+            diagnostic_artifacts = _diagnostic_artifacts(generation_metadata)
         else:
             generated_image = _generate_with_provider(
                 generator=self.generator,
@@ -175,6 +182,7 @@ class KioskVisualTryOnService:
                 field_name="generated_image",
             )
             generation_metadata = _generator_generation_metadata(self.generator)
+            diagnostic_artifacts = _diagnostic_artifacts(generation_metadata)
             warnings.extend(_generator_warnings(generation_metadata))
             output_quality_gate = _visual_output_quality_gate(
                 generated_bytes,
@@ -202,6 +210,7 @@ class KioskVisualTryOnService:
                         "requested_size": size,
                         "generator_metadata": generator_metadata,
                         "generation_metadata": generation_metadata,
+                        "diagnostic_artifacts": diagnostic_artifacts,
                         "output_quality_gate": output_quality_gate,
                         "garment_category": garment_category,
                         "garment_type": garment_type,
@@ -240,6 +249,8 @@ class KioskVisualTryOnService:
             analyzer_model=analyzer_metadata.get("model"),
             analyzer_prompt_version=analyzer_metadata.get("analyzer_prompt_version"),
             output_quality_gate=output_quality_gate,
+            generation_metadata=generation_metadata,
+            diagnostic_artifacts=diagnostic_artifacts,
             warnings=warnings,
         )
 
@@ -386,13 +397,43 @@ def _generator_warnings(metadata: dict[str, Any]) -> list[str]:
     return [str(warning) for warning in raw_warnings if str(warning).strip()]
 
 
-def _read_output_quality_gate(metadata_path: Path) -> dict[str, Any] | None:
+def _read_metadata_payload(metadata_path: Path) -> dict[str, Any]:
     try:
         payload = json.loads(metadata_path.read_text("utf-8"))
     except (OSError, json.JSONDecodeError):
-        return None
-    gate = payload.get("output_quality_gate")
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _output_quality_gate_from_metadata(
+    metadata: dict[str, Any],
+) -> dict[str, Any] | None:
+    gate = metadata.get("output_quality_gate")
     return gate if isinstance(gate, dict) else None
+
+
+def _generation_metadata_from_payload(metadata: dict[str, Any]) -> dict[str, Any]:
+    generation_metadata = metadata.get("generation_metadata")
+    return generation_metadata if isinstance(generation_metadata, dict) else {}
+
+
+def _diagnostic_artifacts(generation_metadata: dict[str, Any]) -> dict[str, str]:
+    artifact_fields = {
+        "work_dir": "work_dir",
+        "source_person": "source_person",
+        "source_garment": "source_garment",
+        "conditioned_person": "conditioned_person",
+        "conditioned_garment": "conditioned_garment",
+        "input_quality_report": "input_quality_report",
+        "conditioning_report": "conditioning_report",
+        "leffa_report": "leffa_report",
+    }
+    artifacts: dict[str, str] = {}
+    for output_key, metadata_key in artifact_fields.items():
+        value = generation_metadata.get(metadata_key)
+        if isinstance(value, str) and value.strip():
+            artifacts[output_key] = value
+    return artifacts
 
 
 def _visual_output_quality_gate(

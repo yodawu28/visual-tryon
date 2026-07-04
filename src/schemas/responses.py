@@ -321,6 +321,8 @@ class KioskPersonalizedTryOnResponse(BaseModel):
     analyzer_model: Optional[str] = None
     analyzer_prompt_version: Optional[str] = None
     output_quality_gate: Optional[dict[str, Any]] = None
+    generation_metadata: dict[str, Any] = Field(default_factory=dict)
+    diagnostic_artifacts: dict[str, str] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
     message: str
 

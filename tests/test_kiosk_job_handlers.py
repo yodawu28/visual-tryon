@@ -101,6 +101,18 @@ class FakeVisualTryOnService:
             "input_mapping": "multi_image_edit",
             "generation_time_seconds": 1.0,
             "multimodal_analysis_applied": False,
+            "output_quality_gate": {"status": "warning", "issues": ["artifact"]},
+            "generation_metadata": {
+                "provider": "local_leffa",
+                "work_dir": "/workspace/tryon-data/kiosk_tryons/leffa_work/test",
+            },
+            "diagnostic_artifacts": {
+                "work_dir": "/workspace/tryon-data/kiosk_tryons/leffa_work/test",
+                "leffa_report": (
+                    "/workspace/tryon-data/kiosk_tryons/leffa_work/test/"
+                    "leffa-report.json"
+                ),
+            },
             "warnings": [],
         }
 
@@ -130,6 +142,12 @@ def test_kiosk_visual_preview_job_handler_generates_preview_and_updates_session(
     assert result["personalized_tryon_key"] == "kiosk-tryon:v1:test"
     assert result["session_status"] == "personalized_tryon_ready"
     assert result["model"] == "qwen/qwen-image-edit-2511"
+    assert result["output_quality_gate"] == {
+        "status": "warning",
+        "issues": ["artifact"],
+    }
+    assert result["generation_metadata"]["provider"] == "local_leffa"
+    assert result["diagnostic_artifacts"]["work_dir"].endswith("/test")
     assert session_service.session.personalized_tryon_key == "kiosk-tryon:v1:test"
 
 

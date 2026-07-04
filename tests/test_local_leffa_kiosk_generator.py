@@ -62,6 +62,12 @@ def test_local_leffa_kiosk_generator_uses_configured_python(
     assert command[0] == str(leffa_python)
 
 
+def test_local_leffa_kiosk_generator_streams_subprocess_output(monkeypatch, tmp_path):
+    _run_fake_generation(monkeypatch, tmp_path, garment_category="tops")
+
+    assert _fake_run_kwargs[-1]["capture_output"] is False
+
+
 def test_local_leffa_kiosk_generator_rejects_unknown_category(monkeypatch, tmp_path):
     generator = _generator(tmp_path)
 
@@ -83,6 +89,7 @@ def test_local_leffa_kiosk_generator_rejects_unknown_category(monkeypatch, tmp_p
 
 
 _fake_condition_calls = []
+_fake_run_kwargs = []
 
 
 def _run_fake_generation(
@@ -94,6 +101,7 @@ def _run_fake_generation(
 ) -> list[str]:
     commands = []
     _fake_condition_calls.clear()
+    _fake_run_kwargs.clear()
 
     def fake_score_inputs(*, person_image, garment_image, garment_category):
         return {
@@ -114,6 +122,7 @@ def _run_fake_generation(
 
     def fake_run(command, **kwargs):
         commands.append(command)
+        _fake_run_kwargs.append(kwargs)
         output = Path(command[command.index("--output") + 1])
         report = Path(command[command.index("--report") + 1])
         output.write_bytes(b"leffa-output")

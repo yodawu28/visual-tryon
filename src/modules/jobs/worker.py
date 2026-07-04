@@ -85,9 +85,15 @@ class JobWorker:
 
         try:
             logger.info("Running job %s (%s)", job.job_id, job.job_type)
+            started = time.perf_counter()
             result = handler.handle(job)
         except Exception as exc:  # pragma: no cover - covered via public behavior
-            logger.exception("Job %s failed", job.job_id)
+            duration_seconds = time.perf_counter() - started
+            logger.exception(
+                "Job %s failed after %.2fs",
+                job.job_id,
+                duration_seconds,
+            )
             error: dict[str, Any] = {
                 "message": str(exc),
                 "error_type": type(exc).__name__,
@@ -106,6 +112,13 @@ class JobWorker:
             )
 
         completed = self.job_service.mark_succeeded(job_id=job.job_id, result=result)
+        duration_seconds = time.perf_counter() - started
+        logger.info(
+            "Job %s completed with status=%s in %.2fs",
+            completed.job_id,
+            completed.status,
+            duration_seconds,
+        )
         return JobWorkerResult(
             processed=True,
             job_id=completed.job_id,

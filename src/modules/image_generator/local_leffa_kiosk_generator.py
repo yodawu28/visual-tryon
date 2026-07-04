@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -14,6 +15,8 @@ from pathlib import Path
 from typing import Any
 
 from src.modules.image_generator.base import ImageGeneratorBase
+
+logger = logging.getLogger(__name__)
 
 
 class LocalLeffaKioskGenerator(ImageGeneratorBase):
@@ -230,13 +233,23 @@ class LocalLeffaKioskGenerator(ImageGeneratorBase):
         if self.no_clone:
             command.append("--no-clone")
 
+        logger.info(
+            "Starting local Leffa subprocess category=%s garment_type=%s work_dir=%s "
+            "device=%s steps=%s timeout_seconds=%s",
+            normalized_category,
+            category_config.leffa_garment_type,
+            work_dir,
+            self.device,
+            self.steps,
+            self.timeout_seconds,
+        )
         try:
             completed = subprocess.run(
                 command,
                 cwd=_project_root(),
                 env=self._subprocess_env(),
                 text=True,
-                capture_output=True,
+                capture_output=False,
                 timeout=self.timeout_seconds,
                 check=False,
             )
@@ -251,10 +264,12 @@ class LocalLeffaKioskGenerator(ImageGeneratorBase):
                 f"stdout={stdout[-1200:]} stderr={stderr[-1200:]}"
             ) from exc
         if completed.returncode != 0:
+            stdout = completed.stdout or ""
+            stderr = completed.stderr or ""
             raise RuntimeError(
                 "Local Leffa generation failed "
                 f"(exit={completed.returncode}). "
-                f"stdout={completed.stdout[-1200:]} stderr={completed.stderr[-1200:]}"
+                f"stdout={stdout[-1200:]} stderr={stderr[-1200:]}"
             )
         if not output.exists():
             raise RuntimeError(f"Local Leffa did not write output: {output}")

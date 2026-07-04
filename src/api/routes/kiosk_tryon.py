@@ -42,6 +42,9 @@ from src.modules.kiosk_tryon.size_chart_registry import (
     SizeChartRegistry,
 )
 from src.modules.kiosk_tryon.visual_tryon import KioskVisualTryOnService
+from src.modules.kiosk_tryon.visual_preview_quality import (
+    require_visual_preview_capture_ready,
+)
 from src.schemas.requests import (
     KioskFitAnalysisRequest,
     KioskSessionCreateRequest,
@@ -510,6 +513,7 @@ async def enqueue_kiosk_visual_preview_job(
     try:
         session = service.get_session(session_id)
         _require_capture_analysis_passed(session)
+        _require_visual_preview_capture_ready(session)
         session_payload = _result_to_dict(session)
         garment_id = session_payload.get("garment_id")
         if not garment_id:
@@ -618,6 +622,7 @@ def _generate_kiosk_visual_preview_response(
     try:
         session = service.get_session(session_id)
         _require_capture_analysis_passed(session)
+        _require_visual_preview_capture_ready(session)
         if not session.garment_id:
             raise ValueError("garment_id is required before visual preview")
 
@@ -960,6 +965,14 @@ def _require_capture_analysis_passed(session: Any) -> None:
     analysis = payload.get("capture_analysis")
     if not isinstance(analysis, dict) or analysis.get("passed") is not True:
         raise ValueError("capture analysis must pass before visual preview")
+
+
+def _require_visual_preview_capture_ready(session: Any) -> None:
+    payload = _result_to_dict(session)
+    analysis = payload.get("capture_analysis")
+    if not isinstance(analysis, dict):
+        raise ValueError("capture analysis must pass before visual preview")
+    require_visual_preview_capture_ready(analysis)
 
 
 def _parse_capture_metadata_json(value: str | None) -> dict[str, Any] | None:

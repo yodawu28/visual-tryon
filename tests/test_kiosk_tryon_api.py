@@ -78,7 +78,17 @@ class FakeKioskTryOnService:
                 garment_id="garment:v1:test",
                 capture_keys=["front"],
                 captures={"front": {"path": "captures/front.png"}},
-                capture_analysis={"passed": True},
+                capture_analysis=_visual_ready_capture_analysis(),
+            )
+        if session_id == "kiosk-session:v1:visual-not-ready":
+            return replace(
+                self.session,
+                session_id=session_id,
+                status="capture_analysis_passed",
+                garment_id="garment:v1:test",
+                capture_keys=["front"],
+                captures={"front": {"path": "captures/front.png"}},
+                capture_analysis=_visual_not_ready_capture_analysis(),
             )
         if session_id == "kiosk-session:v1:fit-ready":
             return replace(
@@ -218,6 +228,56 @@ class FakeGarmentRegistry:
         if self.get_garment(garment_id) is None:
             raise FileNotFoundError(f"Garment not found: {garment_id}")
         return b"garment-image"
+
+
+def _visual_ready_capture_analysis():
+    return {
+        "passed": True,
+        "score": 0.94,
+        "issues": [],
+        "guidance": [],
+        "checks": {
+            "image_not_blurry": True,
+            "image_brightness_ok": True,
+            "person_detected": True,
+        },
+        "quality_gates": {
+            "category_visual_preview": {
+                "status": "passed",
+                "visual_preview_ready": True,
+                "target_confidence_ready": True,
+                "category_quality_score": 0.95,
+                "guidance": [],
+            }
+        },
+    }
+
+
+def _visual_not_ready_capture_analysis():
+    return {
+        "passed": True,
+        "score": 0.88,
+        "issues": [],
+        "guidance": [],
+        "checks": {
+            "image_not_blurry": True,
+            "image_brightness_ok": True,
+            "person_detected": True,
+        },
+        "quality_gates": {
+            "category_visual_preview": {
+                "status": "warning",
+                "visual_preview_ready": False,
+                "target_confidence_ready": False,
+                "category_quality_score": 0.78,
+                "issues": ["torso_detail_enough"],
+                "guidance": [
+                    "Use a closer upper-body capture so chest logo, neckline, "
+                    "and sleeve details are clearer."
+                ],
+            }
+        },
+    }
 
 
 class FakeKioskSizeChartRegistry:
@@ -867,6 +927,24 @@ def test_enqueue_visual_preview_job_endpoint_returns_queued_job():
     assert payload["message"] == "Kiosk visual preview job queued"
 
 
+def test_enqueue_visual_preview_job_requires_visual_ready_capture():
+    client = _client()
+
+    response = client.post(
+        "/api/v1/kiosk/sessions/kiosk-session:v1:visual-not-ready/visual-preview/jobs",
+        json={
+            "use_multimodal_analysis": False,
+            "size": "1024x1024",
+            "max_attempts": 1,
+        },
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert "capture quality is not ready for visual preview" in detail
+    assert "closer upper-body capture" in detail
+
+
 def test_enqueue_visual_preview_job_returns_503_when_provider_is_disabled(
     monkeypatch,
 ):
@@ -893,9 +971,7 @@ def test_enqueue_visual_preview_job_returns_503_when_provider_is_disabled(
 def test_get_visual_preview_image_endpoint_returns_png():
     client = _client()
 
-    response = client.get(
-        "/api/v1/kiosk/visual-previews/kiosk-tryon:v1:test/image"
-    )
+    response = client.get("/api/v1/kiosk/visual-previews/kiosk-tryon:v1:test/image")
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"

@@ -11,6 +11,9 @@ from src.modules.jobs.queue import JobRecord
 from src.modules.kiosk_tryon.garment_registry import GarmentRegistry
 from src.modules.kiosk_tryon.service import KioskTryOnService
 from src.modules.kiosk_tryon.visual_tryon import KioskVisualTryOnService
+from src.modules.kiosk_tryon.visual_preview_quality import (
+    require_visual_preview_capture_ready,
+)
 
 
 KIOSK_VISUAL_PREVIEW_JOB_TYPE = "kiosk_visual_preview"
@@ -37,6 +40,7 @@ class KioskVisualPreviewJobHandler:
         session = self.session_service.get_session(session_id)
         session_payload = _result_to_dict(session)
         _require_capture_analysis_passed(session_payload)
+        _require_visual_preview_capture_ready(session_payload)
 
         garment = self.garment_registry.get_garment(garment_id)
         if garment is None:
@@ -99,6 +103,13 @@ def _require_capture_analysis_passed(session_payload: dict[str, Any]) -> None:
     analysis = session_payload.get("capture_analysis")
     if not isinstance(analysis, dict) or analysis.get("passed") is not True:
         raise ValueError("capture analysis must pass before visual preview")
+
+
+def _require_visual_preview_capture_ready(session_payload: dict[str, Any]) -> None:
+    analysis = session_payload.get("capture_analysis")
+    if not isinstance(analysis, dict):
+        raise ValueError("capture analysis must pass before visual preview")
+    require_visual_preview_capture_ready(analysis)
 
 
 def _result_to_dict(result: Any) -> dict[str, Any]:

@@ -16,7 +16,7 @@ class FakeSessionService:
             avatar_preview_cache_key=None,
             capture_keys=["front"],
             captures={"front": {"path": "captures/front.png"}},
-            capture_analysis={"passed": True},
+            capture_analysis=_visual_ready_capture_analysis(),
             personalized_tryon_key=None,
             fit_analysis_key=None,
             created_at="2026-06-01T00:00:00+00:00",
@@ -117,6 +117,36 @@ class FakeVisualTryOnService:
         }
 
 
+def _visual_ready_capture_analysis():
+    return {
+        "passed": True,
+        "quality_gates": {
+            "category_visual_preview": {
+                "status": "passed",
+                "visual_preview_ready": True,
+                "target_confidence_ready": True,
+                "category_quality_score": 0.95,
+                "guidance": [],
+            }
+        },
+    }
+
+
+def _visual_not_ready_capture_analysis():
+    return {
+        "passed": True,
+        "quality_gates": {
+            "category_visual_preview": {
+                "status": "warning",
+                "visual_preview_ready": False,
+                "target_confidence_ready": False,
+                "category_quality_score": 0.78,
+                "guidance": ["Use a closer upper-body capture."],
+            }
+        },
+    }
+
+
 def test_kiosk_visual_preview_job_handler_generates_preview_and_updates_session():
     session_service = FakeSessionService()
     handler = KioskVisualPreviewJobHandler(
@@ -179,3 +209,34 @@ def test_kiosk_visual_preview_job_handler_requires_passed_capture_analysis():
         assert "capture analysis must pass" in str(exc)
     else:
         raise AssertionError("Expected failed capture analysis to reject job")
+
+
+def test_kiosk_visual_preview_job_handler_requires_visual_ready_capture():
+    session_service = FakeSessionService()
+    session_service.session = replace(
+        session_service.session,
+        capture_analysis=_visual_not_ready_capture_analysis(),
+    )
+    handler = KioskVisualPreviewJobHandler(
+        session_service=session_service,
+        garment_registry=FakeGarmentRegistry(),
+        visual_tryon_service=FakeVisualTryOnService(),
+    )
+    job = JobRecord(
+        job_id="job:v1:test",
+        queue_name="gpu.visual_preview",
+        job_type="kiosk_visual_preview",
+        status="running",
+        payload={
+            "session_id": "kiosk-session:v1:test",
+            "garment_id": "garment:v1:test",
+        },
+    )
+
+    try:
+        handler.handle(job)
+    except ValueError as exc:
+        assert "capture quality is not ready for visual preview" in str(exc)
+        assert "closer upper-body capture" in str(exc)
+    else:
+        raise AssertionError("Expected visual-not-ready capture to reject job")

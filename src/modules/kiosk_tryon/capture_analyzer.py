@@ -415,7 +415,9 @@ def _quality_gates_for_category(
     profile = _capture_profile_for_category(category)
     required_checks = profile["required_checks"]
     missing_required = [
-        check_name for check_name in required_checks if not checks.get(check_name, False)
+        check_name
+        for check_name in required_checks
+        if not checks.get(check_name, False)
     ]
 
     detail_checks = _capture_detail_checks_for_category(category, metrics)
@@ -436,14 +438,14 @@ def _quality_gates_for_category(
         checks=checks,
     )
     issues = [f"missing_{item}" for item in missing_required] + detail_issues
+    visual_preview_ready = status == "passed" and category_quality_score >= 0.9
     return {
         "category_visual_preview": {
             "status": status,
             "garment_category": category,
             "category_quality_score": category_quality_score,
-            "target_confidence_ready": (
-                status == "passed" and category_quality_score >= 0.9
-            ),
+            "target_confidence_ready": visual_preview_ready,
+            "visual_preview_ready": visual_preview_ready,
             "recommended_framing": profile["recommended_framing"],
             "required_checks": required_checks,
             "detail_checks": detail_checks,
@@ -582,9 +584,7 @@ def _capture_detail_checks_for_category(
             )
         }
     return {
-        "full_body_detail_enough": (
-            metrics.get("estimated_body_height_px", 0.0) >= 700
-        )
+        "full_body_detail_enough": (metrics.get("estimated_body_height_px", 0.0) >= 700)
     }
 
 
@@ -598,7 +598,10 @@ def _category_gate_guidance(*, category: str, issues: list[str]) -> list[str]:
         guidance.append(
             "Use a closer lower-body capture so waist, hip, and leg fit can be judged."
         )
-    if category in {"one_pieces", "full_outfit"} and "full_body_detail_enough" in issues:
+    if (
+        category in {"one_pieces", "full_outfit"}
+        and "full_body_detail_enough" in issues
+    ):
         guidance.append(
             "Use a full-body capture with the shopper larger in frame before judging outfit fit."
         )
@@ -627,7 +630,9 @@ def _issues_for_checks(
 
     relevant_pose_checks = _issue_relevant_pose_checks(garment_category)
     if not checks.get("head_visible", True):
-        _append_if_relevant(issues, "head_not_visible", "head_visible", relevant_pose_checks)
+        _append_if_relevant(
+            issues, "head_not_visible", "head_visible", relevant_pose_checks
+        )
     if not checks.get("shoulders_visible", True):
         _append_if_relevant(
             issues,
@@ -636,9 +641,13 @@ def _issues_for_checks(
             relevant_pose_checks,
         )
     if not checks.get("hips_visible", True):
-        _append_if_relevant(issues, "hips_not_visible", "hips_visible", relevant_pose_checks)
+        _append_if_relevant(
+            issues, "hips_not_visible", "hips_visible", relevant_pose_checks
+        )
     if not checks.get("knees_visible", True):
-        _append_if_relevant(issues, "knees_not_visible", "knees_visible", relevant_pose_checks)
+        _append_if_relevant(
+            issues, "knees_not_visible", "knees_visible", relevant_pose_checks
+        )
     if not checks.get("ankles_or_feet_visible", True):
         _append_if_relevant(
             issues,
@@ -654,9 +663,13 @@ def _issues_for_checks(
             relevant_pose_checks,
         )
     if not checks.get("body_centered", True):
-        _append_if_relevant(issues, "body_not_centered", "body_centered", relevant_pose_checks)
+        _append_if_relevant(
+            issues, "body_not_centered", "body_centered", relevant_pose_checks
+        )
     if not checks.get("front_facing", True):
-        _append_if_relevant(issues, "not_front_facing", "front_facing", relevant_pose_checks)
+        _append_if_relevant(
+            issues, "not_front_facing", "front_facing", relevant_pose_checks
+        )
     return issues
 
 

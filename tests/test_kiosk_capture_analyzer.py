@@ -76,9 +76,33 @@ def test_capture_analyzer_adds_category_quality_gate_for_tops():
     assert gate["recommended_framing"] == "upper_body"
     assert gate["category_quality_score"] < 1.0
     assert gate["target_confidence_ready"] is False
+    assert gate["visual_preview_ready"] is False
     assert gate["detail_checks"]["torso_detail_enough"] is False
     assert gate["metrics"]["estimated_torso_width_px"] == 122.88
     assert "torso_detail_enough" in gate["issues"]
+
+
+def test_capture_analyzer_marks_tops_visual_preview_ready_for_close_capture():
+    landmarks = _good_landmarks()
+    landmarks["left_shoulder"] = LandmarkPoint(x=0.28, y=0.25, visibility=0.95)
+    landmarks["right_shoulder"] = LandmarkPoint(x=0.72, y=0.25, visibility=0.95)
+    landmarks["left_hip"] = LandmarkPoint(x=0.36, y=0.62, visibility=0.95)
+    landmarks["right_hip"] = LandmarkPoint(x=0.64, y=0.62, visibility=0.95)
+    landmarks["left_wrist"] = LandmarkPoint(x=0.20, y=0.58, visibility=0.90)
+    landmarks["right_wrist"] = LandmarkPoint(x=0.80, y=0.58, visibility=0.90)
+    analyzer = KioskCaptureAnalyzer(
+        pose_estimator=lambda _image: landmarks,
+        min_blur_variance=5.0,
+    )
+
+    result = analyzer.analyze_front_capture(_image_bytes(), garment_category="tops")
+
+    gate = result.quality_gates["category_visual_preview"]
+    assert result.passed is True
+    assert gate["status"] == "passed"
+    assert gate["category_quality_score"] >= 0.9
+    assert gate["target_confidence_ready"] is True
+    assert gate["visual_preview_ready"] is True
 
 
 def test_capture_analyzer_fails_when_pose_is_missing():

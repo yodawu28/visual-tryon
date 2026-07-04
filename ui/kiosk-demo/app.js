@@ -20,6 +20,7 @@ const state = {
   cameraSequenceRunning: false,
   captureUploaded: localStorage.getItem("kioskCaptureUploaded") === "true",
   capturePassed: localStorage.getItem("kioskCapturePassed") === "true",
+  visualPreviewReady: localStorage.getItem("kioskVisualPreviewReady") === "true",
   fitReady: localStorage.getItem("kioskFitReady") === "true",
   previewKey: localStorage.getItem("kioskPreviewKey") || "",
   jobId: localStorage.getItem("kioskJobId") || "",
@@ -292,8 +293,8 @@ async function startCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: "environment" },
-        width: { ideal: 1440 },
-        height: { ideal: 1920 },
+        width: { ideal: 2160 },
+        height: { ideal: 2880 },
       },
       audio: false,
     });
@@ -373,7 +374,7 @@ async function captureCameraPhoto(slot, options = {}) {
   render();
   try {
     await runCaptureCountdown(5);
-    const candidates = await captureBurstFrames({ count: 5, intervalMs: 140 });
+    const candidates = await captureBurstFrames({ count: 8, intervalMs: 110 });
     const selected = selectBestFrame(candidates);
     if (!selected || !selected.blob) {
       showWarning("Could not capture camera frame.");
@@ -430,6 +431,7 @@ function markCapturesDirty() {
   stopPreviewPolling();
   state.captureUploaded = false;
   state.capturePassed = false;
+  state.visualPreviewReady = false;
   state.fitReady = false;
   state.previewKey = "";
   state.jobId = "";
@@ -570,6 +572,7 @@ async function uploadGarment() {
     state.sessionId = "";
     state.captureUploaded = false;
     state.capturePassed = false;
+    state.visualPreviewReady = false;
     state.fitReady = false;
     state.previewKey = "";
     state.jobId = "";
@@ -600,6 +603,7 @@ async function createSession() {
     state.sessionId = payload.session_id;
     state.captureUploaded = false;
     state.capturePassed = false;
+    state.visualPreviewReady = false;
     state.fitReady = false;
     state.previewKey = "";
     state.jobId = "";
@@ -647,6 +651,7 @@ async function uploadCaptures() {
     });
     state.captureUploaded = true;
     state.capturePassed = false;
+    state.visualPreviewReady = false;
     state.fitReady = false;
     state.previewKey = "";
     state.jobId = "";
@@ -684,9 +689,19 @@ async function analyzeCaptures(options = {}) {
       method: "POST",
     });
     const passed = Boolean(payload.capture_analysis && payload.capture_analysis.passed);
+    const previewReady = visualPreviewReady(payload.capture_analysis);
     state.capturePassed = passed;
+    state.visualPreviewReady = previewReady;
     persist();
-    setStatus(els.captureStatus, passed ? "success" : "warning", passed ? "Passed" : "Needs retake");
+    setStatus(
+      els.captureStatus,
+      passed && previewReady ? "success" : "warning",
+      passed
+        ? previewReady
+          ? "Preview ready"
+          : "Retake for preview"
+        : "Needs retake",
+    );
     state.warnings = collectWarnings(payload.capture_analysis);
     logEvent(isAutoRun ? "Auto capture analysis" : "Capture analysis", payload);
   } catch (error) {
@@ -734,6 +749,10 @@ async function analyzeFit() {
 async function queuePreviewJob() {
   if (!state.sessionId || !state.capturePassed) {
     showWarning("Capture analysis must pass before visual preview.");
+    return;
+  }
+  if (!state.visualPreviewReady) {
+    showWarning("Retake a clearer capture before visual preview.");
     return;
   }
 
@@ -942,6 +961,7 @@ function render() {
   const hasSession = Boolean(state.sessionId);
   const hasJob = Boolean(state.jobId);
   const previewJobActive = hasJob && !state.previewKey && isActivePreviewJob(state.jobStatus);
+  const previewCaptureReady = state.capturePassed && state.visualPreviewReady;
   const cameraRunning = Boolean(state.cameraStream);
   const cameraBusy = Boolean(state.cameraBusy || state.cameraSequenceRunning);
 
@@ -950,7 +970,7 @@ function render() {
   els.uploadCapturesButton.disabled = !hasGarment || !hasFrontFile;
   els.analyzeCapturesButton.disabled = !hasSession || !state.captureUploaded;
   els.fitAnalyzeButton.disabled = !hasSession || !state.capturePassed;
-  els.queuePreviewButton.disabled = !hasSession || !state.capturePassed || previewJobActive;
+  els.queuePreviewButton.disabled = !hasSession || !previewCaptureReady || previewJobActive;
   els.pollJobButton.disabled = !hasJob || previewPollInFlight;
   els.queuePreviewButton.textContent = previewJobActive ? "Generating Preview" : "Queue Preview Job";
   els.pollJobButton.textContent = previewJobActive ? "Polling Job" : "Refresh Job";
@@ -963,7 +983,8 @@ function render() {
   if (hasGarment && els.garmentStatus.textContent === "Waiting") {
     setStatus(els.garmentStatus, "success", "Uploaded");
   }
-  if (state.capturePassed) setStatus(els.captureStatus, "success", "Passed");
+  if (state.capturePassed && state.visualPreviewReady) setStatus(els.captureStatus, "success", "Preview ready");
+  else if (state.capturePassed) setStatus(els.captureStatus, "warning", "Retake for preview");
   else if (state.captureUploaded) setStatus(els.captureStatus, "success", "Uploaded");
   if (state.fitReady) setStatus(els.fitStatus, "success", "Ready");
   if (state.previewKey) {
@@ -983,7 +1004,7 @@ function render() {
   els.summarySession.textContent = hasSession ? shortId(state.sessionId) : "Not started";
   const captureSourceLabel = state.captureSource ? ` (${state.captureSource.replaceAll("_", " ")})` : "";
   els.summaryCaptures.textContent = state.capturePassed
-    ? `Quality passed${captureSourceLabel}`
+    ? `${state.visualPreviewReady ? "Preview ready" : "Fit ready, retake for preview"}${captureSourceLabel}`
     : state.captureUploaded
       ? `Uploaded, not checked${captureSourceLabel}`
       : "Not uploaded";
@@ -1070,7 +1091,28 @@ function collectWarnings(analysis) {
   if (!analysis) return [];
   const guidance = Array.isArray(analysis.guidance) ? analysis.guidance : [];
   const issues = Array.isArray(analysis.issues) ? analysis.issues.map((issue) => `Issue: ${issue}`) : [];
-  return [...issues, ...guidance];
+  const previewGate = visualPreviewGate(analysis);
+  const previewGuidance = previewGate && Array.isArray(previewGate.guidance)
+    ? previewGate.guidance
+    : [];
+  const previewIssues = previewGate && Array.isArray(previewGate.issues)
+    ? previewGate.issues.map((issue) => `Preview issue: ${issue}`)
+    : [];
+  const previewStatus = previewGate && previewGate.visual_preview_ready === false
+    ? ["Visual preview needs a clearer capture before running GPU generation."]
+    : [];
+  return [...issues, ...guidance, ...previewStatus, ...previewIssues, ...previewGuidance];
+}
+
+function visualPreviewReady(analysis) {
+  const previewGate = visualPreviewGate(analysis);
+  return Boolean(previewGate && previewGate.visual_preview_ready === true);
+}
+
+function visualPreviewGate(analysis) {
+  if (!analysis || !analysis.quality_gates) return null;
+  const gate = analysis.quality_gates.category_visual_preview;
+  return gate && typeof gate === "object" ? gate : null;
 }
 
 function setStatus(el, type, text) {
@@ -1121,6 +1163,7 @@ function persist() {
   setOrRemove("kioskPreviewKey", state.previewKey);
   localStorage.setItem("kioskCaptureUploaded", String(state.captureUploaded));
   localStorage.setItem("kioskCapturePassed", String(state.capturePassed));
+  localStorage.setItem("kioskVisualPreviewReady", String(state.visualPreviewReady));
   localStorage.setItem("kioskFitReady", String(state.fitReady));
 }
 
@@ -1139,6 +1182,7 @@ function resetUiState() {
     "kioskCaptureSource",
     "kioskCaptureUploaded",
     "kioskCapturePassed",
+    "kioskVisualPreviewReady",
     "kioskFitReady",
     "kioskJobId",
     "kioskJobStatus",
@@ -1164,6 +1208,7 @@ function resetUiState() {
     cameraSequenceRunning: false,
     captureUploaded: false,
     capturePassed: false,
+    visualPreviewReady: false,
     fitReady: false,
     previewKey: "",
     jobId: "",

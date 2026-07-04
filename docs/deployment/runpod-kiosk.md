@@ -9,7 +9,9 @@ For the phased deployment strategy, see
 
 ## Pod Shape
 
-- Expose HTTP port `8080` for FastAPI Swagger and kiosk API.
+- Expose one HTTP port for FastAPI, Swagger, kiosk API, and the static kiosk UI.
+  The default is `8080`, but any RunPod-exposed port can be used when `.env`
+  `PORT` matches it.
 - Use a persistent volume mounted at `/workspace`.
 - Keep mutable project data under `/workspace/tryon-data`.
 - Keep local model/cache assets under `/workspace/tryon-models`.
@@ -51,6 +53,8 @@ Edit `.env`:
   provider.
 - Set `CORS_ORIGINS` to include `https://<pod-id>-8080.proxy.runpod.net` after
   the pod is created.
+- Keep `KIOSK_UI_ENABLED=true` and `KIOSK_UI_PATH=/kiosk` to test the static UI
+  through the same RunPod HTTP proxy as the API.
 - Set `DEBUG=true` for the Phase 1 Swagger smoke test. Set it back to `false`
   before exposing the API beyond controlled testing.
 - Keep `TEMP_STORAGE_DIR=/workspace/tryon-data`.
@@ -125,6 +129,17 @@ python -m scripts.kiosk_preflight --json
 
 Expected result: `READY`. If it reports `NOT READY`, fix the failed check before
 opening Swagger for an end-to-end run.
+
+## Browser Smoke Test
+
+Open the static kiosk UI through the same FastAPI port:
+
+```text
+https://<pod-id>-8080.proxy.runpod.net/kiosk/
+```
+
+The UI defaults to the same origin as the page, so it does not need a separate
+`5173` proxy on RunPod. `make ui-kiosk` remains local-only development tooling.
 
 ## Swagger Smoke Test
 
@@ -467,6 +482,11 @@ anything:
 ```bash
 make runpod-leffa-deps-check
 ```
+
+Leffa package pins live in `requirements-leffa-runpod.txt`. The install target
+uses the persistent `PIP_CACHE_DIR`, prefers binary wheels, and keeps pip's
+upgrade strategy at `only-if-needed` so repeated installs reuse the cached model
+venv whenever possible.
 
 Only force a rebuild when the Leffa venv is corrupted or you intentionally want
 to replace the torch/dependency stack:

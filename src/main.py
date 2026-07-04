@@ -5,8 +5,10 @@ FastAPI application entry point.
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 import time
 import logging
+from pathlib import Path
 
 from src.api.router_registry import include_routers_for_profile
 from src.config.settings import get_settings
@@ -66,6 +68,27 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Include routers
 include_routers_for_profile(app, settings.api_profile)
+
+
+def mount_kiosk_ui(application: FastAPI) -> None:
+    """Serve the static kiosk UI from the API process for single-port pods."""
+    if not settings.kiosk_ui_enabled:
+        return
+
+    ui_dir = Path(__file__).resolve().parent.parent / "ui" / "kiosk-demo"
+    if not (ui_dir / "index.html").exists():
+        logger.warning("Kiosk UI directory is missing; skipping static UI mount")
+        return
+
+    mount_path = settings.kiosk_ui_path.rstrip("/") or "/kiosk"
+    application.mount(
+        mount_path,
+        StaticFiles(directory=ui_dir, html=True),
+        name="kiosk-ui",
+    )
+
+
+mount_kiosk_ui(app)
 
 
 @app.on_event("startup")

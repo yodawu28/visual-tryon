@@ -182,7 +182,10 @@ def _load_image(path: Path) -> Image.Image:
     if not path.exists():
         raise FileNotFoundError(f"Input image not found: {path}")
     with Image.open(path) as image:
-        return ImageOps.exif_transpose(image).copy()
+        transposed = ImageOps.exif_transpose(image)
+        if transposed is None:
+            return image.copy()
+        return transposed.copy()
 
 
 def _person_metrics(

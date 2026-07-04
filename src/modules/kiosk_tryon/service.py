@@ -186,9 +186,7 @@ class KioskTryOnService:
             analysis = {
                 **analysis,
                 "capture_metadata": capture_metadata,
-                "capture_protocol_quality": _capture_protocol_quality(
-                    capture_metadata
-                ),
+                "capture_protocol_quality": _capture_protocol_quality(capture_metadata),
             }
         status = (
             "capture_analysis_passed"
@@ -482,10 +480,12 @@ def _analyze_front_capture(
 ) -> Any:
     method = capture_analyzer.analyze_front_capture
     try:
-        parameters = inspect.signature(method).parameters
+        accepts_garment_category = (
+            "garment_category" in inspect.signature(method).parameters
+        )
     except (TypeError, ValueError):
-        parameters = {}
-    if "garment_category" in parameters:
+        accepts_garment_category = False
+    if accepts_garment_category:
         return method(image_bytes, garment_category=garment_category)
     return method(image_bytes)
 

@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     host: str = Field(default="127.0.0.1", env="HOST")
     port: int = Field(default=8000, env="PORT")
     api_profile: str = Field(default="kiosk", env="API_PROFILE")
+    kiosk_ui_enabled: bool = Field(default=True, env="KIOSK_UI_ENABLED")
+    kiosk_ui_path: str = Field(default="/kiosk", env="KIOSK_UI_PATH")
 
     # CORS
     cors_origins: Union[str, List[str]] = Field(

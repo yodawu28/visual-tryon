@@ -76,6 +76,7 @@ RUNPOD_LEFFA_REPO_URL ?= https://github.com/franciszzj/Leffa.git
 RUNPOD_LEFFA_ROOT ?= $(RUNPOD_MODEL_DIR)/external/Leffa
 RUNPOD_LEFFA_VENV ?= $(RUNPOD_MODEL_DIR)/venvs/leffa
 RUNPOD_LEFFA_PYTHON ?= $(RUNPOD_LEFFA_VENV)/bin/python
+RUNPOD_LEFFA_REQUIREMENTS ?= requirements-leffa-runpod.txt
 RUNPOD_LEFFA_MODEL_REPO_ID ?= franciszzj/Leffa
 RUNPOD_LEFFA_CHECKPOINT_DIR ?= $(RUNPOD_LEFFA_ROOT)/ckpts
 RUNPOD_LEFFA_SIZE ?= 768x1024
@@ -135,7 +136,7 @@ help:
 	@echo "  make run        - Run FastAPI server"
 	@echo "  make run-kiosk  - Run kiosk API on 0.0.0.0:8080 for deployed pods"
 	@echo "  make run-kiosk-all - Run kiosk API + worker in one foreground process"
-	@echo "  make ui-kiosk   - Serve the static kiosk app UI on 127.0.0.1:$(UI_PORT)"
+	@echo "  make ui-kiosk   - Serve the static kiosk app UI locally on 127.0.0.1:$(UI_PORT)"
 	@echo "  make kiosk-seed-size-charts - Import default local kiosk size charts"
 	@echo "  make kiosk-reset - Reset local runtime test data and seed default size charts"
 	@echo "  make worker     - Run local kiosk worker loop"
@@ -234,6 +235,7 @@ runpod-help:
 	@echo ""
 	@echo "Run app:"
 	@echo "  make runpod-start"
+	@echo "  open https://<pod-id>-8080.proxy.runpod.net/kiosk/"
 	@echo ""
 	@echo "Or run app and let the supervisor start Ollama if needed:"
 	@echo "  make runpod-start-with-ollama"
@@ -343,39 +345,10 @@ runpod-install-leffa-deps: runpod-install-leffa-torch-cu124
 		echo "Leffa runtime already ready; skipping dependency install."; \
 	else \
 		PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_LEFFA_PYTHON)" -m pip install \
-			"accelerate>=0.31.0" \
-			"av>=12.0.0" \
-			"cloudpickle>=3.0.0" \
-			"diffusers>=0.29.2" \
-			"einops>=0.8.0" \
-			"fvcore>=0.1.5.post20221221" \
-			"huggingface_hub>=0.23.4" \
-			"imageio>=2.34.0" \
-			"iopath>=0.1.10" \
-			"matplotlib>=3.9.1" \
-			"numpy==1.26.4" \
-			"omegaconf>=2.3.0" \
-			"onnxruntime>=1.18.0" \
-			"opencv-python-headless==4.10.0.84" \
-			"packaging>=24.1" \
-			"pandas>=2.2.2" \
-			"peft>=0.11.1" \
-			"pillow>=10.4.0" \
-			"psutil>=6.0.0" \
-			"pycocotools>=2.0.8" \
-			"PyYAML>=6.0.1" \
-			"regex==2024.5.15" \
-			"safetensors>=0.4.5" \
-			"scikit-image>=0.24.0" \
-			"scipy>=1.10.1" \
-			"tabulate>=0.9.0" \
-			"termcolor>=2.4.0" \
-			"timm>=1.0.7" \
-			"tokenizers>=0.19.1" \
-			"torchmetrics>=1.4.0" \
-			"tqdm>=4.66.4" \
-			"transformers>=4.43.0" \
-			"yacs>=0.1.8"; \
+			--prefer-binary \
+			--upgrade-strategy only-if-needed \
+			$(if $(filter 1 true yes,$(RUNPOD_LEFFA_FORCE_REINSTALL)),--force-reinstall,) \
+			-r "$(RUNPOD_LEFFA_REQUIREMENTS)"; \
 	fi
 	@echo "Leffa runtime installed at $(RUNPOD_LEFFA_VENV)"
 	@echo "Set LOCAL_LEFFA_PYTHON=$(RUNPOD_LEFFA_PYTHON) before make runpod-start"

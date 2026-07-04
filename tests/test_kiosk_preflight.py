@@ -73,6 +73,12 @@ def test_run_preflight_returns_unreachable_for_api_connection_error(monkeypatch)
     assert kiosk_preflight.exit_code_for_result(result) == 2
 
 
+def test_default_base_url_uses_port_environment(monkeypatch):
+    monkeypatch.setenv("PORT", "9090")
+
+    assert kiosk_preflight.default_base_url() == "http://127.0.0.1:9090"
+
+
 def test_main_prints_json_and_returns_exit_code(monkeypatch, capsys):
     monkeypatch.setattr(
         kiosk_preflight,

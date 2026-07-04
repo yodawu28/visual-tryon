@@ -16,6 +16,17 @@ make ui-kiosk
 
 Open `http://127.0.0.1:5173`.
 
+On RunPod, do not expose a separate `5173` UI port. FastAPI serves this same
+static UI at `/kiosk`, so open:
+
+```text
+https://<pod-id>-8080.proxy.runpod.net/kiosk/
+```
+
+When served from `/kiosk`, the app uses the current origin as its API base.
+When served from local static ports `5173` or `5174`, it defaults to
+`http://127.0.0.1:8080`.
+
 Shopper capture supports both file upload and browser camera capture. Camera
 capture requires a secure browser context, so use `localhost`, HTTPS, or a
 trusted tunnel/proxy when testing from a phone.

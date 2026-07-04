@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from typing import Any
 
 import httpx
@@ -17,7 +18,16 @@ import httpx
 DEFAULT_BASE_URL = "http://127.0.0.1:8080"
 
 
-def run_preflight(*, base_url: str = DEFAULT_BASE_URL, timeout: float = 5.0) -> dict[str, Any]:
+def default_base_url() -> str:
+    port = os.getenv("PORT", "8080").strip() or "8080"
+    return f"http://127.0.0.1:{port}"
+
+
+def run_preflight(
+    *, base_url: str | None = None, timeout: float = 5.0
+) -> dict[str, Any]:
+    if base_url is None:
+        base_url = default_base_url()
     endpoint = f"{base_url.rstrip('/')}/api/v1/readiness"
     try:
         response = httpx.get(endpoint, timeout=timeout)
@@ -98,7 +108,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--base-url",
-        default=DEFAULT_BASE_URL,
+        default=default_base_url(),
         help="Base URL for the running kiosk API.",
     )
     parser.add_argument(

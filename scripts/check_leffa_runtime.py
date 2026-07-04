@@ -10,7 +10,6 @@ import argparse
 import importlib
 import importlib.metadata as metadata
 import importlib.util
-import sys
 from dataclasses import dataclass
 
 

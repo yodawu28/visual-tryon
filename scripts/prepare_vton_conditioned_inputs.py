@@ -85,7 +85,7 @@ def prepare_conditioned_inputs(
     person = _load_image(person_image).convert("RGB")
     garment = _load_image(garment_image).convert("RGBA")
 
-    conditioned_person = _condition_person(
+    conditioned_person, person_meta = _condition_person(
         person,
         max_size=person_max_size,
         canvas_size=person_canvas_size,
@@ -96,7 +96,6 @@ def prepare_conditioned_inputs(
         clean_background=person_clean_background,
         enhance=person_enhance,
     )
-    conditioned_person, person_meta = conditioned_person
     conditioned_garment, garment_meta = _condition_garment(
         garment,
         canvas_size=garment_canvas_size,
@@ -153,7 +152,10 @@ def _load_image(path: Path) -> Image.Image:
     if not path.exists():
         raise FileNotFoundError(f"Input image not found: {path}")
     with Image.open(path) as image:
-        return ImageOps.exif_transpose(image).copy()
+        transposed = ImageOps.exif_transpose(image)
+        if transposed is None:
+            return image.copy()
+        return transposed.copy()
 
 
 def _condition_person(

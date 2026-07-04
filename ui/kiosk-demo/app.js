@@ -1,5 +1,5 @@
 const state = {
-  apiBase: localStorage.getItem("kioskApiBase") || "http://127.0.0.1:8080",
+  apiBase: resolveDefaultApiBase(),
   garmentId: localStorage.getItem("kioskGarmentId") || "",
   garmentName: localStorage.getItem("kioskGarmentName") || "",
   garmentRecord: null,
@@ -26,6 +26,23 @@ const state = {
   jobStatus: localStorage.getItem("kioskJobStatus") || "",
   warnings: [],
 };
+
+function resolveDefaultApiBase() {
+  const storedApiBase = localStorage.getItem("kioskApiBase");
+  if (storedApiBase) {
+    return storedApiBase;
+  }
+
+  const location = window.location;
+  const isLocalStaticServer =
+    ["localhost", "127.0.0.1"].includes(location.hostname) &&
+    ["5173", "5174"].includes(location.port);
+  if (location.protocol === "file:" || isLocalStaticServer) {
+    return "http://127.0.0.1:8080";
+  }
+
+  return window.location.origin || "http://127.0.0.1:8080";
+}
 
 const els = {
   apiBase: byId("apiBase"),

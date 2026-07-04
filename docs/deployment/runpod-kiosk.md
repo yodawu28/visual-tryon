@@ -509,7 +509,9 @@ make runpod-leffa-import-check
 
 This installs `torch==2.6.0`, `torchvision==0.21.0`, and `torchaudio==2.6.0`
 from the PyTorch `cu124` index into `/workspace/tryon-models/venvs/leffa` only
-when the cached torch stack is missing or incompatible. To force this repair:
+when the cached torch stack is missing or incompatible. The normal repair does
+not use pip `--force-reinstall`, so pip can keep already matching wheels and
+only replace missing or mismatched packages. To force a full reinstall:
 
 ```bash
 RUNPOD_LEFFA_FORCE_REINSTALL=1 make runpod-install-leffa-torch-cu124

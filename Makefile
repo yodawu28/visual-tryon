@@ -316,7 +316,8 @@ runpod-install-leffa-torch-cu124:
 		echo "Leffa Torch stack already ready; skipping reinstall."; \
 	else \
 		echo "Installing Leffa Torch stack into $(RUNPOD_LEFFA_VENV)"; \
-		PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_LEFFA_PYTHON)" -m pip install --force-reinstall \
+		PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_LEFFA_PYTHON)" -m pip install \
+			$(if $(filter 1 true yes,$(RUNPOD_LEFFA_FORCE_REINSTALL)),--force-reinstall,) \
 			torch==$(RUNPOD_TORCH_CU124_VERSION) \
 			torchvision==$(RUNPOD_TORCHVISION_CU124_VERSION) \
 			torchaudio==$(RUNPOD_TORCHAUDIO_CU124_VERSION) \

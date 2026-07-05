@@ -229,7 +229,7 @@ def main() -> int:
                 env=env,
             )
         )
-        if args.start_local_visual_engine_service:
+        if args.start_local_visual_engine_service and not args.no_worker:
             processes.append(
                 _start_process(
                     "local-visual-engine",

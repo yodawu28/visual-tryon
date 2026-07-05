@@ -153,5 +153,42 @@ def test_main_passes_service_mode_env_to_worker(monkeypatch) -> None:
     assert worker["env"]["LOCAL_VISUAL_ENGINE_SERVICE_URL"] == "http://127.0.0.1:8099"
 
 
+def test_main_no_worker_skips_local_visual_engine_service(monkeypatch) -> None:
+    started = []
+
+    monkeypatch.setattr(
+        run_kiosk_all,
+        "parse_args",
+        lambda: SimpleNamespace(
+            api_host="0.0.0.0",
+            api_port=8080,
+            no_worker=True,
+            worker_poll_interval_seconds=2.0,
+            worker_stale_running_seconds=1800,
+            start_ollama=False,
+            ollama_command="ollama",
+            ollama_base_url="http://127.0.0.1:11434",
+            log_level="INFO",
+            shutdown_timeout_seconds=15.0,
+            start_local_visual_engine_service=True,
+            local_visual_engine_service_host="127.0.0.1",
+            local_visual_engine_service_port=8099,
+            local_visual_engine_python="/workspace/tryon-models/venvs/leffa/bin/python",
+        ),
+    )
+
+    def fake_start_process(name, command, *, env):
+        started.append({"name": name, "command": command, "env": dict(env)})
+        return SimpleNamespace(name=name, process=SimpleNamespace())
+
+    monkeypatch.setattr(run_kiosk_all, "_start_process", fake_start_process)
+    monkeypatch.setattr(run_kiosk_all, "_wait_for_processes", lambda *_, **__: 0)
+    monkeypatch.setattr(run_kiosk_all, "_stop_processes", lambda *_, **__: None)
+
+    assert run_kiosk_all.main() == 0
+
+    assert [item["name"] for item in started] == ["api"]
+
+
 def test_build_ollama_command_starts_server() -> None:
     assert build_ollama_command(ollama_command="ollama") == ["ollama", "serve"]

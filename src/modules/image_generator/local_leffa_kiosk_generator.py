@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from src.modules.image_generator.base import ImageGeneratorBase
 
 logger = logging.getLogger(__name__)
@@ -46,7 +48,17 @@ class LocalLeffaKioskGenerator(ImageGeneratorBase):
         guidance_scale: float = 2.5,
         seed: int = 42,
         timeout_seconds: int = 900,
+        execution_mode: str = "subprocess",
+        service_url: str = "http://127.0.0.1:8091",
+        service_ready_timeout_seconds: int = 900,
+        service_request_timeout_seconds: int | None = None,
     ) -> None:
+        normalized_execution_mode = execution_mode.strip().lower()
+        if normalized_execution_mode not in {"subprocess", "service"}:
+            raise ValueError(
+                "Local Leffa execution_mode must be 'subprocess' or 'service'. "
+                f"Received {execution_mode!r}."
+            )
         self.work_dir = Path(work_dir)
         self.leffa_root = Path(leffa_root)
         self.repo_url = repo_url
@@ -65,6 +77,12 @@ class LocalLeffaKioskGenerator(ImageGeneratorBase):
         self.guidance_scale = guidance_scale
         self.seed = seed
         self.timeout_seconds = timeout_seconds
+        self.execution_mode = normalized_execution_mode
+        self.service_url = service_url.rstrip("/")
+        self.service_ready_timeout_seconds = service_ready_timeout_seconds
+        self.service_request_timeout_seconds = (
+            service_request_timeout_seconds or timeout_seconds
+        )
         self._last_generation_metadata: dict[str, Any] = {}
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
@@ -189,88 +207,107 @@ class LocalLeffaKioskGenerator(ImageGeneratorBase):
             person_framing=category_config.person_framing,
         )
 
-        command = [
-            str(self.python_executable or sys.executable),
-            "-u",
-            "-m",
-            "scripts.local_leffa_smoke",
-            "--person-image",
-            str(conditioned_person),
-            "--garment-image",
-            str(conditioned_garment),
-            "--output",
-            str(output),
-            "--report",
-            str(leffa_report),
-            "--leffa-root",
-            str(self.leffa_root),
-            "--repo-url",
-            self.repo_url,
-            "--model-repo-id",
-            self.model_repo_id,
-            "--checkpoint-dir",
-            str(self.checkpoint_dir),
-            "--size",
-            self.size,
-            "--device",
-            self.device,
-            "--dtype",
-            self.dtype,
-            "--vt-model-type",
-            self.vt_model_type,
-            "--garment-type",
-            category_config.leffa_garment_type,
-            "--steps",
-            str(self.steps),
-            "--guidance-scale",
-            str(self.guidance_scale),
-            "--seed",
-            str(self.seed),
-            "--no-ref-acceleration",
-            "--no-repaint",
-            "--no-preprocess-garment",
-        ]
-        if self.no_clone:
-            command.append("--no-clone")
+        service_payload = None
+        if self.execution_mode == "service":
+            logger.info(
+                "Starting local Leffa service generation category=%s "
+                "garment_type=%s work_dir=%s service_url=%s steps=%s",
+                normalized_category,
+                category_config.leffa_garment_type,
+                work_dir,
+                self.service_url,
+                self.steps,
+            )
+            service_payload = self._run_service_generation(
+                person_image=conditioned_person,
+                garment_image=conditioned_garment,
+                output=output,
+                report=leffa_report,
+                garment_type=category_config.leffa_garment_type,
+            )
+        else:
+            command = [
+                str(self.python_executable or sys.executable),
+                "-u",
+                "-m",
+                "scripts.local_leffa_smoke",
+                "--person-image",
+                str(conditioned_person),
+                "--garment-image",
+                str(conditioned_garment),
+                "--output",
+                str(output),
+                "--report",
+                str(leffa_report),
+                "--leffa-root",
+                str(self.leffa_root),
+                "--repo-url",
+                self.repo_url,
+                "--model-repo-id",
+                self.model_repo_id,
+                "--checkpoint-dir",
+                str(self.checkpoint_dir),
+                "--size",
+                self.size,
+                "--device",
+                self.device,
+                "--dtype",
+                self.dtype,
+                "--vt-model-type",
+                self.vt_model_type,
+                "--garment-type",
+                category_config.leffa_garment_type,
+                "--steps",
+                str(self.steps),
+                "--guidance-scale",
+                str(self.guidance_scale),
+                "--seed",
+                str(self.seed),
+                "--no-ref-acceleration",
+                "--no-repaint",
+                "--no-preprocess-garment",
+            ]
+            if self.no_clone:
+                command.append("--no-clone")
 
-        logger.info(
-            "Starting local Leffa subprocess category=%s garment_type=%s work_dir=%s "
-            "device=%s steps=%s timeout_seconds=%s",
-            normalized_category,
-            category_config.leffa_garment_type,
-            work_dir,
-            self.device,
-            self.steps,
-            self.timeout_seconds,
-        )
-        try:
-            completed = subprocess.run(
-                command,
-                cwd=_project_root(),
-                env=self._subprocess_env(),
-                text=True,
-                capture_output=False,
-                timeout=self.timeout_seconds,
-                check=False,
+            logger.info(
+                "Starting local Leffa subprocess category=%s garment_type=%s "
+                "work_dir=%s device=%s steps=%s timeout_seconds=%s",
+                normalized_category,
+                category_config.leffa_garment_type,
+                work_dir,
+                self.device,
+                self.steps,
+                self.timeout_seconds,
             )
-        except subprocess.TimeoutExpired as exc:
-            stdout = _decode_process_output(exc.stdout)
-            stderr = _decode_process_output(exc.stderr)
-            raise RuntimeError(
-                "Local Leffa generation timed out "
-                f"after {self.timeout_seconds} seconds. "
-                f"work_dir={work_dir} "
-                f"report={leffa_report} "
-                f"stdout={stdout[-1200:]} stderr={stderr[-1200:]}"
-            ) from exc
-        if completed.returncode != 0:
-            stdout = completed.stdout or ""
-            stderr = completed.stderr or ""
-            raise RuntimeError(
-                "Local Leffa generation failed "
-                f"(exit={completed.returncode}). "
-                f"stdout={stdout[-1200:]} stderr={stderr[-1200:]}"
-            )
+            try:
+                completed = subprocess.run(
+                    command,
+                    cwd=_project_root(),
+                    env=self._subprocess_env(),
+                    text=True,
+                    capture_output=False,
+                    timeout=self.timeout_seconds,
+                    check=False,
+                )
+            except subprocess.TimeoutExpired as exc:
+                stdout = _decode_process_output(exc.stdout)
+                stderr = _decode_process_output(exc.stderr)
+                raise RuntimeError(
+                    "Local Leffa generation timed out "
+                    f"after {self.timeout_seconds} seconds. "
+                    f"work_dir={work_dir} "
+                    f"report={leffa_report} "
+                    f"stdout={stdout[-1200:]} stderr={stderr[-1200:]}"
+                ) from exc
+            if completed.returncode != 0:
+                stdout = completed.stdout or ""
+                stderr = completed.stderr or ""
+                raise RuntimeError(
+                    "Local Leffa generation failed "
+                    f"(exit={completed.returncode}). "
+                    f"stdout={stdout[-1200:]} stderr={stderr[-1200:]}"
+                )
         if not output.exists():
             raise RuntimeError(f"Local Leffa did not write output: {output}")
 
@@ -296,6 +333,12 @@ class LocalLeffaKioskGenerator(ImageGeneratorBase):
             "input_quality": input_quality,
             "conditioning": conditioning,
             "leffa": leffa_payload,
+            "execution_mode": self.execution_mode,
+            "service": (
+                {"url": self.service_url, "response": service_payload}
+                if self.execution_mode == "service"
+                else None
+            ),
             "generation_time_seconds": time.time() - started,
             "warnings": _metadata_warnings(
                 input_quality=input_quality,
@@ -303,6 +346,71 @@ class LocalLeffaKioskGenerator(ImageGeneratorBase):
             ),
         }
         return base64.b64encode(output.read_bytes()).decode("utf-8")
+
+    def _run_service_generation(
+        self,
+        *,
+        person_image: Path,
+        garment_image: Path,
+        output: Path,
+        report: Path,
+        garment_type: str,
+    ) -> dict[str, Any]:
+        self._wait_for_service_ready()
+        request = {
+            "engine": "leffa",
+            "person_image": str(person_image),
+            "garment_image": str(garment_image),
+            "output": str(output),
+            "report": str(report),
+            "garment_type": garment_type,
+            "size": self.size,
+            "steps": self.steps,
+            "guidance_scale": self.guidance_scale,
+            "seed": self.seed,
+            "ref_acceleration": False,
+            "repaint": False,
+            "preprocess_garment": False,
+        }
+        response = httpx.post(
+            f"{self.service_url}/v1/generate",
+            json=request,
+            timeout=self.service_request_timeout_seconds,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise RuntimeError(
+                f"Local Leffa service returned non-object payload: {payload!r}"
+            )
+        if payload.get("success") is not True:
+            raise RuntimeError(f"Local Leffa service generation failed: {payload!r}")
+        return payload
+
+    def _wait_for_service_ready(self) -> None:
+        ready_url = f"{self.service_url}/ready"
+        deadline = time.time() + self.service_ready_timeout_seconds
+        last_error = "service did not report ready"
+
+        while True:
+            try:
+                response = httpx.get(ready_url, timeout=2.0)
+                response.raise_for_status()
+                payload = response.json()
+                if isinstance(payload, dict) and payload.get("ready") is True:
+                    return
+                last_error = f"ready payload={payload!r}"
+            except Exception as exc:
+                last_error = repr(exc)
+
+            if time.time() >= deadline:
+                raise RuntimeError(
+                    "Local Leffa service was not ready "
+                    f"at {self.service_url} after "
+                    f"{self.service_ready_timeout_seconds} seconds. "
+                    f"last_error={last_error}"
+                )
+            time.sleep(1.0)
 
     def _subprocess_env(self) -> dict[str, str]:
         env = os.environ.copy()

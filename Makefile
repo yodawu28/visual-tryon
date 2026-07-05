@@ -94,6 +94,7 @@ RUNPOD_LEFFA_PERSON_IMAGE ?= $(RUNPOD_QWEN_EDIT_PERSON_IMAGE)
 RUNPOD_LEFFA_GARMENT_IMAGE ?= $(RUNPOD_QWEN_EDIT_GARMENT_IMAGE)
 RUNPOD_LEFFA_OUTPUT ?= $(RUNPOD_DATA_DIR)/leffa_smoke/leffa-smoke.png
 RUNPOD_LEFFA_REPORT ?= $(RUNPOD_DATA_DIR)/leffa_smoke/leffa-smoke.json
+RUNPOD_LEFFA_PRELOAD_REPORT ?= $(RUNPOD_DATA_DIR)/leffa_smoke/leffa-preload.json
 RUNPOD_LEFFA_CONDITIONED_OUTPUT ?= $(RUNPOD_DATA_DIR)/leffa_smoke/leffa-conditioned-smoke.png
 RUNPOD_LEFFA_CONDITIONED_REPORT ?= $(RUNPOD_DATA_DIR)/leffa_smoke/leffa-conditioned-smoke.json
 RUNPOD_OMNIVTON_REPO_URL ?= https://github.com/Jerome-Young/OmniVTON.git
@@ -125,7 +126,7 @@ RUNPOD_TORCHAUDIO_CU124_VERSION ?= 2.6.0
 RUNPOD_TORCH_CU124_INDEX ?= https://download.pytorch.org/whl/cu124
 RUNPOD_LEFFA_FORCE_REINSTALL ?= 0
 
-.PHONY: help setup install install-kiosk run run-kiosk run-kiosk-all ui-kiosk kiosk-seed-size-charts kiosk-reset worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-install-torch-cu124 runpod-install-catvton-deps runpod-install-leffa-torch-cu124 runpod-install-leffa-deps runpod-leffa-deps-check runpod-install-omnivton-deps runpod-catvton-import-check runpod-leffa-import-check runpod-omnivton-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-vton-input-quality runpod-vton-condition-smoke-inputs runpod-leffa-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke runpod-catvton-quality-smoke runpod-leffa-smoke runpod-leffa-conditioned-smoke runpod-leffa-web-garment-smoke runpod-leffa-web-garment-detail-smoke runpod-leffa-upper-body-web-garment-smoke runpod-omnivton-smoke runpod-omnivton-outpainting-smoke runpod-omnivton-web-garment-smoke test clean lint format check
+.PHONY: help setup install install-kiosk run run-kiosk run-kiosk-all ui-kiosk kiosk-seed-size-charts kiosk-reset worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-install-qwen-edit-deps runpod-install-torch-cu124 runpod-install-catvton-deps runpod-install-leffa-torch-cu124 runpod-install-leffa-deps runpod-leffa-deps-check runpod-install-omnivton-deps runpod-catvton-import-check runpod-leffa-import-check runpod-leffa-preload runpod-omnivton-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-vton-input-quality runpod-vton-condition-smoke-inputs runpod-leffa-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke runpod-catvton-quality-smoke runpod-leffa-smoke runpod-leffa-conditioned-smoke runpod-leffa-web-garment-smoke runpod-leffa-web-garment-detail-smoke runpod-leffa-upper-body-web-garment-smoke runpod-omnivton-smoke runpod-omnivton-outpainting-smoke runpod-omnivton-web-garment-smoke test clean lint format check
 
 help:
 	@echo "Virtual Try-On MVP - Makefile commands"
@@ -170,6 +171,7 @@ help:
 	@echo "  make runpod-install-leffa-torch-cu124 - Fix Leffa venv Torch for CUDA 12.4/12.7 drivers"
 	@echo "  make runpod-leffa-deps-check - Check cached Leffa runtime without reinstalling"
 	@echo "  make runpod-leffa-import-check - Validate Leffa imports without loading models"
+	@echo "  make runpod-leffa-preload - Download/cache Leffa repo and checkpoints before first user job"
 	@echo "  make runpod-leffa-smoke - Run local Leffa smoke with prepared/default inputs"
 	@echo "  make runpod-leffa-conditioned-smoke - Run Leffa with normalized smoke inputs"
 	@echo "  make runpod-leffa-web-garment-smoke RUNPOD_WEB_GARMENT_ID=2 - Run Leffa with data/garment_catalog web garment"
@@ -265,6 +267,8 @@ runpod-help:
 	@echo "  make runpod-install-leffa-deps"
 	@echo "  make runpod-leffa-deps-check"
 	@echo "  make runpod-leffa-import-check"
+	@echo "  make runpod-leffa-preload"
+	@echo "  LOCAL_VISUAL_ENGINE_MODE=service LOCAL_VISUAL_ENGINE_START_SERVICE=true make runpod-start - Run API + worker + persistent local visual engine service"
 	@echo "  make runpod-leffa-smoke-data"
 	@echo "  make runpod-vton-condition-smoke-inputs"
 	@echo "  make runpod-leffa-smoke"
@@ -411,6 +415,23 @@ runpod-leffa-import-check:
 		--checkpoint-dir "$(RUNPOD_LEFFA_CHECKPOINT_DIR)" \
 		--device cpu \
 		--check-imports-only
+
+runpod-leffa-preload: runpod-install-leffa-deps
+	HF_HOME="$(RUNPOD_HF_HOME)" \
+	TRANSFORMERS_CACHE="$(RUNPOD_HF_HOME)/transformers" \
+	HUGGINGFACE_HUB_CACHE="$(RUNPOD_HF_HOME)/hub" \
+	TORCH_HOME="$(RUNPOD_TORCH_HOME)" \
+	XDG_CACHE_HOME="$(RUNPOD_MODEL_DIR)/xdg-cache" \
+	"$(RUNPOD_LEFFA_PYTHON)" -m scripts.local_leffa_smoke \
+		--report "$(RUNPOD_LEFFA_PRELOAD_REPORT)" \
+		--leffa-root "$(RUNPOD_LEFFA_ROOT)" \
+		--repo-url "$(RUNPOD_LEFFA_REPO_URL)" \
+		--model-repo-id "$(RUNPOD_LEFFA_MODEL_REPO_ID)" \
+		--checkpoint-dir "$(RUNPOD_LEFFA_CHECKPOINT_DIR)" \
+		--size "$(RUNPOD_LEFFA_SIZE)" \
+		--device cpu \
+		--vt-model-type "$(RUNPOD_LEFFA_VT_MODEL_TYPE)" \
+		--download-checkpoints-only
 
 runpod-omnivton-import-check:
 	HF_HOME="$(RUNPOD_HF_HOME)" \

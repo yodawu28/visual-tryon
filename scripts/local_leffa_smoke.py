@@ -40,17 +40,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run one local Leffa smoke test")
     parser.add_argument(
         "--person-image",
-        required=True,
         type=Path,
         help="Person/front capture image path",
     )
     parser.add_argument(
         "--garment-image",
-        required=True,
         type=Path,
         help="Garment reference image path",
     )
-    parser.add_argument("--output", required=True, type=Path, help="Output PNG path")
+    parser.add_argument("--output", type=Path, help="Output PNG path")
     parser.add_argument(
         "--report",
         type=Path,
@@ -153,7 +151,34 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Clone/use Leffa and validate imports, then exit before loading models",
     )
-    return parser.parse_args(argv)
+    parser.add_argument(
+        "--download-checkpoints-only",
+        action="store_true",
+        help=(
+            "Clone/use Leffa, download and validate checkpoints, then exit "
+            "before loading models or reading input images"
+        ),
+    )
+    args = parser.parse_args(argv)
+
+    if args.report is None and args.output is None:
+        parser.error("--output is required unless --report is provided")
+
+    if not args.check_imports_only and not args.download_checkpoints_only:
+        missing_options = []
+        if args.person_image is None:
+            missing_options.append("--person-image")
+        if args.garment_image is None:
+            missing_options.append("--garment-image")
+        if args.output is None:
+            missing_options.append("--output")
+        if missing_options:
+            parser.error(
+                "the following arguments are required for generation: "
+                + ", ".join(missing_options)
+            )
+
+    return args
 
 
 def _positive_int(value: str) -> int:
@@ -256,11 +281,54 @@ def load_leffa_modules(leffa_root: Path) -> dict[str, Any]:
     }
 
 
+def download_leffa_checkpoints(
+    *,
+    modules: dict[str, Any],
+    model_repo_id: str,
+    ckpt_dir: Path,
+) -> None:
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    progress(f"downloading/loading Leffa checkpoints from {model_repo_id}")
+    modules["snapshot_download"](
+        repo_id=model_repo_id,
+        local_dir=str(ckpt_dir),
+    )
+
+
+def validate_leffa_checkpoint_assets(
+    *,
+    ckpt_dir: Path,
+    vt_model_type: str,
+) -> dict[str, str]:
+    base_model_path = ckpt_dir / DEFAULT_BASE_MODEL_PATH
+    pretrained_model = _virtual_tryon_checkpoint_path(ckpt_dir, vt_model_type)
+    assets = {
+        "base_model_path": base_model_path,
+        "virtual_tryon_checkpoint": pretrained_model,
+        "densepose_config": ckpt_dir / "densepose" / "densepose_rcnn_R_50_FPN_s1x.yaml",
+        "densepose_weights": ckpt_dir / "densepose" / "model_final_162be9.pkl",
+        "humanparsing_atr": ckpt_dir / "humanparsing" / "parsing_atr.onnx",
+        "humanparsing_lip": ckpt_dir / "humanparsing" / "parsing_lip.onnx",
+        "openpose_body_model": ckpt_dir / "openpose" / "body_pose_model.pth",
+    }
+    for label, path in assets.items():
+        _ensure_checkpoint_exists(path, label.replace("_", " "))
+    return {label: str(path) for label, path in assets.items()}
+
+
+def _virtual_tryon_checkpoint_path(ckpt_dir: Path, vt_model_type: str) -> Path:
+    return (
+        ckpt_dir / DEFAULT_VIRTUAL_TRYON_MODEL
+        if vt_model_type == "viton_hd"
+        else ckpt_dir / DEFAULT_VIRTUAL_TRYON_DC_MODEL
+    )
+
+
 def generate_smoke(
     *,
-    person_image: Path,
-    garment_image: Path,
-    output: Path,
+    person_image: Path | None,
+    garment_image: Path | None,
+    output: Path | None,
     report: Path,
     leffa_root: Path,
     repo_url: str,
@@ -280,9 +348,8 @@ def generate_smoke(
     preprocess_garment: bool,
     allow_tf32: bool,
     check_imports_only: bool = False,
+    download_checkpoints_only: bool = False,
 ) -> dict[str, Any]:
-    import torch
-
     started_at = datetime.now(UTC)
     started_monotonic = time.perf_counter()
     width, height = parse_size(size)
@@ -292,8 +359,10 @@ def generate_smoke(
             f"Got {size}; use RUNPOD_LEFFA_SIZE=768x1024 for smoke."
         )
 
-    resolved_device = resolve_device(device)
-    validate_device_runtime(resolved_device)
+    resolved_device = device
+    if not download_checkpoints_only:
+        resolved_device = resolve_device(device)
+        validate_device_runtime(resolved_device)
     ensure_leffa_repo(leffa_root=leffa_root, repo_url=repo_url, no_clone=no_clone)
     modules = load_leffa_modules(leffa_root)
 
@@ -311,30 +380,61 @@ def generate_smoke(
         _write_report(report, report_payload)
         return report_payload
 
+    ckpt_dir = checkpoint_dir or leffa_root / "ckpts"
+    download_leffa_checkpoints(
+        modules=modules,
+        model_repo_id=model_repo_id,
+        ckpt_dir=ckpt_dir,
+    )
+    checkpoint_assets = validate_leffa_checkpoint_assets(
+        ckpt_dir=ckpt_dir,
+        vt_model_type=vt_model_type,
+    )
+    base_model_path = Path(checkpoint_assets["base_model_path"])
+    pretrained_model = Path(checkpoint_assets["virtual_tryon_checkpoint"])
+
+    if download_checkpoints_only:
+        finished_at = datetime.now(UTC)
+        report_payload = {
+            "success": True,
+            "started_at": started_at.isoformat(),
+            "finished_at": finished_at.isoformat(),
+            "preload_time_seconds": time.perf_counter() - started_monotonic,
+            "model": "Leffa",
+            "repo_url": repo_url,
+            "model_repo_id": model_repo_id,
+            "leffa_root": str(leffa_root),
+            "checkpoint_dir": str(ckpt_dir),
+            "base_model_path": str(base_model_path),
+            "pretrained_model": str(pretrained_model),
+            "checkpoint_assets": checkpoint_assets,
+            "size": size,
+            "width": width,
+            "height": height,
+            "vt_model_type": vt_model_type,
+            "download_checkpoints_only": True,
+            "check_imports_only": False,
+            "report": str(report),
+            "error": None,
+        }
+        _write_report(report, report_payload)
+        return report_payload
+
+    if person_image is None:
+        raise ValueError("person_image is required for Leffa generation")
+    if garment_image is None:
+        raise ValueError("garment_image is required for Leffa generation")
+    if output is None:
+        raise ValueError("output is required for Leffa generation")
+
     ensure_input_exists(person_image, "person image")
     ensure_input_exists(garment_image, "garment image")
+
+    import torch
 
     if allow_tf32 and resolved_device == "cuda":
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
-
-    ckpt_dir = checkpoint_dir or leffa_root / "ckpts"
-    ckpt_dir.mkdir(parents=True, exist_ok=True)
-    progress(f"downloading/loading Leffa checkpoints from {model_repo_id}")
-    modules["snapshot_download"](
-        repo_id=model_repo_id,
-        local_dir=str(ckpt_dir),
-        local_dir_use_symlinks=False,
-    )
-
-    base_model_path = ckpt_dir / DEFAULT_BASE_MODEL_PATH
-    pretrained_model = (
-        ckpt_dir / DEFAULT_VIRTUAL_TRYON_MODEL
-        if vt_model_type == "viton_hd"
-        else ckpt_dir / DEFAULT_VIRTUAL_TRYON_DC_MODEL
-    )
-    _ensure_checkpoint_exists(base_model_path, "base model path")
-    _ensure_checkpoint_exists(pretrained_model, "Leffa virtual try-on checkpoint")
 
     progress("loading Leffa preprocessing modules")
     densepose_predictor = modules["DensePosePredictor"](
@@ -500,7 +600,11 @@ def _write_report(path: Path, payload: dict[str, Any]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    report_path = args.report or args.output.with_suffix(f"{args.output.suffix}.json")
+    report_path = args.report
+    if report_path is None:
+        if args.output is None:
+            raise ValueError("--output is required unless --report is provided")
+        report_path = args.output.with_suffix(f"{args.output.suffix}.json")
     checkpoint_dir = args.checkpoint_dir
     try:
         generate_smoke(
@@ -526,6 +630,7 @@ def main(argv: list[str] | None = None) -> int:
             preprocess_garment=args.preprocess_garment,
             allow_tf32=args.allow_tf32,
             check_imports_only=args.check_imports_only,
+            download_checkpoints_only=args.download_checkpoints_only,
         )
         return 0
     except Exception as exc:
@@ -550,9 +655,10 @@ def main(argv: list[str] | None = None) -> int:
             "preprocess_garment": args.preprocess_garment,
             "allow_tf32": args.allow_tf32,
             "check_imports_only": args.check_imports_only,
-            "person_image": str(args.person_image),
-            "garment_image": str(args.garment_image),
-            "output": str(args.output),
+            "download_checkpoints_only": args.download_checkpoints_only,
+            "person_image": str(args.person_image) if args.person_image else None,
+            "garment_image": str(args.garment_image) if args.garment_image else None,
+            "output": str(args.output) if args.output else None,
             "report": str(report_path),
             "error": {
                 "type": type(exc).__name__,

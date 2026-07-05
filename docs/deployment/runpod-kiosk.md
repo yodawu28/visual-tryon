@@ -466,6 +466,7 @@ source venv/bin/activate
 make runpod-cuda-report
 make runpod-install-leffa-deps
 make runpod-leffa-import-check
+make runpod-leffa-preload
 ```
 
 `make runpod-install-leffa-deps` installs Leffa dependencies into an isolated
@@ -521,6 +522,14 @@ RUNPOD_LEFFA_FORCE_REINSTALL=1 make runpod-install-leffa-torch-cu124
 Python imports only. It does not download model weights or generate an image.
 Use this check to catch DensePose, SCHP, OpenPose, or dependency issues before
 spending GPU time on generation.
+
+`make runpod-leffa-preload` downloads the Hugging Face checkpoint snapshot into
+`/workspace/tryon-models/external/Leffa/ckpts` and validates the exact files
+used by Leffa generation. It does not load the diffusion model, does not run
+inference, and does not require person/garment images. Run it before opening the
+kiosk to users so the first visual preview job does not pay the checkpoint
+download cost inside the worker. The preload report is written to
+`/workspace/tryon-data/leffa_smoke/leffa-preload.json`.
 
 Prepare reusable smoke inputs:
 
@@ -742,6 +751,32 @@ on slower or cold pods a single preview can exceed 900 seconds. Faster GPUs
 such as RTX 4000 Ada, RTX 4090, or A5000 should normally complete much sooner,
 but the Swagger flow should still use `/visual-preview/jobs` and poll
 `/kiosk/jobs/{job_id}` instead of the synchronous `/visual-preview` endpoint.
+
+### Persistent Local Visual Engine Service
+
+After `make runpod-leffa-preload`, RunPod can avoid reloading Leffa for every
+visual preview job by running the local visual engine service:
+
+```bash
+LOCAL_VISUAL_ENGINE_MODE=service \
+LOCAL_VISUAL_ENGINE_START_SERVICE=true \
+LOCAL_VISUAL_ENGINE_SERVICE_URL=http://127.0.0.1:8091 \
+LOCAL_VISUAL_ENGINE_SERVICE_PORT=8091 \
+make runpod-start
+```
+
+The service binds to `127.0.0.1` only. Do not expose port `8091` through
+RunPod; the API and browser still use port `8080`.
+
+Expected startup logs:
+
+- `[local-visual-engine] loading engine=leffa`
+- `[local-visual-engine] ready`
+- worker jobs report `execution_mode=service`
+
+If service mode fails, remove `LOCAL_VISUAL_ENGINE_MODE=service` and
+`LOCAL_VISUAL_ENGINE_START_SERVICE=true` to fall back to the per-job subprocess
+path.
 
 Readiness should show `visual_preview_provider=ready` with
 `provider=local_leffa`:

@@ -17,6 +17,7 @@ if str(REPO_ROOT) not in sys.path:
 
 
 logger = logging.getLogger(__name__)
+LOG_LEVEL_CHOICES = ("DEBUG", "INFO", "WARNING", "ERROR")
 
 
 def parse_args() -> argparse.Namespace:
@@ -28,12 +29,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--port",
         type=int,
-        default=int(os.environ.get("LOCAL_VISUAL_ENGINE_SERVICE_PORT", "8091")),
+        default=_env_int("LOCAL_VISUAL_ENGINE_SERVICE_PORT", 8091),
     )
     parser.add_argument(
         "--log-level",
-        default=os.environ.get("LOG_LEVEL", "INFO").upper(),
-        choices=("DEBUG", "INFO", "WARNING", "ERROR"),
+        default=_env_log_level("LOG_LEVEL", "INFO"),
+        choices=LOG_LEVEL_CHOICES,
     )
     return parser.parse_args()
 
@@ -72,6 +73,23 @@ def _env_flag(name: str, default: bool) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_int(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
+def _env_log_level(name: str, default: str) -> str:
+    value = os.environ.get(name, default).upper()
+    if value not in LOG_LEVEL_CHOICES:
+        return default
+    return value
 
 
 def main() -> int:

@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -59,3 +60,51 @@ def test_direct_script_help_lists_cli_options():
     assert "--host" in result.stdout
     assert "--port" in result.stdout
     assert "--log-level" in result.stdout
+
+
+def test_direct_script_help_tolerates_malformed_env_defaults():
+    env = _malformed_cli_default_env()
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_local_visual_engine_service.py",
+            "--help",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert "--host" in result.stdout
+    assert "--port" in result.stdout
+    assert "--log-level" in result.stdout
+
+
+def test_module_help_tolerates_malformed_env_defaults():
+    env = _malformed_cli_default_env()
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.run_local_visual_engine_service",
+            "--help",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert "--host" in result.stdout
+    assert "--port" in result.stdout
+    assert "--log-level" in result.stdout
+
+
+def _malformed_cli_default_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["LOCAL_VISUAL_ENGINE_SERVICE_PORT"] = "abc"
+    env["LOG_LEVEL"] = "TRACE"
+    return env

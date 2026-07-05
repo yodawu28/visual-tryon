@@ -106,8 +106,21 @@ class LocalVisualEngineHTTPServer:
 
                 request_started = time.perf_counter()
                 try:
-                    payload = self._read_json()
-                    request = GenerateRequest.from_dict(payload)
+                    try:
+                        payload = self._read_json()
+                        request = GenerateRequest.from_dict(payload)
+                    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                        self._write_json(
+                            HTTPStatus.BAD_REQUEST,
+                            {
+                                "success": False,
+                                "error": {
+                                    "type": "InvalidRequest",
+                                    "message": str(exc),
+                                },
+                            },
+                        )
+                        return
 
                     if not server._loaded or not server.engine.is_ready():
                         self._write_json(

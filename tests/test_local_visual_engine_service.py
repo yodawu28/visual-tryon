@@ -108,6 +108,35 @@ def test_generate_endpoint_returns_not_ready_before_metadata_lookup():
     assert engine.calls == 0
 
 
+def test_generate_endpoint_rejects_missing_required_field():
+    engine = FakeEngine()
+    server = LocalVisualEngineHTTPServer(host="127.0.0.1", port=0, engine=engine)
+    payload = _generate_payload()
+    payload.pop("garment_image")
+
+    with server.running_in_thread(load_engine=True) as base_url:
+        response = _post_json_error(f"{base_url}/v1/generate", payload)
+
+    assert response.code == 400
+    assert response.payload["success"] is False
+    assert response.payload["error"]["type"] == "InvalidRequest"
+    assert "garment_image" in response.payload["error"]["message"]
+    assert engine.calls == 0
+
+
+def test_generate_endpoint_rejects_non_object_json_body():
+    engine = FakeEngine()
+    server = LocalVisualEngineHTTPServer(host="127.0.0.1", port=0, engine=engine)
+
+    with server.running_in_thread(load_engine=True) as base_url:
+        response = _post_json_error(f"{base_url}/v1/generate", ["not", "an", "object"])
+
+    assert response.code == 400
+    assert response.payload["success"] is False
+    assert response.payload["error"]["type"] == "InvalidRequest"
+    assert engine.calls == 0
+
+
 def test_generate_endpoint_rejects_wrong_engine():
     engine = FakeEngine()
     server = LocalVisualEngineHTTPServer(host="127.0.0.1", port=0, engine=engine)
@@ -197,12 +226,12 @@ def _get_json(url: str) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
-def _post_json(url: str, payload: dict) -> dict:
+def _post_json(url: str, payload: object) -> dict:
     with urllib.request.urlopen(_json_request(url, payload), timeout=5) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
-def _post_json_error(url: str, payload: dict) -> ErrorResponse:
+def _post_json_error(url: str, payload: object) -> ErrorResponse:
     try:
         _post_json(url, payload)
     except urllib.error.HTTPError as exc:
@@ -213,7 +242,7 @@ def _post_json_error(url: str, payload: dict) -> ErrorResponse:
     raise AssertionError("Expected request to fail")
 
 
-def _json_request(url: str, payload: dict) -> urllib.request.Request:
+def _json_request(url: str, payload: object) -> urllib.request.Request:
     return urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),

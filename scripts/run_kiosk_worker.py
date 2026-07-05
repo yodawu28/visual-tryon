@@ -139,6 +139,14 @@ def _build_kiosk_visual_generator(settings):
             guidance_scale=float(settings.local_leffa_guidance_scale),
             seed=int(settings.local_leffa_seed),
             timeout_seconds=int(settings.local_leffa_timeout),
+            execution_mode=settings.local_visual_engine_mode,
+            service_url=settings.local_visual_engine_service_url,
+            service_ready_timeout_seconds=int(
+                settings.local_visual_engine_service_ready_timeout
+            ),
+            service_request_timeout_seconds=int(
+                settings.effective_local_visual_engine_service_request_timeout
+            ),
         )
     raise RuntimeError(
         "Kiosk visual preview provider is disabled. Production kiosk visual "

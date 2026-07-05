@@ -63,6 +63,26 @@ def build_ollama_command(*, ollama_command: str) -> list[str]:
     return [ollama_command, "serve"]
 
 
+def build_local_visual_engine_service_command(
+    *,
+    python_executable: str,
+    host: str,
+    port: int,
+    log_level: str,
+) -> list[str]:
+    return [
+        python_executable,
+        "-m",
+        "scripts.run_local_visual_engine_service",
+        "--host",
+        host,
+        "--port",
+        str(port),
+        "--log-level",
+        log_level,
+    ]
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run kiosk API and worker as one deployable foreground process"
@@ -115,6 +135,31 @@ def parse_args() -> argparse.Namespace:
         help="Ollama base URL used to decide whether ollama serve is already up",
     )
     parser.add_argument(
+        "--start-local-visual-engine-service",
+        action="store_true",
+        default=_env_flag("LOCAL_VISUAL_ENGINE_START_SERVICE"),
+        help=(
+            "Start the local visual engine HTTP service before the worker. Can "
+            "also be enabled with LOCAL_VISUAL_ENGINE_START_SERVICE=true."
+        ),
+    )
+    parser.add_argument(
+        "--local-visual-engine-service-host",
+        default=os.getenv("LOCAL_VISUAL_ENGINE_SERVICE_HOST", "127.0.0.1"),
+        help="Local visual engine service bind host",
+    )
+    parser.add_argument(
+        "--local-visual-engine-service-port",
+        type=int,
+        default=int(os.getenv("LOCAL_VISUAL_ENGINE_SERVICE_PORT", "8091")),
+        help="Local visual engine service bind port",
+    )
+    parser.add_argument(
+        "--local-visual-engine-python",
+        default=os.getenv("LOCAL_LEFFA_PYTHON", sys.executable),
+        help="Python executable used to start the local visual engine service",
+    )
+    parser.add_argument(
         "--log-level",
         default=os.getenv("LOG_LEVEL", "INFO"),
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -164,6 +209,19 @@ def main() -> int:
                 env=env,
             )
         )
+        if args.start_local_visual_engine_service:
+            processes.append(
+                _start_process(
+                    "local-visual-engine",
+                    build_local_visual_engine_service_command(
+                        python_executable=args.local_visual_engine_python,
+                        host=args.local_visual_engine_service_host,
+                        port=args.local_visual_engine_service_port,
+                        log_level=args.log_level,
+                    ),
+                    env=env,
+                )
+            )
         if not args.no_worker:
             processes.append(
                 _start_process(

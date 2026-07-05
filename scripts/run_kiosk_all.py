@@ -83,6 +83,20 @@ def build_local_visual_engine_service_command(
     ]
 
 
+def build_local_visual_engine_worker_env(
+    *,
+    env: dict[str, str],
+    host: str,
+    port: int,
+    enabled: bool,
+) -> dict[str, str]:
+    worker_env = dict(env)
+    if enabled:
+        worker_env["LOCAL_VISUAL_ENGINE_MODE"] = "service"
+        worker_env["LOCAL_VISUAL_ENGINE_SERVICE_URL"] = f"http://{host}:{port}"
+    return worker_env
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run kiosk API and worker as one deployable foreground process"
@@ -151,7 +165,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--local-visual-engine-service-port",
         type=int,
-        default=int(os.getenv("LOCAL_VISUAL_ENGINE_SERVICE_PORT", "8091")),
+        default=_env_int("LOCAL_VISUAL_ENGINE_SERVICE_PORT", 8091),
         help="Local visual engine service bind port",
     )
     parser.add_argument(
@@ -178,6 +192,12 @@ def main() -> int:
     args = parse_args()
     env = os.environ.copy()
     env.setdefault("API_PROFILE", "kiosk")
+    worker_env = build_local_visual_engine_worker_env(
+        env=env,
+        host=args.local_visual_engine_service_host,
+        port=args.local_visual_engine_service_port,
+        enabled=args.start_local_visual_engine_service,
+    )
 
     shutdown_requested = threading.Event()
     processes: list[ManagedProcess] = []
@@ -231,7 +251,7 @@ def main() -> int:
                         stale_running_seconds=args.worker_stale_running_seconds,
                         log_level=args.log_level,
                     ),
-                    env=env,
+                    env=worker_env,
                 )
             )
 
@@ -250,6 +270,13 @@ def main() -> int:
 def _env_flag(name: str) -> bool:
     value = os.getenv(name, "").strip().lower()
     return value in {"1", "true", "yes", "on"}
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
 
 
 def _ollama_is_reachable(base_url: str) -> bool:

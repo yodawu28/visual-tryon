@@ -54,6 +54,13 @@ class FakeEngine:
         )
 
 
+class MetadataUnavailableUntilLoadEngine(FakeEngine):
+    def metadata(self) -> EngineMetadata:
+        if not self.loaded:
+            raise AssertionError("metadata should not be called before load")
+        return super().metadata()
+
+
 def test_health_and_ready_endpoints_reflect_load_state():
     engine = FakeEngine()
     server = LocalVisualEngineHTTPServer(host="127.0.0.1", port=0, engine=engine)
@@ -87,6 +94,18 @@ def test_generate_endpoint_calls_engine_and_returns_json():
     assert result["queue_wait_seconds"] >= 0
     assert result["total_time_seconds"] >= result["generation_time_seconds"]
     assert engine.calls == 1
+
+
+def test_generate_endpoint_returns_not_ready_before_metadata_lookup():
+    engine = MetadataUnavailableUntilLoadEngine()
+    server = LocalVisualEngineHTTPServer(host="127.0.0.1", port=0, engine=engine)
+
+    with server.running_in_thread(load_engine=False) as base_url:
+        response = _post_json_error(f"{base_url}/v1/generate", _generate_payload())
+
+    assert response.code == 503
+    assert response.payload["error"]["type"] == "EngineNotReady"
+    assert engine.calls == 0
 
 
 def test_generate_endpoint_rejects_wrong_engine():

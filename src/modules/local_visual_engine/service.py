@@ -108,6 +108,20 @@ class LocalVisualEngineHTTPServer:
                 try:
                     payload = self._read_json()
                     request = GenerateRequest.from_dict(payload)
+
+                    if not server._loaded or not server.engine.is_ready():
+                        self._write_json(
+                            HTTPStatus.SERVICE_UNAVAILABLE,
+                            {
+                                "success": False,
+                                "error": {
+                                    "type": "EngineNotReady",
+                                    "message": "Engine is not ready",
+                                },
+                            },
+                        )
+                        return
+
                     loaded_engine = self._loaded_engine_name()
                     if request.engine != loaded_engine:
                         self._write_json(
@@ -121,16 +135,6 @@ class LocalVisualEngineHTTPServer:
                                         f"{loaded_engine}"
                                     )
                                 },
-                            },
-                        )
-                        return
-
-                    if not server._loaded or not server.engine.is_ready():
-                        self._write_json(
-                            HTTPStatus.SERVICE_UNAVAILABLE,
-                            {
-                                "success": False,
-                                "error": {"message": "Engine is not ready"},
                             },
                         )
                         return

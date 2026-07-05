@@ -71,6 +71,38 @@ class Settings(BaseSettings):
         default="disabled",
         env="KIOSK_VISUAL_PREVIEW_PROVIDER",
     )  # "disabled", "local_leffa" for self-hosted GPU tops preview, or "replicate_qwen" for benchmark/debug
+    local_visual_engine_mode: str = Field(
+        default="subprocess",
+        env="LOCAL_VISUAL_ENGINE_MODE",
+    )
+    local_visual_engine_service_url: str = Field(
+        default="http://127.0.0.1:8091",
+        env="LOCAL_VISUAL_ENGINE_SERVICE_URL",
+    )
+    local_visual_engine_start_service: bool = Field(
+        default=False,
+        env="LOCAL_VISUAL_ENGINE_START_SERVICE",
+    )
+    local_visual_engine_service_host: str = Field(
+        default="127.0.0.1",
+        env="LOCAL_VISUAL_ENGINE_SERVICE_HOST",
+    )
+    local_visual_engine_service_port: int = Field(
+        default=8091,
+        env="LOCAL_VISUAL_ENGINE_SERVICE_PORT",
+    )
+    local_visual_engine_service_ready_timeout: int = Field(
+        default=900,
+        env="LOCAL_VISUAL_ENGINE_SERVICE_READY_TIMEOUT",
+    )
+    local_visual_engine_service_request_timeout: int | None = Field(
+        default=None,
+        env="LOCAL_VISUAL_ENGINE_SERVICE_REQUEST_TIMEOUT",
+    )
+    local_visual_engine_engine: str = Field(
+        default="leffa",
+        env="LOCAL_VISUAL_ENGINE_ENGINE",
+    )
 
     # Local Leffa visual try-on provider
     local_leffa_root: Path = Field(
@@ -242,6 +274,22 @@ class Settings(BaseSettings):
             return None
         return v
 
+    @field_validator("local_visual_engine_mode")
+    @classmethod
+    def validate_local_visual_engine_mode(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"subprocess", "service"}:
+            raise ValueError("LOCAL_VISUAL_ENGINE_MODE must be subprocess or service")
+        return normalized
+
+    @field_validator("local_visual_engine_engine")
+    @classmethod
+    def validate_local_visual_engine_engine(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized != "leffa":
+            raise ValueError("LOCAL_VISUAL_ENGINE_ENGINE currently supports leffa")
+        return normalized
+
     @field_validator(
         "temp_storage_dir",
         "playwright_profile_dir",
@@ -258,6 +306,12 @@ class Settings(BaseSettings):
     @property
     def max_upload_size_bytes(self) -> int:
         return self.max_upload_size_mb * 1024 * 1024
+
+    @property
+    def effective_local_visual_engine_service_request_timeout(self) -> int:
+        return (
+            self.local_visual_engine_service_request_timeout or self.local_leffa_timeout
+        )
 
 
 # Singleton pattern

@@ -80,36 +80,49 @@ class FakeTransform:
         return {**data, "transformed": True}
 
 
-def test_leffa_engine_loads_once_and_generates_artifacts(tmp_path, monkeypatch):
-    import src.modules.local_visual_engine.leffa_engine as leffa_engine
-
-    load_calls: list[Path] = []
-
+def _fake_leffa_modules(load_calls: list[Path]) -> object:
     def fake_load_leffa_modules(leffa_root: Path) -> dict[str, object]:
         load_calls.append(leffa_root)
-        return {
-            "DensePosePredictor": FakeDensePose,
-            "LeffaInference": FakeInference,
-            "LeffaModel": FakeModel,
-            "LeffaTransform": FakeTransform,
-            "OpenPose": FakeOpenPose,
-            "Parsing": FakeParsing,
-            "get_agnostic_mask_hd": lambda *_: Image.new("L", (384, 512), 255),
-            "preprocess_garment_image": lambda path: Image.open(path).convert("RGB"),
-            "resize_and_center": lambda image, width, height: image.resize(
-                (width, height)
-            ),
-            "snapshot_download": lambda **_: None,
-        }
+        return _fake_module_map()
 
-    checkpoint_dir = tmp_path / "ckpts"
-    checkpoint_assets = {
+    return fake_load_leffa_modules
+
+
+def _fake_module_map() -> dict[str, object]:
+    return {
+        "DensePosePredictor": FakeDensePose,
+        "LeffaInference": FakeInference,
+        "LeffaModel": FakeModel,
+        "LeffaTransform": FakeTransform,
+        "OpenPose": FakeOpenPose,
+        "Parsing": FakeParsing,
+        "get_agnostic_mask_hd": lambda *_: Image.new("L", (384, 512), 255),
+        "preprocess_garment_image": lambda path: Image.open(path).convert("RGB"),
+        "resize_and_center": lambda image, width, height: image.resize((width, height)),
+        "snapshot_download": lambda **_: None,
+    }
+
+
+def _fake_checkpoint_assets(checkpoint_dir: Path) -> dict[str, str]:
+    return {
         "base_model_path": str(checkpoint_dir / "stable-diffusion-inpainting"),
         "virtual_tryon_checkpoint": str(checkpoint_dir / "virtual_tryon.pth"),
     }
+
+
+def _patch_fake_leffa_helpers(monkeypatch, tmp_path):
+    import src.modules.local_visual_engine.leffa_engine as leffa_engine
+
+    load_calls: list[Path] = []
+    checkpoint_dir = tmp_path / "ckpts"
+    checkpoint_assets = _fake_checkpoint_assets(checkpoint_dir)
     monkeypatch.setattr(leffa_engine, "ensure_leffa_repo", lambda **_: None)
     monkeypatch.setattr(leffa_engine, "download_leffa_checkpoints", lambda **_: None)
-    monkeypatch.setattr(leffa_engine, "load_leffa_modules", fake_load_leffa_modules)
+    monkeypatch.setattr(
+        leffa_engine,
+        "load_leffa_modules",
+        _fake_leffa_modules(load_calls),
+    )
     monkeypatch.setattr(
         leffa_engine,
         "validate_leffa_checkpoint_assets",
@@ -121,6 +134,16 @@ def test_leffa_engine_loads_once_and_generates_artifacts(tmp_path, monkeypatch):
         lambda device: {"device": device, "peak_memory_mb": 0},
     )
     monkeypatch.setattr(leffa_engine, "validate_device_runtime", lambda device: None)
+    monkeypatch.setattr(leffa_engine, "resolve_device", lambda device: device)
+
+    return checkpoint_dir, checkpoint_assets, load_calls
+
+
+def test_leffa_engine_loads_once_and_generates_artifacts(tmp_path, monkeypatch):
+    checkpoint_dir, checkpoint_assets, load_calls = _patch_fake_leffa_helpers(
+        monkeypatch,
+        tmp_path,
+    )
 
     engine = LeffaVisualEngine(
         leffa_root=tmp_path / "Leffa",
@@ -199,3 +222,35 @@ def test_leffa_engine_loads_once_and_generates_artifacts(tmp_path, monkeypatch):
     assert report_payload["engine_metadata"] == metadata.to_dict()
     assert report_payload["error"] is None
     assert load_calls == [tmp_path / "Leffa"]
+
+
+def test_leffa_engine_resolves_auto_device_before_validation(tmp_path, monkeypatch):
+    checkpoint_dir, _, _ = _patch_fake_leffa_helpers(monkeypatch, tmp_path)
+
+    import src.modules.local_visual_engine.leffa_engine as leffa_engine
+
+    validated_devices: list[str] = []
+    monkeypatch.setattr(leffa_engine, "resolve_device", lambda device: "cuda")
+    monkeypatch.setattr(
+        leffa_engine,
+        "validate_device_runtime",
+        lambda device: validated_devices.append(device),
+    )
+
+    engine = LeffaVisualEngine(
+        leffa_root=tmp_path / "Leffa",
+        repo_url="https://example.test/leffa.git",
+        no_clone=True,
+        model_repo_id="example/leffa",
+        checkpoint_dir=checkpoint_dir,
+        size="768x1024",
+        device="auto",
+        dtype="float32",
+        vt_model_type="viton_hd",
+        allow_tf32=False,
+    )
+
+    metadata = engine.load()
+
+    assert validated_devices == ["cuda"]
+    assert metadata.device == "cuda"

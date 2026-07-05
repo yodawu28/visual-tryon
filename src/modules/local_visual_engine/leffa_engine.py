@@ -4,22 +4,13 @@ import json
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from importlib import import_module
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 from PIL import Image
 
-from scripts.local_leffa_smoke import (
-    collect_runtime_metrics,
-    download_leffa_checkpoints,
-    ensure_input_exists,
-    ensure_leffa_repo,
-    load_leffa_modules,
-    parse_size,
-    validate_device_runtime,
-    validate_leffa_checkpoint_assets,
-)
 from src.modules.local_visual_engine.contracts import (
     EngineMetadata,
     GenerateRequest,
@@ -67,13 +58,15 @@ class LeffaVisualEngine:
         self.allow_tf32 = allow_tf32
         self._state: _LoadedState | None = None
         self._metadata: EngineMetadata | None = None
+        self._resolved_device: str | None = None
 
     def load(self) -> EngineMetadata:
         if self._state is not None and self._metadata is not None:
             return self._metadata
 
         width, height = self._validate_size()
-        validate_device_runtime(self.device)
+        self._resolved_device = resolve_device(self.device)
+        validate_device_runtime(self._resolved_device)
         self._configure_tf32()
         ensure_leffa_repo(
             leffa_root=self.leffa_root,
@@ -190,7 +183,7 @@ class LeffaVisualEngine:
 
         import torch
 
-        if self.device == "cuda":
+        if self._active_device() == "cuda":
             try:
                 torch.cuda.reset_peak_memory_stats()
             except Exception:
@@ -260,7 +253,7 @@ class LeffaVisualEngine:
         return self._validate_size()
 
     def _configure_tf32(self) -> None:
-        if not self.allow_tf32 or self.device != "cuda":
+        if not self.allow_tf32 or self._active_device() != "cuda":
             return
 
         import torch
@@ -275,7 +268,7 @@ class LeffaVisualEngine:
             implementation="LeffaVisualEngine",
             model_repo_id=self.model_repo_id,
             checkpoint_dir=str(self.checkpoint_dir),
-            device=self.device,
+            device=self._active_device(),
             dtype=self.dtype,
             model_type=self.vt_model_type,
             extra={
@@ -347,7 +340,7 @@ class LeffaVisualEngine:
             "checkpoint_dir": str(self.checkpoint_dir),
             "base_model_path": metadata["extra"]["base_model_path"],
             "pretrained_model": metadata["extra"]["pretrained_model"],
-            "device": self.device,
+            "device": self._active_device(),
             "dtype": self.dtype,
             "size": self.size,
             "width": width,
@@ -386,10 +379,73 @@ class LeffaVisualEngine:
                 "mask_output": str(mask_output),
                 "densepose_output": str(densepose_output),
             },
-            "runtime": collect_runtime_metrics(self.device),
+            "runtime": collect_runtime_metrics(self._active_device()),
             "engine_metadata": metadata,
             "error": None,
         }
+
+    def _active_device(self) -> str:
+        return self._resolved_device or self.device
+
+
+def _smoke_helpers() -> Any:
+    return import_module("scripts.local_leffa_smoke")
+
+
+def collect_runtime_metrics(device: str) -> dict[str, Any]:
+    return _smoke_helpers().collect_runtime_metrics(device)
+
+
+def download_leffa_checkpoints(
+    *,
+    modules: dict[str, Any],
+    model_repo_id: str,
+    ckpt_dir: Path,
+) -> None:
+    _smoke_helpers().download_leffa_checkpoints(
+        modules=modules,
+        model_repo_id=model_repo_id,
+        ckpt_dir=ckpt_dir,
+    )
+
+
+def ensure_input_exists(path: Path, label: str) -> None:
+    _smoke_helpers().ensure_input_exists(path, label)
+
+
+def ensure_leffa_repo(*, leffa_root: Path, repo_url: str, no_clone: bool) -> None:
+    _smoke_helpers().ensure_leffa_repo(
+        leffa_root=leffa_root,
+        repo_url=repo_url,
+        no_clone=no_clone,
+    )
+
+
+def load_leffa_modules(leffa_root: Path) -> dict[str, Any]:
+    return _smoke_helpers().load_leffa_modules(leffa_root)
+
+
+def parse_size(size: str) -> tuple[int, int]:
+    return _smoke_helpers().parse_size(size)
+
+
+def resolve_device(device: str) -> str:
+    return _smoke_helpers().resolve_device(device)
+
+
+def validate_device_runtime(device: str) -> None:
+    _smoke_helpers().validate_device_runtime(device)
+
+
+def validate_leffa_checkpoint_assets(
+    *,
+    ckpt_dir: Path,
+    vt_model_type: str,
+) -> dict[str, str]:
+    return _smoke_helpers().validate_leffa_checkpoint_assets(
+        ckpt_dir=ckpt_dir,
+        vt_model_type=vt_model_type,
+    )
 
 
 def _load_rgb_image(path: Path) -> Image.Image:

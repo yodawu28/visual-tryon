@@ -103,6 +103,19 @@ def test_module_help_tolerates_malformed_env_defaults():
     assert "--log-level" in result.stdout
 
 
+def test_main_defers_service_import_until_after_parse_args():
+    source = Path("scripts/run_local_visual_engine_service.py").read_text("utf-8")
+    main_index = source.index("def main()")
+    parse_args_index = source.index("args = parse_args()", main_index)
+    service_import_index = source.index(
+        "from src.modules.local_visual_engine.service import "
+        "LocalVisualEngineHTTPServer",
+        main_index,
+    )
+
+    assert parse_args_index < service_import_index
+
+
 def _malformed_cli_default_env() -> dict[str, str]:
     env = os.environ.copy()
     env["LOCAL_VISUAL_ENGINE_SERVICE_PORT"] = "abc"

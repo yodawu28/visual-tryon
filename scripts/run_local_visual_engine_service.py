@@ -93,9 +93,9 @@ def _env_log_level(name: str, default: str) -> str:
 
 
 def main() -> int:
+    args = parse_args()
     from src.modules.local_visual_engine.service import LocalVisualEngineHTTPServer
 
-    args = parse_args()
     logging.basicConfig(
         level=getattr(logging, args.log_level),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",

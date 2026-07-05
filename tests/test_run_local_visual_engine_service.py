@@ -1,3 +1,5 @@
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -40,3 +42,20 @@ def test_build_engine_from_env_rejects_unknown_engine(monkeypatch):
 
     with pytest.raises(ValueError, match="supports only leffa"):
         build_engine_from_env()
+
+
+def test_direct_script_help_lists_cli_options():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_local_visual_engine_service.py",
+            "--help",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "--host" in result.stdout
+    assert "--port" in result.stdout
+    assert "--log-level" in result.stdout

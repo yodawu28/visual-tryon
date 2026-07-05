@@ -4,9 +4,16 @@ import argparse
 import logging
 import os
 from pathlib import Path
+import sys
+from typing import TYPE_CHECKING
 
-from src.modules.local_visual_engine.leffa_engine import LeffaVisualEngine
-from src.modules.local_visual_engine.service import LocalVisualEngineHTTPServer
+if TYPE_CHECKING:
+    from src.modules.local_visual_engine.leffa_engine import LeffaVisualEngine
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
 logger = logging.getLogger(__name__)
@@ -32,6 +39,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def build_engine_from_env() -> LeffaVisualEngine:
+    from src.modules.local_visual_engine.leffa_engine import LeffaVisualEngine
+
     engine = os.environ.get("LOCAL_VISUAL_ENGINE_ENGINE", "leffa").lower()
     if engine != "leffa":
         raise ValueError("Local visual engine service supports only leffa")
@@ -66,6 +75,8 @@ def _env_flag(name: str, default: bool) -> bool:
 
 
 def main() -> int:
+    from src.modules.local_visual_engine.service import LocalVisualEngineHTTPServer
+
     args = parse_args()
     logging.basicConfig(
         level=getattr(logging, args.log_level),

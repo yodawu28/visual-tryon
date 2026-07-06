@@ -432,7 +432,10 @@ class FakeKioskFitIntelligenceService:
         assert garment_id == "garment:v1:test"
         assert garment_category == "tops"
         assert garment_type == "jersey"
-        assert capture_analysis == {"passed": True}
+        assert capture_analysis["passed"] is True
+        assert capture_analysis["quality_gates"]["category_visual_preview"][
+            "visual_preview_ready"
+        ] is True
         assert front_image == b"front-image"
         assert side_image is None
         assert garment_image == b"garment-image"

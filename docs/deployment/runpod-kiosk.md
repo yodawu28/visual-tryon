@@ -765,8 +765,14 @@ LOCAL_VISUAL_ENGINE_SERVICE_PORT=8091 \
 make runpod-start
 ```
 
-The service binds to `127.0.0.1` only. Do not expose port `8091` through
-RunPod; the API and browser still use port `8080`.
+These values can also live in `.env`; `make runpod-start` and the local visual
+engine service both load `.env` before applying command-line defaults. Exported
+shell variables still take precedence over `.env`.
+
+The service binds to loopback only, normally `127.0.0.1`. Do not expose port
+`8091` through RunPod; the API and browser still use port `8080`. Binding to
+`0.0.0.0` is rejected unless `LOCAL_VISUAL_ENGINE_ALLOW_UNSAFE_BIND=true` is
+set, which is not recommended for kiosk deployments.
 
 Expected startup logs:
 

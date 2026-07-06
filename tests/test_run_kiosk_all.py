@@ -1,3 +1,4 @@
+import os
 import sys
 from types import SimpleNamespace
 
@@ -74,6 +75,69 @@ def test_env_int_uses_default_for_malformed_value(monkeypatch) -> None:
     assert _env_int("LOCAL_VISUAL_ENGINE_SERVICE_PORT", 8091) == 8091
 
 
+def test_load_runtime_env_reads_dotenv_without_overwriting_exported(
+    monkeypatch, tmp_path
+) -> None:
+    dotenv = tmp_path / ".env"
+    dotenv.write_text(
+        "\n".join(
+            [
+                "LOCAL_LEFFA_PYTHON=/workspace/tryon-models/venvs/leffa/bin/python",
+                "LOCAL_LEFFA_ROOT=/workspace/tryon-models/external/Leffa",
+                "LOCAL_VISUAL_ENGINE_START_SERVICE=true",
+                "LOCAL_VISUAL_ENGINE_SERVICE_PORT=8091",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("LOCAL_LEFFA_PYTHON", raising=False)
+    monkeypatch.delenv("LOCAL_LEFFA_ROOT", raising=False)
+    monkeypatch.delenv("LOCAL_VISUAL_ENGINE_START_SERVICE", raising=False)
+    monkeypatch.setenv("LOCAL_VISUAL_ENGINE_SERVICE_PORT", "9000")
+
+    env = run_kiosk_all.load_runtime_env()
+
+    assert env["LOCAL_LEFFA_PYTHON"] == "/workspace/tryon-models/venvs/leffa/bin/python"
+    assert env["LOCAL_LEFFA_ROOT"] == "/workspace/tryon-models/external/Leffa"
+    assert env["LOCAL_VISUAL_ENGINE_START_SERVICE"] == "true"
+    assert env["LOCAL_VISUAL_ENGINE_SERVICE_PORT"] == "9000"
+    assert "LOCAL_LEFFA_PYTHON" not in os.environ
+
+
+def test_parse_args_uses_dotenv_for_local_visual_engine_defaults(
+    monkeypatch, tmp_path
+) -> None:
+    (tmp_path / ".env").write_text(
+        "\n".join(
+            [
+                "LOCAL_VISUAL_ENGINE_START_SERVICE=true",
+                "LOCAL_VISUAL_ENGINE_SERVICE_HOST=127.0.0.2",
+                "LOCAL_VISUAL_ENGINE_SERVICE_PORT=8098",
+                "LOCAL_LEFFA_PYTHON=/workspace/tryon-models/venvs/leffa/bin/python",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["run_kiosk_all.py"])
+    monkeypatch.delenv("LOCAL_VISUAL_ENGINE_START_SERVICE", raising=False)
+    monkeypatch.delenv("LOCAL_VISUAL_ENGINE_SERVICE_HOST", raising=False)
+    monkeypatch.delenv("LOCAL_VISUAL_ENGINE_SERVICE_PORT", raising=False)
+    monkeypatch.delenv("LOCAL_LEFFA_PYTHON", raising=False)
+
+    env = run_kiosk_all.load_runtime_env()
+    args = run_kiosk_all.parse_args(env=env)
+
+    assert args.start_local_visual_engine_service is True
+    assert args.local_visual_engine_service_host == "127.0.0.2"
+    assert args.local_visual_engine_service_port == 8098
+    assert (
+        args.local_visual_engine_python
+        == "/workspace/tryon-models/venvs/leffa/bin/python"
+    )
+
+
 def test_build_local_visual_engine_worker_env_sets_service_mode() -> None:
     env = {
         "LOCAL_VISUAL_ENGINE_MODE": "subprocess",
@@ -118,7 +182,7 @@ def test_main_passes_service_mode_env_to_worker(monkeypatch) -> None:
     monkeypatch.setattr(
         run_kiosk_all,
         "parse_args",
-        lambda: SimpleNamespace(
+        lambda **_: SimpleNamespace(
             api_host="0.0.0.0",
             api_port=8080,
             no_worker=False,
@@ -159,7 +223,7 @@ def test_main_no_worker_skips_local_visual_engine_service(monkeypatch) -> None:
     monkeypatch.setattr(
         run_kiosk_all,
         "parse_args",
-        lambda: SimpleNamespace(
+        lambda **_: SimpleNamespace(
             api_host="0.0.0.0",
             api_port=8080,
             no_worker=True,

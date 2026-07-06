@@ -20,6 +20,8 @@ import urllib.request
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from scripts.runtime_env import load_runtime_env
+
 
 @dataclass
 class ManagedProcess:
@@ -97,19 +99,20 @@ def build_local_visual_engine_worker_env(
     return worker_env
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(*, env: dict[str, str] | None = None) -> argparse.Namespace:
+    env = env or os.environ
     parser = argparse.ArgumentParser(
         description="Run kiosk API and worker as one deployable foreground process"
     )
     parser.add_argument(
         "--api-host",
-        default=os.getenv("HOST", "0.0.0.0"),
+        default=env.get("HOST", "0.0.0.0"),
         help="API bind host",
     )
     parser.add_argument(
         "--api-port",
         type=int,
-        default=int(os.getenv("PORT", "8080")),
+        default=int(env.get("PORT", "8080")),
         help="API bind port",
     )
     parser.add_argument(
@@ -132,7 +135,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--start-ollama",
         action="store_true",
-        default=_env_flag("KIOSK_START_OLLAMA"),
+        default=_env_flag("KIOSK_START_OLLAMA", env=env),
         help=(
             "Start `ollama serve` if OLLAMA_BASE_URL is not reachable. Can also "
             "be enabled with KIOSK_START_OLLAMA=true."
@@ -140,18 +143,18 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--ollama-command",
-        default=os.getenv("OLLAMA_COMMAND", "ollama"),
+        default=env.get("OLLAMA_COMMAND", "ollama"),
         help="Ollama executable to use with --start-ollama",
     )
     parser.add_argument(
         "--ollama-base-url",
-        default=os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
+        default=env.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
         help="Ollama base URL used to decide whether ollama serve is already up",
     )
     parser.add_argument(
         "--start-local-visual-engine-service",
         action="store_true",
-        default=_env_flag("LOCAL_VISUAL_ENGINE_START_SERVICE"),
+        default=_env_flag("LOCAL_VISUAL_ENGINE_START_SERVICE", env=env),
         help=(
             "Start the local visual engine HTTP service before the worker. Can "
             "also be enabled with LOCAL_VISUAL_ENGINE_START_SERVICE=true."
@@ -159,23 +162,23 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--local-visual-engine-service-host",
-        default=os.getenv("LOCAL_VISUAL_ENGINE_SERVICE_HOST", "127.0.0.1"),
+        default=env.get("LOCAL_VISUAL_ENGINE_SERVICE_HOST", "127.0.0.1"),
         help="Local visual engine service bind host",
     )
     parser.add_argument(
         "--local-visual-engine-service-port",
         type=int,
-        default=_env_int("LOCAL_VISUAL_ENGINE_SERVICE_PORT", 8091),
+        default=_env_int("LOCAL_VISUAL_ENGINE_SERVICE_PORT", 8091, env=env),
         help="Local visual engine service bind port",
     )
     parser.add_argument(
         "--local-visual-engine-python",
-        default=os.getenv("LOCAL_LEFFA_PYTHON", sys.executable),
+        default=env.get("LOCAL_LEFFA_PYTHON", sys.executable),
         help="Python executable used to start the local visual engine service",
     )
     parser.add_argument(
         "--log-level",
-        default=os.getenv("LOG_LEVEL", "INFO"),
+        default=env.get("LOG_LEVEL", "INFO"),
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Worker log level",
     )
@@ -189,8 +192,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
-    args = parse_args()
-    env = os.environ.copy()
+    env = load_runtime_env()
+    args = parse_args(env=env)
     env.setdefault("API_PROFILE", "kiosk")
     worker_env = build_local_visual_engine_worker_env(
         env=env,
@@ -267,14 +270,16 @@ def main() -> int:
         _stop_processes(processes, timeout_seconds=args.shutdown_timeout_seconds)
 
 
-def _env_flag(name: str) -> bool:
-    value = os.getenv(name, "").strip().lower()
+def _env_flag(name: str, *, env: dict[str, str] | None = None) -> bool:
+    env = env or os.environ
+    value = env.get(name, "").strip().lower()
     return value in {"1", "true", "yes", "on"}
 
 
-def _env_int(name: str, default: int) -> int:
+def _env_int(name: str, default: int, *, env: dict[str, str] | None = None) -> int:
+    env = env or os.environ
     try:
-        return int(os.getenv(name, str(default)))
+        return int(env.get(name, str(default)))
     except ValueError:
         return default
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import logging
 import os
 from pathlib import Path
@@ -92,7 +93,39 @@ def _env_log_level(name: str, default: str) -> str:
     return value
 
 
+def load_runtime_env(*, update_environ: bool = False) -> dict[str, str]:
+    from scripts.runtime_env import load_runtime_env as _load_runtime_env
+
+    return _load_runtime_env(update_environ=update_environ)
+
+
+def apply_leffa_runtime_env() -> None:
+    from scripts.runtime_env import apply_leffa_runtime_env as _apply_leffa_runtime_env
+
+    _apply_leffa_runtime_env()
+
+
+def validate_bind_host(host: str) -> None:
+    if _env_flag("LOCAL_VISUAL_ENGINE_ALLOW_UNSAFE_BIND", False):
+        return
+    if host == "localhost":
+        return
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError as exc:
+        raise ValueError(
+            "Local visual engine service must bind to a loopback host unless "
+            "LOCAL_VISUAL_ENGINE_ALLOW_UNSAFE_BIND=true is set"
+        ) from exc
+    if not address.is_loopback:
+        raise ValueError(
+            "Local visual engine service must bind to a loopback host unless "
+            "LOCAL_VISUAL_ENGINE_ALLOW_UNSAFE_BIND=true is set"
+        )
+
+
 def main() -> int:
+    load_runtime_env(update_environ=True)
     args = parse_args()
     from src.modules.local_visual_engine.service import LocalVisualEngineHTTPServer
 
@@ -101,6 +134,8 @@ def main() -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
+    validate_bind_host(args.host)
+    apply_leffa_runtime_env()
     engine = build_engine_from_env()
     server = LocalVisualEngineHTTPServer(host=args.host, port=args.port, engine=engine)
     server.load_engine()

@@ -103,3 +103,49 @@ def test_generate_smoke_can_preload_checkpoints_without_inputs(
         ckpt_dir / "virtual_tryon.pth"
     )
     assert report.exists()
+
+
+def test_generate_smoke_validates_inputs_before_checkpoint_download(
+    monkeypatch,
+    tmp_path,
+):
+    def fake_snapshot_download(*, repo_id: str, local_dir: str) -> None:
+        raise AssertionError("checkpoint download should not start for missing inputs")
+
+    monkeypatch.setattr(local_leffa_smoke, "ensure_leffa_repo", lambda **_: None)
+    monkeypatch.setattr(
+        local_leffa_smoke,
+        "load_leffa_modules",
+        lambda _: {"snapshot_download": fake_snapshot_download},
+    )
+
+    try:
+        local_leffa_smoke.generate_smoke(
+            person_image=tmp_path / "missing-person.png",
+            garment_image=tmp_path / "missing-garment.png",
+            output=tmp_path / "output.png",
+            report=tmp_path / "report.json",
+            leffa_root=tmp_path / "Leffa",
+            repo_url="https://example.com/Leffa.git",
+            no_clone=False,
+            model_repo_id="fake/Leffa",
+            checkpoint_dir=tmp_path / "ckpts",
+            size="768x1024",
+            device="cpu",
+            dtype="float16",
+            vt_model_type="viton_hd",
+            garment_type="upper_body",
+            steps=30,
+            guidance_scale=2.5,
+            seed=42,
+            ref_acceleration=False,
+            repaint=False,
+            preprocess_garment=False,
+            allow_tf32=True,
+        )
+    except FileNotFoundError as exc:
+        assert "Missing person image" in str(exc)
+    else:
+        raise AssertionError(
+            "Expected missing input to fail before checkpoint download"
+        )

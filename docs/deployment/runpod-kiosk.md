@@ -770,8 +770,8 @@ RunPod; the API and browser still use port `8080`.
 
 Expected startup logs:
 
-- `[local-visual-engine] loading engine=leffa`
-- `[local-visual-engine] ready`
+- `[local-visual-engine] ... Loaded local visual engine engine=leffa ...`
+- `[local-visual-engine] ... Local visual engine service ready at http://127.0.0.1:8091`
 - worker jobs report `execution_mode=service`
 
 If service mode fails, remove `LOCAL_VISUAL_ENGINE_MODE=service` and

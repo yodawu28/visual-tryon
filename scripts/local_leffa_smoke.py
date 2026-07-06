@@ -380,6 +380,16 @@ def generate_smoke(
         _write_report(report, report_payload)
         return report_payload
 
+    if not download_checkpoints_only:
+        if person_image is None:
+            raise ValueError("person_image is required for Leffa generation")
+        if garment_image is None:
+            raise ValueError("garment_image is required for Leffa generation")
+        if output is None:
+            raise ValueError("output is required for Leffa generation")
+        ensure_input_exists(person_image, "person image")
+        ensure_input_exists(garment_image, "garment image")
+
     ckpt_dir = checkpoint_dir or leffa_root / "ckpts"
     download_leffa_checkpoints(
         modules=modules,
@@ -419,16 +429,6 @@ def generate_smoke(
         }
         _write_report(report, report_payload)
         return report_payload
-
-    if person_image is None:
-        raise ValueError("person_image is required for Leffa generation")
-    if garment_image is None:
-        raise ValueError("garment_image is required for Leffa generation")
-    if output is None:
-        raise ValueError("output is required for Leffa generation")
-
-    ensure_input_exists(person_image, "person image")
-    ensure_input_exists(garment_image, "garment image")
 
     import torch
 

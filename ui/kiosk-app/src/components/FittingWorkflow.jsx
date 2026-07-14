@@ -142,14 +142,16 @@ function isStepComplete(key, state) {
 
 export function SelectedGarmentBar({ garmentLabel, onOpenProduct, state }) {
   const selected = Boolean(state.garmentId);
-  const displayName = selected ? garmentLabel : "T-Shirt";
-  const categoryLabel = formatCategoryLabel(state.garmentCategory || "tops");
+  const displayName = selected ? garmentLabel : "No garment selected";
+  const categoryLabel = selected ? formatCategoryLabel(state.garmentCategory || "tops") : "Upload a product to start";
   const garmentTypeLabel = state.garmentType ? state.garmentType.replaceAll("_", " ") : "";
   const chartLabel = state.sizeChartName
     ? `${state.sizeChartName}${state.sizeChartSizes ? ` · ${state.sizeChartSizes}` : ""}`
     : state.sizeChartId
       ? `Chart linked${state.sizeChartSizes ? ` · ${state.sizeChartSizes}` : ""}`
-      : "No chart linked";
+      : selected
+        ? "No chart linked"
+        : "Size chart loads after upload";
 
   return (
     <section
@@ -163,7 +165,7 @@ export function SelectedGarmentBar({ garmentLabel, onOpenProduct, state }) {
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
           <p className="truncate font-semibold text-ink">{displayName}</p>
           <span className="text-muted">{categoryLabel}</span>
-          {garmentTypeLabel && (
+          {selected && garmentTypeLabel && (
             <>
               <span className="h-1 w-1 rounded-full bg-slate-300" />
               <span className="capitalize text-muted">{garmentTypeLabel}</span>
@@ -174,8 +176,8 @@ export function SelectedGarmentBar({ garmentLabel, onOpenProduct, state }) {
         </div>
       </div>
 
-      <Button className="w-full sm:w-auto" onClick={onOpenProduct} size="sm" variant="ghost">
-        Change product
+      <Button className="w-full sm:w-auto" onClick={onOpenProduct} size="sm" variant={selected ? "ghost" : "primary"}>
+        {selected ? "Change product" : "Upload product"}
       </Button>
     </section>
   );
@@ -342,7 +344,7 @@ export function OperatorGuidancePanel({ onQueueTryOn, state, tryOnLabel, workflo
 
       <section className="border-t border-line/70 pt-2.5">
         <h3 className="text-sm font-semibold text-ink">Output status</h3>
-        <OutputStatusList workflowState={workflowState} />
+        <OutputStatusList state={state} workflowState={workflowState} />
         {state.fitRecommendationLabel && (
           <p className="mt-2 rounded-md bg-slate-50 px-2.5 py-2 text-sm font-medium text-ink">
             {state.fitRecommendationLabel}
@@ -355,9 +357,15 @@ export function OperatorGuidancePanel({ onQueueTryOn, state, tryOnLabel, workflo
   );
 }
 
-export function OutputStatusList({ workflowState }) {
+export function OutputStatusList({ state, workflowState }) {
+  const garmentReady = Boolean(state.garmentId);
   const rows = [
-    { label: "Garment", sourceText: "Garment: Ready", value: "Ready", tone: "success" },
+    {
+      label: "Garment",
+      sourceText: garmentReady ? "Garment: Ready" : "Garment: Not selected",
+      value: garmentReady ? "Ready" : "Not selected",
+      tone: garmentReady ? "success" : "locked",
+    },
     {
       label: "Shopper scan",
       sourceText: "Shopper scan: Not started",

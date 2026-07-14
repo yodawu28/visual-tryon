@@ -137,8 +137,20 @@ def test_kiosk_ui_has_screen_navigation_state_contract():
     assert "SettingsPanel" not in app_js
     assert "handlePrimaryAction" in app_js
     assert "kioskActiveStep" not in app_js
-    assert 'garmentId: "local-demo-garment"' in app_js
-    assert 'garmentName: "T-Shirt"' in app_js
+    assert 'garmentId: ""' in app_js
+    assert 'garmentName: ""' in app_js
+    assert 'garmentId: "local-demo-garment"' not in app_js
+    assert "storedSessionValue" in app_js
+
+
+def test_kiosk_ui_uses_backend_session_id_after_product_upload():
+    app_js = Path("ui/kiosk-app/src/App.jsx").read_text("utf-8")
+    workflow_source = Path("ui/kiosk-app/src/components/FittingWorkflow.jsx").read_text("utf-8")
+
+    assert "sessionResponse.session_id" in app_js
+    assert "sessionResponse.session?.session_id" not in app_js
+    assert "Upload a product to start" in workflow_source
+    assert 'const displayName = selected ? garmentLabel : "T-Shirt";' not in workflow_source
 
 
 def test_kiosk_ui_keeps_diagnostics_out_of_primary_surface():

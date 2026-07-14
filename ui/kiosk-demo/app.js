@@ -7333,10 +7333,10 @@ function isStepComplete(key, state) {
 }
 function SelectedGarmentBar({ garmentLabel, onOpenProduct, state }) {
   const selected = Boolean(state.garmentId);
-  const displayName = selected ? garmentLabel : "T-Shirt";
-  const categoryLabel = formatCategoryLabel(state.garmentCategory || "tops");
+  const displayName = selected ? garmentLabel : "No garment selected";
+  const categoryLabel = selected ? formatCategoryLabel(state.garmentCategory || "tops") : "Upload a product to start";
   const garmentTypeLabel = state.garmentType ? state.garmentType.replaceAll("_", " ") : "";
-  const chartLabel = state.sizeChartName ? `${state.sizeChartName}${state.sizeChartSizes ? ` · ${state.sizeChartSizes}` : ""}` : state.sizeChartId ? `Chart linked${state.sizeChartSizes ? ` · ${state.sizeChartSizes}` : ""}` : "No chart linked";
+  const chartLabel = state.sizeChartName ? `${state.sizeChartName}${state.sizeChartSizes ? ` · ${state.sizeChartSizes}` : ""}` : state.sizeChartId ? `Chart linked${state.sizeChartSizes ? ` · ${state.sizeChartSizes}` : ""}` : selected ? "No chart linked" : "Size chart loads after upload";
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "section",
     {
@@ -7348,7 +7348,7 @@ function SelectedGarmentBar({ garmentLabel, onOpenProduct, state }) {
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "truncate font-semibold text-ink", children: displayName }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-muted", children: categoryLabel }),
-            garmentTypeLabel && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+            selected && garmentTypeLabel && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-1 w-1 rounded-full bg-slate-300" }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "capitalize text-muted", children: garmentTypeLabel })
             ] }),
@@ -7356,7 +7356,7 @@ function SelectedGarmentBar({ garmentLabel, onOpenProduct, state }) {
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: state.sizeChartId ? "text-muted" : "font-medium text-amber-700", children: chartLabel })
           ] })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "w-full sm:w-auto", onClick: onOpenProduct, size: "sm", variant: "ghost", children: "Change product" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "w-full sm:w-auto", onClick: onOpenProduct, size: "sm", variant: selected ? "ghost" : "primary", children: selected ? "Change product" : "Upload product" })
       ]
     }
   );
@@ -7489,15 +7489,21 @@ function OperatorGuidancePanel({ onQueueTryOn, state, tryOnLabel, workflowState 
     /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "border-t border-line/70 pt-2.5", children: /* @__PURE__ */ jsxRuntimeExports.jsx(CaptureChecklist, { checked: workflowState.scan === "scanComplete" }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "border-t border-line/70 pt-2.5", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-sm font-semibold text-ink", children: "Output status" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(OutputStatusList, { workflowState }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(OutputStatusList, { state, workflowState }),
       state.fitRecommendationLabel && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-2 rounded-md bg-slate-50 px-2.5 py-2 text-sm font-medium text-ink", children: state.fitRecommendationLabel })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyPreview, { onQueueTryOn, state, tryOnLabel, workflowState })
   ] });
 }
-function OutputStatusList({ workflowState }) {
+function OutputStatusList({ state, workflowState }) {
+  const garmentReady = Boolean(state.garmentId);
   const rows = [
-    { label: "Garment", sourceText: "Garment: Ready", value: "Ready", tone: "success" },
+    {
+      label: "Garment",
+      sourceText: garmentReady ? "Garment: Ready" : "Garment: Not selected",
+      value: garmentReady ? "Ready" : "Not selected",
+      tone: garmentReady ? "success" : "locked"
+    },
     {
       label: "Shopper scan",
       sourceText: "Shopper scan: Not started",
@@ -7784,8 +7790,8 @@ const appNavItems = [
   { key: "settings", label: "Settings", icon: SettingsIcon }
 ];
 const initialSessionState = {
-  garmentId: "local-demo-garment",
-  garmentName: "T-Shirt",
+  garmentId: "",
+  garmentName: "",
   garmentCategory: "tops",
   garmentType: "regular_top",
   sessionId: "",
@@ -7816,7 +7822,7 @@ function FittingRoomApp() {
   const [sizeChartsStatus, setSizeChartsStatus] = reactExports.useState("Idle");
   const [state, setState] = reactExports.useState(() => ({
     ...initialSessionState,
-    garmentId: localStorage.getItem("kioskGarmentId") || initialSessionState.garmentId,
+    garmentId: storedSessionValue("kioskGarmentId") || initialSessionState.garmentId,
     garmentName: localStorage.getItem("kioskGarmentName") || initialSessionState.garmentName,
     garmentCategory: localStorage.getItem("kioskGarmentCategory") || initialSessionState.garmentCategory,
     garmentType: localStorage.getItem("kioskGarmentType") || initialSessionState.garmentType,
@@ -7870,19 +7876,11 @@ function FittingRoomApp() {
     setEventLog((current) => [`${(/* @__PURE__ */ new Date()).toLocaleTimeString()} ${message}`, ...current].slice(0, 10));
   }
   function resetSession() {
-    localStorage.removeItem("kioskGarmentId");
-    localStorage.removeItem("kioskGarmentName");
-    localStorage.removeItem("kioskGarmentCategory");
-    localStorage.removeItem("kioskGarmentType");
-    localStorage.removeItem("kioskSessionId");
-    localStorage.removeItem("kioskSizeChartId");
-    localStorage.removeItem("kioskSizeChartName");
-    localStorage.removeItem("kioskSizeChartSizes");
+    clearStoredSessionState();
     setState(initialSessionState);
     appendLog("New fitting session prepared");
   }
   async function saveProduct(event) {
-    var _a;
     event.preventDefault();
     setProductError("");
     setProductSaving(true);
@@ -7914,7 +7912,7 @@ function FittingRoomApp() {
         garmentName: garment.name || garmentName,
         garmentCategory: garment.category || garmentCategory,
         garmentType: garment.garment_type || garmentType,
-        sessionId: ((_a = sessionResponse.session) == null ? void 0 : _a.session_id) || "",
+        sessionId: sessionResponse.session_id || "",
         sizeChartId: garment.size_chart_id || sizeChartId,
         sizeChartName: (selectedSizeChart == null ? void 0 : selectedSizeChart.name) || "",
         sizeChartSizes: formatSizeRange((selectedSizeChart == null ? void 0 : selectedSizeChart.size_chart) || garment.size_chart || [])
@@ -8129,6 +8127,26 @@ function persistSessionState(nextState) {
   localStorage.setItem("kioskSizeChartId", nextState.sizeChartId || "");
   localStorage.setItem("kioskSizeChartName", nextState.sizeChartName || "");
   localStorage.setItem("kioskSizeChartSizes", nextState.sizeChartSizes || "");
+}
+function storedSessionValue(key) {
+  const value = localStorage.getItem(key);
+  if (value === "local-demo-garment") {
+    clearStoredSessionState();
+    return "";
+  }
+  return value || "";
+}
+function clearStoredSessionState() {
+  [
+    "kioskGarmentId",
+    "kioskGarmentName",
+    "kioskGarmentCategory",
+    "kioskGarmentType",
+    "kioskSessionId",
+    "kioskSizeChartId",
+    "kioskSizeChartName",
+    "kioskSizeChartSizes"
+  ].forEach((key) => localStorage.removeItem(key));
 }
 function formatSizeRange(sizeChart) {
   const sizes2 = Array.isArray(sizeChart) ? sizeChart.map((item) => item == null ? void 0 : item.size).filter(Boolean) : [];

@@ -40,8 +40,8 @@ const appNavItems = [
 ];
 
 const initialSessionState = {
-  garmentId: "local-demo-garment",
-  garmentName: "T-Shirt",
+  garmentId: "",
+  garmentName: "",
   garmentCategory: "tops",
   garmentType: "regular_top",
   sessionId: "",
@@ -73,7 +73,7 @@ function FittingRoomApp() {
   const [sizeChartsStatus, setSizeChartsStatus] = useState("Idle");
   const [state, setState] = useState(() => ({
     ...initialSessionState,
-    garmentId: localStorage.getItem("kioskGarmentId") || initialSessionState.garmentId,
+    garmentId: storedSessionValue("kioskGarmentId") || initialSessionState.garmentId,
     garmentName: localStorage.getItem("kioskGarmentName") || initialSessionState.garmentName,
     garmentCategory: localStorage.getItem("kioskGarmentCategory") || initialSessionState.garmentCategory,
     garmentType: localStorage.getItem("kioskGarmentType") || initialSessionState.garmentType,
@@ -138,14 +138,7 @@ function FittingRoomApp() {
   }
 
   function resetSession() {
-    localStorage.removeItem("kioskGarmentId");
-    localStorage.removeItem("kioskGarmentName");
-    localStorage.removeItem("kioskGarmentCategory");
-    localStorage.removeItem("kioskGarmentType");
-    localStorage.removeItem("kioskSessionId");
-    localStorage.removeItem("kioskSizeChartId");
-    localStorage.removeItem("kioskSizeChartName");
-    localStorage.removeItem("kioskSizeChartSizes");
+    clearStoredSessionState();
     setState(initialSessionState);
     appendLog("New fitting session prepared");
   }
@@ -185,7 +178,7 @@ function FittingRoomApp() {
         garmentName: garment.name || garmentName,
         garmentCategory: garment.category || garmentCategory,
         garmentType: garment.garment_type || garmentType,
-        sessionId: sessionResponse.session?.session_id || "",
+        sessionId: sessionResponse.session_id || "",
         sizeChartId: garment.size_chart_id || sizeChartId,
         sizeChartName: selectedSizeChart?.name || "",
         sizeChartSizes: formatSizeRange(selectedSizeChart?.size_chart || garment.size_chart || []),
@@ -423,6 +416,28 @@ function persistSessionState(nextState) {
   localStorage.setItem("kioskSizeChartId", nextState.sizeChartId || "");
   localStorage.setItem("kioskSizeChartName", nextState.sizeChartName || "");
   localStorage.setItem("kioskSizeChartSizes", nextState.sizeChartSizes || "");
+}
+
+function storedSessionValue(key) {
+  const value = localStorage.getItem(key);
+  if (value === "local-demo-garment") {
+    clearStoredSessionState();
+    return "";
+  }
+  return value || "";
+}
+
+function clearStoredSessionState() {
+  [
+    "kioskGarmentId",
+    "kioskGarmentName",
+    "kioskGarmentCategory",
+    "kioskGarmentType",
+    "kioskSessionId",
+    "kioskSizeChartId",
+    "kioskSizeChartName",
+    "kioskSizeChartSizes",
+  ].forEach((key) => localStorage.removeItem(key));
 }
 
 function formatSizeRange(sizeChart) {

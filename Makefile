@@ -205,6 +205,18 @@ run:
 ui-kiosk:
 	python3 -m http.server $(UI_PORT) --bind 127.0.0.1 --directory ui/kiosk-demo
 
+ui-kiosk-install:
+	cd ui/kiosk-app && npm install
+
+ui-kiosk-dev:
+	cd ui/kiosk-app && npm run dev
+
+ui-kiosk-build:
+	cd ui/kiosk-app && npm run build
+
+ui-kiosk-preview:
+	cd ui/kiosk-app && npm run preview
+
 kiosk-seed-size-charts:
 	python -m scripts.seed_size_charts --db-path $(LOCAL_DATA_DIR)/size_charts/size_charts.sqlite3
 

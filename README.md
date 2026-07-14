@@ -151,6 +151,13 @@ source venv/bin/activate
 make runpod-install
 ```
 
+Use the combined bootstrap when the pod should also run the local Leffa visual
+preview runtime:
+
+```bash
+make runpod-bootstrap
+```
+
 Configure `.env` from `.env.runpod.example`, then start the all-in-one kiosk
 process:
 
@@ -252,6 +259,7 @@ RunPod helper commands:
 ```bash
 make runpod-help
 make runpod-install
+make runpod-bootstrap      # app deps + isolated Leffa runtime deps
 make runpod-pull-ollama
 make runpod-start-with-ollama
 make runpod-preflight

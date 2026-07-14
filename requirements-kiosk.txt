@@ -1,5 +1,6 @@
 # Kiosk API/runtime dependencies for RunPod deployment.
 # Keep heavyweight model stacks in isolated optional runtimes, not in the app venv.
+# Runtime versions are constrained by constraints-kiosk.txt during Makefile installs.
 
 # Web Framework
 fastapi==0.115.5

@@ -32,12 +32,17 @@ def test_leffa_install_uses_isolated_runtime_check_and_constraints() -> None:
 def test_dependency_constraints_pin_runtime_profiles_without_cross_installing_torch() -> None:
     kiosk_constraints = Path("constraints-kiosk.txt").read_text("utf-8")
     leffa_constraints = Path("constraints-leffa-runpod.txt").read_text("utf-8")
+    leffa_requirements = Path("requirements-leffa-runpod.txt").read_text("utf-8")
+    leffa_checker = Path("scripts/check_leffa_runtime.py").read_text("utf-8")
 
     assert "fastapi==0.115.5" in kiosk_constraints
     assert "mediapipe==0.10.21" in kiosk_constraints
     assert "torch==" not in kiosk_constraints
 
     assert "diffusers==0.32.2" in leffa_constraints
+    assert "hf_transfer==" in leffa_constraints
+    assert "hf_transfer>=" in leffa_requirements
+    assert 'RuntimeRequirement("hf_transfer", "hf_transfer")' in leffa_checker
     assert "transformers==4.46.3" in leffa_constraints
     assert "torch==" not in leffa_constraints
     assert "torchvision==" not in leffa_constraints

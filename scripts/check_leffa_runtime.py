@@ -34,6 +34,7 @@ LEFFA_REQUIREMENTS = (
     RuntimeRequirement("diffusers", "diffusers"),
     RuntimeRequirement("einops", "einops"),
     RuntimeRequirement("fvcore", "fvcore"),
+    RuntimeRequirement("hf_transfer", "hf_transfer"),
     RuntimeRequirement("huggingface_hub", "huggingface_hub"),
     RuntimeRequirement("imageio", "imageio"),
     RuntimeRequirement("iopath", "iopath"),

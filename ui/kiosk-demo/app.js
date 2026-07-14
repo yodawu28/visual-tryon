@@ -7231,6 +7231,7 @@ function FittingWorkflow({
   activeStage,
   captureLabel,
   garmentLabel,
+  onCapturePhoto,
   onOpenProduct,
   onQueueTryOn,
   onRunScan,
@@ -7251,6 +7252,7 @@ function FittingWorkflow({
             ScanWorkspace,
             {
               captureLabel,
+              onCapturePhoto,
               onRunScan,
               state,
               workflowState
@@ -7332,6 +7334,9 @@ function isStepComplete(key, state) {
 function SelectedGarmentBar({ garmentLabel, onOpenProduct, state }) {
   const selected = Boolean(state.garmentId);
   const displayName = selected ? garmentLabel : "T-Shirt";
+  const categoryLabel = formatCategoryLabel(state.garmentCategory || "tops");
+  const garmentTypeLabel = state.garmentType ? state.garmentType.replaceAll("_", " ") : "";
+  const chartLabel = state.sizeChartName ? `${state.sizeChartName}${state.sizeChartSizes ? ` · ${state.sizeChartSizes}` : ""}` : state.sizeChartId ? `Chart linked${state.sizeChartSizes ? ` · ${state.sizeChartSizes}` : ""}` : "No chart linked";
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "section",
     {
@@ -7342,9 +7347,13 @@ function SelectedGarmentBar({ garmentLabel, onOpenProduct, state }) {
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid h-8 w-8 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-700 ring-1 ring-line/80", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ProductIcon, { className: "h-5 w-5" }) }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "truncate font-semibold text-ink", children: displayName }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-muted", children: "Tops" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-muted", children: categoryLabel }),
+            garmentTypeLabel && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-1 w-1 rounded-full bg-slate-300" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "capitalize text-muted", children: garmentTypeLabel })
+            ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-1 w-1 rounded-full bg-slate-300" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-muted", children: "Size chart attached" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: state.sizeChartId ? "text-muted" : "font-medium text-amber-700", children: chartLabel })
           ] })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "w-full sm:w-auto", onClick: onOpenProduct, size: "sm", variant: "ghost", children: "Change product" })
@@ -7352,7 +7361,16 @@ function SelectedGarmentBar({ garmentLabel, onOpenProduct, state }) {
     }
   );
 }
-function ScanWorkspace({ captureLabel, onRunScan, state, workflowState }) {
+function formatCategoryLabel(category) {
+  const labels = {
+    bottoms: "Bottoms",
+    full_outfit: "Full outfit",
+    one_pieces: "One piece",
+    tops: "Tops"
+  };
+  return labels[category] || String(category);
+}
+function ScanWorkspace({ captureLabel, onCapturePhoto, onRunScan, state, workflowState }) {
   const scanComplete = workflowState.scan === "scanComplete";
   const scanStarted = workflowState.scan === "scanning" || scanComplete;
   const cameraStatus = getCameraStatus(workflowState);
@@ -7367,6 +7385,7 @@ function ScanWorkspace({ captureLabel, onRunScan, state, workflowState }) {
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "px-4 pb-3 sm:px-5", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
       CameraCaptureFrame,
       {
+        onCapturePhoto,
         onRunScan,
         scanComplete,
         scanLabel: cameraStatus,
@@ -7376,9 +7395,36 @@ function ScanWorkspace({ captureLabel, onRunScan, state, workflowState }) {
     ) })
   ] });
 }
-function CameraCaptureFrame({ onRunScan, scanComplete, scanLabel, scanStarted, state }) {
-  const disabled = !state.garmentId;
+function CameraCaptureFrame({ onCapturePhoto, onRunScan, scanComplete, scanLabel, scanStarted, state }) {
+  const fileInputRef = reactExports.useRef(null);
+  const captureSourceRef = reactExports.useRef("file_upload");
+  const disabled = !state.garmentId || state.scanBusy || state.fitLoading;
+  function openCapturePicker(captureSource) {
+    var _a;
+    captureSourceRef.current = captureSource;
+    (_a = fileInputRef.current) == null ? void 0 : _a.click();
+  }
+  function handleFileChange(event) {
+    var _a;
+    const file = (_a = event.target.files) == null ? void 0 : _a[0];
+    if (file) {
+      onCapturePhoto == null ? void 0 : onCapturePhoto(file, captureSourceRef.current);
+    } else {
+      onRunScan == null ? void 0 : onRunScan();
+    }
+    event.target.value = "";
+  }
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "scan-stage relative grid h-[360px] overflow-hidden rounded-lg bg-slate-950 text-white shadow-soft sm:h-[420px] xl:h-[440px]", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "input",
+      {
+        accept: "image/*",
+        className: "sr-only",
+        onChange: handleFileChange,
+        ref: fileInputRef,
+        type: "file"
+      }
+    ),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(148,163,184,0.16),transparent_32%),linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,1))]" }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute inset-x-4 top-4 z-10 flex items-center justify-between gap-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { tone: scanComplete ? "success" : "dark", children: scanLabel }),
@@ -7403,8 +7449,8 @@ function CameraCaptureFrame({ onRunScan, scanComplete, scanLabel, scanStarted, s
         /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-0.5 text-xs text-white/68", children: "Keep head, torso, and garment area inside the guide." })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "scan-action-row grid grid-cols-2 gap-2 sm:flex sm:shrink-0", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "h-9 min-w-28 px-3 text-sm", disabled, onClick: onRunScan, children: scanComplete ? "Retake scan" : "Start scan" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "h-9 min-w-28 px-3 text-sm", disabled, onClick: onRunScan, variant: "secondary", children: "Upload photo" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "h-9 min-w-28 px-3 text-sm", disabled, onClick: () => openCapturePicker("guided_scan"), children: state.scanBusy || state.fitLoading ? "Analyzing..." : scanComplete ? "Retake scan" : "Start scan" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "h-9 min-w-28 px-3 text-sm", disabled, onClick: () => openCapturePicker("file_upload"), variant: "secondary", children: "Upload photo" })
       ] })
     ] })
   ] });
@@ -7443,7 +7489,8 @@ function OperatorGuidancePanel({ onQueueTryOn, state, tryOnLabel, workflowState 
     /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "border-t border-line/70 pt-2.5", children: /* @__PURE__ */ jsxRuntimeExports.jsx(CaptureChecklist, { checked: workflowState.scan === "scanComplete" }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "border-t border-line/70 pt-2.5", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-sm font-semibold text-ink", children: "Output status" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(OutputStatusList, { workflowState })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(OutputStatusList, { workflowState }),
+      state.fitRecommendationLabel && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-2 rounded-md bg-slate-50 px-2.5 py-2 text-sm font-medium text-ink", children: state.fitRecommendationLabel })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyPreview, { onQueueTryOn, state, tryOnLabel, workflowState })
   ] });
@@ -7540,8 +7587,8 @@ function getNextStepText(workflowState) {
   return "Start a shopper scan to unlock fit recommendation and try-on preview.";
 }
 function getWorkflowState(state) {
-  const scan = state.capturePassed ? "scanComplete" : state.captureUploaded ? "scanning" : "scanNotStarted";
-  const fit = state.fitReady ? "fitReady" : state.capturePassed ? "fitLoading" : "fitLocked";
+  const scan = state.capturePassed ? "scanComplete" : state.scanBusy || state.captureUploaded ? "scanning" : "scanNotStarted";
+  const fit = state.fitReady ? "fitReady" : state.fitLoading || state.capturePassed ? "fitLoading" : "fitLocked";
   const tryOn = state.previewKey ? "tryOnReady" : state.jobStatus === "running" ? "tryOnGenerating" : "tryOnLocked";
   return { fit, scan, tryOn };
 }
@@ -7563,7 +7610,7 @@ function Input({ className = "", label, hint, id, ...props }) {
     hint ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-normal text-muted", children: hint }) : null
   ] });
 }
-function Select({ children, className = "", label, id, ...props }) {
+function Select({ children, className = "", hint, label, id, ...props }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid gap-1.5 text-sm font-medium text-slate-700", htmlFor: id, children: [
     label,
     /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -7578,7 +7625,8 @@ function Select({ children, className = "", label, id, ...props }) {
         ...props,
         children
       }
-    )
+    ),
+    hint ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-normal text-muted", children: hint }) : null
   ] });
 }
 function Modal({ children, description, onClose, open, title }) {
@@ -7624,6 +7672,12 @@ class ApiRequestError extends Error {
     this.status = status;
   }
 }
+const SIZE_CHARTS_PATH = "/api/v1/kiosk/size-charts";
+const GARMENTS_PATH = "/api/v1/kiosk/garments";
+const SESSIONS_PATH = "/api/v1/kiosk/sessions";
+const CAPTURES_PATH = "captures";
+const CAPTURE_ANALYZE_PATH = "captures/analyze";
+const FIT_ANALYZE_PATH = "fit/analyze";
 async function request(apiBase, path, options = {}) {
   const response = await fetch(`${apiBase}${path}`, options);
   const contentType = response.headers.get("content-type") || "";
@@ -7654,6 +7708,51 @@ async function checkReadiness(apiBase) {
       payload: { error: error.message, status: error.status || "network" }
     };
   }
+}
+async function listSizeCharts(apiBase, filters = {}) {
+  const params = new URLSearchParams();
+  if (filters.category) params.set("category", filters.category);
+  if (filters.countryCode) params.set("country_code", filters.countryCode);
+  const query = params.toString();
+  return request(apiBase, `${SIZE_CHARTS_PATH}${query ? `?${query}` : ""}`);
+}
+async function uploadGarment(apiBase, formData) {
+  return request(apiBase, GARMENTS_PATH, {
+    method: "POST",
+    body: formData
+  });
+}
+async function createSession(apiBase, garmentId) {
+  return request(apiBase, SESSIONS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ garment_id: garmentId })
+  });
+}
+async function uploadCapture(apiBase, sessionId, frontImage, captureSource = "file_upload") {
+  const formData = new FormData();
+  formData.append("front_image", frontImage);
+  formData.append("capture_source", captureSource);
+  return request(apiBase, `${SESSIONS_PATH}/${sessionId}/${CAPTURES_PATH}`, {
+    method: "POST",
+    body: formData
+  });
+}
+async function analyzeCapture(apiBase, sessionId) {
+  return request(apiBase, `${SESSIONS_PATH}/${sessionId}/${CAPTURE_ANALYZE_PATH}`, {
+    method: "POST"
+  });
+}
+async function analyzeFit(apiBase, sessionId, bodyMeasurements = {}) {
+  return request(apiBase, `${SESSIONS_PATH}/${sessionId}/${FIT_ANALYZE_PATH}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      preferred_fit: "regular",
+      body_measurements: bodyMeasurements,
+      use_ai_analysis: false
+    })
+  });
 }
 function displaySessionLabel(hasSession) {
   return hasSession ? "Active" : "New fitting";
@@ -7687,6 +7786,16 @@ const appNavItems = [
 const initialSessionState = {
   garmentId: "local-demo-garment",
   garmentName: "T-Shirt",
+  garmentCategory: "tops",
+  garmentType: "regular_top",
+  sessionId: "",
+  sizeChartId: "",
+  sizeChartName: "",
+  sizeChartSizes: "",
+  fitRecommendationLabel: "",
+  fitRecommendationStatus: "",
+  scanBusy: false,
+  fitLoading: false,
   captureUploaded: false,
   capturePassed: false,
   visualPreviewReady: false,
@@ -7701,10 +7810,20 @@ function FittingRoomApp() {
   const [eventLog, setEventLog] = reactExports.useState(["App loaded"]);
   const [diagnosticsDrawer, setDiagnosticsDrawer] = reactExports.useState(false);
   const [productModalOpen, setProductModalOpen] = reactExports.useState(false);
+  const [productError, setProductError] = reactExports.useState("");
+  const [productSaving, setProductSaving] = reactExports.useState(false);
+  const [sizeCharts, setSizeCharts] = reactExports.useState([]);
+  const [sizeChartsStatus, setSizeChartsStatus] = reactExports.useState("Idle");
   const [state, setState] = reactExports.useState(() => ({
     ...initialSessionState,
     garmentId: localStorage.getItem("kioskGarmentId") || initialSessionState.garmentId,
-    garmentName: localStorage.getItem("kioskGarmentName") || initialSessionState.garmentName
+    garmentName: localStorage.getItem("kioskGarmentName") || initialSessionState.garmentName,
+    garmentCategory: localStorage.getItem("kioskGarmentCategory") || initialSessionState.garmentCategory,
+    garmentType: localStorage.getItem("kioskGarmentType") || initialSessionState.garmentType,
+    sessionId: localStorage.getItem("kioskSessionId") || initialSessionState.sessionId,
+    sizeChartId: localStorage.getItem("kioskSizeChartId") || initialSessionState.sizeChartId,
+    sizeChartName: localStorage.getItem("kioskSizeChartName") || initialSessionState.sizeChartName,
+    sizeChartSizes: localStorage.getItem("kioskSizeChartSizes") || initialSessionState.sizeChartSizes
   }));
   const hasSession = Boolean(state.garmentId || state.captureUploaded || state.jobId || state.previewKey);
   const sessionLabel = displaySessionLabel(hasSession);
@@ -7726,6 +7845,25 @@ function FittingRoomApp() {
       cancelled = true;
     };
   }, [apiBase]);
+  reactExports.useEffect(() => {
+    if (!productModalOpen) return void 0;
+    let cancelled = false;
+    setSizeChartsStatus("Loading");
+    listSizeCharts(apiBase).then((payload) => {
+      if (cancelled) return;
+      const charts = Array.isArray(payload.size_charts) ? payload.size_charts : [];
+      setSizeCharts(charts);
+      setSizeChartsStatus(charts.length ? "Ready" : "Empty");
+    }).catch((error) => {
+      if (cancelled) return;
+      setSizeCharts([]);
+      setSizeChartsStatus("Unavailable");
+      setProductError(`Could not load size charts: ${error.message}`);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBase, productModalOpen]);
   const applicationShell = "product-application-shell min-h-screen overflow-x-hidden bg-canvas text-ink";
   const bottomNavigation = "fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 px-2 py-2 backdrop-blur lg:hidden";
   function appendLog(message) {
@@ -7734,23 +7872,63 @@ function FittingRoomApp() {
   function resetSession() {
     localStorage.removeItem("kioskGarmentId");
     localStorage.removeItem("kioskGarmentName");
+    localStorage.removeItem("kioskGarmentCategory");
+    localStorage.removeItem("kioskGarmentType");
+    localStorage.removeItem("kioskSessionId");
+    localStorage.removeItem("kioskSizeChartId");
+    localStorage.removeItem("kioskSizeChartName");
+    localStorage.removeItem("kioskSizeChartSizes");
     setState(initialSessionState);
     appendLog("New fitting session prepared");
   }
-  function saveProduct(event) {
+  async function saveProduct(event) {
+    var _a;
     event.preventDefault();
+    setProductError("");
+    setProductSaving(true);
     const form = new FormData(event.currentTarget);
+    const garmentImage = form.get("garmentImage");
     const garmentName = String(form.get("garmentName") || "Coach demo garment").trim();
-    const nextState = {
-      ...state,
-      garmentId: "local-demo-garment",
-      garmentName
-    };
-    localStorage.setItem("kioskGarmentId", nextState.garmentId);
-    localStorage.setItem("kioskGarmentName", nextState.garmentName);
-    setState(nextState);
-    setProductModalOpen(false);
-    appendLog(`Product selected: ${garmentName}`);
+    const garmentCategory = String(form.get("category") || "tops");
+    const garmentType = String(form.get("garmentType") || "").trim();
+    const sizeChartId = String(form.get("sizeChartId") || "").trim();
+    const selectedSizeChart = sizeCharts.find((chart) => chart.size_chart_id === sizeChartId);
+    if (!(garmentImage instanceof File) || !garmentImage.name) {
+      setProductError("Choose a garment image before saving the product.");
+      setProductSaving(false);
+      return;
+    }
+    try {
+      const uploadPayload = new FormData();
+      uploadPayload.append("file", garmentImage);
+      uploadPayload.append("category", garmentCategory);
+      uploadPayload.append("name", garmentName);
+      if (garmentType) uploadPayload.append("garment_type", garmentType);
+      if (sizeChartId) uploadPayload.append("size_chart_id", sizeChartId);
+      const garmentResponse = await uploadGarment(apiBase, uploadPayload);
+      const garment = garmentResponse.garment;
+      const sessionResponse = await createSession(apiBase, garment.garment_id);
+      const nextState = {
+        ...initialSessionState,
+        garmentId: garment.garment_id,
+        garmentName: garment.name || garmentName,
+        garmentCategory: garment.category || garmentCategory,
+        garmentType: garment.garment_type || garmentType,
+        sessionId: ((_a = sessionResponse.session) == null ? void 0 : _a.session_id) || "",
+        sizeChartId: garment.size_chart_id || sizeChartId,
+        sizeChartName: (selectedSizeChart == null ? void 0 : selectedSizeChart.name) || "",
+        sizeChartSizes: formatSizeRange((selectedSizeChart == null ? void 0 : selectedSizeChart.size_chart) || garment.size_chart || [])
+      };
+      persistSessionState(nextState);
+      setState(nextState);
+      setProductModalOpen(false);
+      appendLog(`Product uploaded: ${nextState.garmentName}`);
+    } catch (error) {
+      setProductError(error.message || "Could not upload product.");
+      appendLog(`Product upload failed: ${error.message || "unknown error"}`);
+    } finally {
+      setProductSaving(false);
+    }
   }
   function simulateCapture() {
     setState((current) => ({
@@ -7761,6 +7939,55 @@ function FittingRoomApp() {
       fitReady: true
     }));
     appendLog("Guided scan marked ready");
+  }
+  async function handleCapturePhoto(file, captureSource = "file_upload") {
+    var _a, _b;
+    if (!state.sessionId) {
+      setProductError("Upload a garment and create a session before scanning the shopper.");
+      setProductModalOpen(true);
+      return;
+    }
+    setState((current) => ({
+      ...current,
+      captureUploaded: true,
+      capturePassed: false,
+      fitLoading: true,
+      fitReady: false,
+      fitRecommendationLabel: "",
+      fitRecommendationStatus: "",
+      scanBusy: true
+    }));
+    appendLog("Uploading shopper scan");
+    try {
+      await uploadCapture(apiBase, state.sessionId, file, captureSource);
+      const captureResponse = await analyzeCapture(apiBase, state.sessionId);
+      const capturePassed = ((_b = (_a = captureResponse.session) == null ? void 0 : _a.capture_analysis) == null ? void 0 : _b.passed) !== false;
+      setState((current) => ({
+        ...current,
+        capturePassed,
+        scanBusy: false
+      }));
+      appendLog(capturePassed ? "Capture analysis passed" : "Capture analysis needs review");
+      const fitResponse = await analyzeFit(apiBase, state.sessionId);
+      const recommendation = fitResponse.size_recommendation || {};
+      const recommendedSize = recommendation.recommended_size;
+      setState((current) => ({
+        ...current,
+        capturePassed,
+        fitLoading: false,
+        fitReady: true,
+        fitRecommendationLabel: recommendedSize ? `Recommended size ${recommendedSize}` : recommendation.reason || "Fit result ready",
+        fitRecommendationStatus: recommendation.status || "ready"
+      }));
+      appendLog(recommendedSize ? `Fit recommendation: ${recommendedSize}` : `Fit result: ${recommendation.status || "ready"}`);
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        fitLoading: false,
+        scanBusy: false
+      }));
+      appendLog(`Scan or fit failed: ${error.message || "unknown error"}`);
+    }
   }
   function queueTryOn() {
     setState((current) => ({
@@ -7839,6 +8066,7 @@ function FittingRoomApp() {
             activeStage,
             captureLabel,
             garmentLabel,
+            onCapturePhoto: handleCapturePhoto,
             onOpenProduct: () => setProductModalOpen(true),
             onQueueTryOn: queueTryOn,
             onRunScan: simulateCapture,
@@ -7858,7 +8086,18 @@ function FittingRoomApp() {
             onClose: () => setDiagnosticsDrawer(false)
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(ProductModal, { onClose: () => setProductModalOpen(false), onSubmit: saveProduct, open: productModalOpen })
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          ProductModal,
+          {
+            error: productError,
+            onClose: () => setProductModalOpen(false),
+            onSubmit: saveProduct,
+            open: productModalOpen,
+            saving: productSaving,
+            sizeCharts,
+            sizeChartsStatus
+          }
+        )
       ]
     }
   );
@@ -7881,7 +8120,24 @@ function getActiveStage(state) {
   if (!state.previewKey) return "fit";
   return "tryon";
 }
-function ProductModal({ onClose, onSubmit, open }) {
+function persistSessionState(nextState) {
+  localStorage.setItem("kioskGarmentId", nextState.garmentId);
+  localStorage.setItem("kioskGarmentName", nextState.garmentName);
+  localStorage.setItem("kioskGarmentCategory", nextState.garmentCategory);
+  localStorage.setItem("kioskGarmentType", nextState.garmentType || "");
+  localStorage.setItem("kioskSessionId", nextState.sessionId || "");
+  localStorage.setItem("kioskSizeChartId", nextState.sizeChartId || "");
+  localStorage.setItem("kioskSizeChartName", nextState.sizeChartName || "");
+  localStorage.setItem("kioskSizeChartSizes", nextState.sizeChartSizes || "");
+}
+function formatSizeRange(sizeChart) {
+  const sizes2 = Array.isArray(sizeChart) ? sizeChart.map((item) => item == null ? void 0 : item.size).filter(Boolean) : [];
+  if (!sizes2.length) return "";
+  return sizes2.length === 1 ? sizes2[0] : `${sizes2[0]}-${sizes2[sizes2.length - 1]}`;
+}
+function ProductModal({ error, onClose, onSubmit, open, saving, sizeCharts, sizeChartsStatus }) {
+  const [productCategory, setProductCategory] = reactExports.useState("tops");
+  const visibleSizeCharts = sizeCharts.filter((chart) => chart.category === productCategory);
   return /* @__PURE__ */ jsxRuntimeExports.jsx(
     Modal,
     {
@@ -7892,22 +8148,52 @@ function ProductModal({ onClose, onSubmit, open }) {
       children: /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { className: "grid gap-4", onSubmit, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(Input, { id: "garmentName", label: "Display name", name: "garmentName", placeholder: "Coach demo garment" }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-4 sm:grid-cols-2", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(Select, { id: "category", label: "Category", name: "category", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { children: "Tops" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { children: "Bottoms" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { children: "One piece" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { children: "Full outfit" })
-          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            Select,
+            {
+              id: "category",
+              label: "Category",
+              name: "category",
+              onChange: (event) => setProductCategory(event.target.value),
+              value: productCategory,
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "tops", children: "Tops" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "bottoms", children: "Bottoms" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "one_pieces", children: "One piece" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "full_outfit", children: "Full outfit" })
+              ]
+            }
+          ),
           /* @__PURE__ */ jsxRuntimeExports.jsx(Input, { id: "garmentType", label: "Garment type", name: "garmentType", placeholder: "t-shirt" })
         ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          Select,
+          {
+            hint: sizeChartsStatus === "Loading" ? "Loading available charts..." : "Used by Fit Intelligence for deterministic size recommendation.",
+            id: "sizeChartId",
+            label: "Size chart",
+            name: "sizeChartId",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "No size chart" }),
+              visibleSizeCharts.map((chart) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: chart.size_chart_id, children: [
+                chart.name,
+                " · ",
+                chart.country_code,
+                " · ",
+                chart.category
+              ] }, chart.size_chart_id))
+            ]
+          }
+        ),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid min-h-32 cursor-pointer place-items-center rounded-2xl border border-dashed border-line bg-slate-50 p-4 text-center transition hover:bg-brand-50", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "sr-only", type: "file" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { accept: "image/*", className: "sr-only", name: "garmentImage", required: true, type: "file" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-semibold text-ink", children: "Choose garment image" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "mt-1 text-sm text-muted", children: "PNG or JPG, clean front product photo" })
         ] }),
+        error && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700", children: error }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-end gap-2", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: onClose, variant: "secondary", children: "Cancel" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { type: "submit", children: "Save product" })
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { disabled: saving, onClick: onClose, variant: "secondary", children: "Cancel" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { disabled: saving, type: "submit", children: saving ? "Saving..." : "Save product" })
         ] })
       ] })
     }

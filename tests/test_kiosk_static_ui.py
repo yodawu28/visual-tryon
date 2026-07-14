@@ -76,6 +76,43 @@ def test_kiosk_ui_uses_same_origin_default_for_runpod():
     assert "127.0.0.1:8080" in app_js
 
 
+def test_kiosk_ui_loads_size_charts_for_product_selection():
+    app_js = Path("ui/kiosk-app/src/App.jsx").read_text("utf-8")
+    api_js = Path("ui/kiosk-app/src/lib/api.js").read_text("utf-8")
+    workflow_source = Path("ui/kiosk-app/src/components/FittingWorkflow.jsx").read_text("utf-8")
+
+    assert "listSizeCharts" in api_js
+    assert '"/api/v1/kiosk/size-charts"' in api_js
+    assert "uploadGarment" in api_js
+    assert '"/api/v1/kiosk/garments"' in api_js
+    assert "createSession" in api_js
+    assert '"/api/v1/kiosk/sessions"' in api_js
+    assert "sizeChartId" in app_js
+    assert "sizeChartName" in app_js
+    assert "setSizeCharts" in app_js
+    assert "sizeChartId" in workflow_source
+    assert "chartLabel" in workflow_source
+    assert '"Size chart attached"' not in workflow_source
+
+
+def test_kiosk_ui_wires_scan_upload_and_fit_analysis_to_backend():
+    app_js = Path("ui/kiosk-app/src/App.jsx").read_text("utf-8")
+    api_js = Path("ui/kiosk-app/src/lib/api.js").read_text("utf-8")
+    workflow_source = Path("ui/kiosk-app/src/components/FittingWorkflow.jsx").read_text("utf-8")
+
+    assert "uploadCapture" in api_js
+    assert 'captures"' in api_js
+    assert "analyzeCapture" in api_js
+    assert 'captures/analyze"' in api_js
+    assert "analyzeFit" in api_js
+    assert 'fit/analyze"' in api_js
+    assert "handleCapturePhoto" in app_js
+    assert "capture_source" in api_js
+    assert "size_recommendation" in app_js
+    assert "onCapturePhoto" in workflow_source
+    assert "fileInputRef" in workflow_source
+
+
 def test_kiosk_ui_presents_mobile_first_virtual_fitting_app_shell():
     index_html = Path("ui/kiosk-demo/index.html").read_text("utf-8")
     app_source = Path("ui/kiosk-app/src/App.jsx").read_text("utf-8")

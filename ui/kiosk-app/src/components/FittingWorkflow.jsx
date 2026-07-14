@@ -1,3 +1,5 @@
+import { useRef } from "react";
+
 import { Button } from "./Button.jsx";
 import { DashboardIcon, ProductIcon, ScanIcon, TryOnIcon } from "./icons.jsx";
 
@@ -27,6 +29,7 @@ export function FittingWorkflow({
   activeStage,
   captureLabel,
   garmentLabel,
+  onCapturePhoto,
   onOpenProduct,
   onQueueTryOn,
   onRunScan,
@@ -46,6 +49,7 @@ export function FittingWorkflow({
       <div className="fitting-console-grid fitting-workflow-layout grid items-start gap-3 xl:grid-cols-[minmax(0,68fr)_minmax(320px,32fr)]">
         <ScanWorkspace
           captureLabel={captureLabel}
+          onCapturePhoto={onCapturePhoto}
           onRunScan={onRunScan}
           state={state}
           workflowState={workflowState}
@@ -139,6 +143,13 @@ function isStepComplete(key, state) {
 export function SelectedGarmentBar({ garmentLabel, onOpenProduct, state }) {
   const selected = Boolean(state.garmentId);
   const displayName = selected ? garmentLabel : "T-Shirt";
+  const categoryLabel = formatCategoryLabel(state.garmentCategory || "tops");
+  const garmentTypeLabel = state.garmentType ? state.garmentType.replaceAll("_", " ") : "";
+  const chartLabel = state.sizeChartName
+    ? `${state.sizeChartName}${state.sizeChartSizes ? ` · ${state.sizeChartSizes}` : ""}`
+    : state.sizeChartId
+      ? `Chart linked${state.sizeChartSizes ? ` · ${state.sizeChartSizes}` : ""}`
+      : "No chart linked";
 
   return (
     <section
@@ -151,9 +162,15 @@ export function SelectedGarmentBar({ garmentLabel, onOpenProduct, state }) {
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
           <p className="truncate font-semibold text-ink">{displayName}</p>
-          <span className="text-muted">Tops</span>
+          <span className="text-muted">{categoryLabel}</span>
+          {garmentTypeLabel && (
+            <>
+              <span className="h-1 w-1 rounded-full bg-slate-300" />
+              <span className="capitalize text-muted">{garmentTypeLabel}</span>
+            </>
+          )}
           <span className="h-1 w-1 rounded-full bg-slate-300" />
-          <span className="text-muted">Size chart attached</span>
+          <span className={state.sizeChartId ? "text-muted" : "font-medium text-amber-700"}>{chartLabel}</span>
         </div>
       </div>
 
@@ -164,7 +181,17 @@ export function SelectedGarmentBar({ garmentLabel, onOpenProduct, state }) {
   );
 }
 
-export function ScanWorkspace({ captureLabel, onRunScan, state, workflowState }) {
+function formatCategoryLabel(category) {
+  const labels = {
+    bottoms: "Bottoms",
+    full_outfit: "Full outfit",
+    one_pieces: "One piece",
+    tops: "Tops",
+  };
+  return labels[category] || String(category || "Tops");
+}
+
+export function ScanWorkspace({ captureLabel, onCapturePhoto, onRunScan, state, workflowState }) {
   const scanComplete = workflowState.scan === "scanComplete";
   const scanStarted = workflowState.scan === "scanning" || scanComplete;
   const cameraStatus = getCameraStatus(workflowState);
@@ -183,6 +210,7 @@ export function ScanWorkspace({ captureLabel, onRunScan, state, workflowState })
 
       <div className="px-4 pb-3 sm:px-5">
         <CameraCaptureFrame
+          onCapturePhoto={onCapturePhoto}
           onRunScan={onRunScan}
           scanComplete={scanComplete}
           scanLabel={cameraStatus}
@@ -194,11 +222,35 @@ export function ScanWorkspace({ captureLabel, onRunScan, state, workflowState })
   );
 }
 
-export function CameraCaptureFrame({ onRunScan, scanComplete, scanLabel, scanStarted, state }) {
-  const disabled = !state.garmentId;
+export function CameraCaptureFrame({ onCapturePhoto, onRunScan, scanComplete, scanLabel, scanStarted, state }) {
+  const fileInputRef = useRef(null);
+  const captureSourceRef = useRef("file_upload");
+  const disabled = !state.garmentId || state.scanBusy || state.fitLoading;
+
+  function openCapturePicker(captureSource) {
+    captureSourceRef.current = captureSource;
+    fileInputRef.current?.click();
+  }
+
+  function handleFileChange(event) {
+    const file = event.target.files?.[0];
+    if (file) {
+      onCapturePhoto?.(file, captureSourceRef.current);
+    } else {
+      onRunScan?.();
+    }
+    event.target.value = "";
+  }
 
   return (
     <div className="scan-stage relative grid h-[360px] overflow-hidden rounded-lg bg-slate-950 text-white shadow-soft sm:h-[420px] xl:h-[440px]">
+      <input
+        accept="image/*"
+        className="sr-only"
+        onChange={handleFileChange}
+        ref={fileInputRef}
+        type="file"
+      />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(148,163,184,0.16),transparent_32%),linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,1))]" />
       <div className="absolute inset-x-4 top-4 z-10 flex items-center justify-between gap-3">
         <StatusBadge tone={scanComplete ? "success" : "dark"}>{scanLabel}</StatusBadge>
@@ -226,10 +278,10 @@ export function CameraCaptureFrame({ onRunScan, scanComplete, scanLabel, scanSta
           <p className="mt-0.5 text-xs text-white/68">Keep head, torso, and garment area inside the guide.</p>
         </div>
         <div className="scan-action-row grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
-          <Button className="h-9 min-w-28 px-3 text-sm" disabled={disabled} onClick={onRunScan}>
-            {scanComplete ? "Retake scan" : "Start scan"}
+          <Button className="h-9 min-w-28 px-3 text-sm" disabled={disabled} onClick={() => openCapturePicker("guided_scan")}>
+            {state.scanBusy || state.fitLoading ? "Analyzing..." : scanComplete ? "Retake scan" : "Start scan"}
           </Button>
-          <Button className="h-9 min-w-28 px-3 text-sm" disabled={disabled} onClick={onRunScan} variant="secondary">
+          <Button className="h-9 min-w-28 px-3 text-sm" disabled={disabled} onClick={() => openCapturePicker("file_upload")} variant="secondary">
             Upload photo
           </Button>
         </div>
@@ -291,6 +343,11 @@ export function OperatorGuidancePanel({ onQueueTryOn, state, tryOnLabel, workflo
       <section className="border-t border-line/70 pt-2.5">
         <h3 className="text-sm font-semibold text-ink">Output status</h3>
         <OutputStatusList workflowState={workflowState} />
+        {state.fitRecommendationLabel && (
+          <p className="mt-2 rounded-md bg-slate-50 px-2.5 py-2 text-sm font-medium text-ink">
+            {state.fitRecommendationLabel}
+          </p>
+        )}
       </section>
 
       <EmptyPreview onQueueTryOn={onQueueTryOn} state={state} tryOnLabel={tryOnLabel} workflowState={workflowState} />
@@ -426,8 +483,8 @@ function getNextStepText(workflowState) {
 }
 
 function getWorkflowState(state) {
-  const scan = state.capturePassed ? "scanComplete" : state.captureUploaded ? "scanning" : "scanNotStarted";
-  const fit = state.fitReady ? "fitReady" : state.capturePassed ? "fitLoading" : "fitLocked";
+  const scan = state.capturePassed ? "scanComplete" : state.scanBusy || state.captureUploaded ? "scanning" : "scanNotStarted";
+  const fit = state.fitReady ? "fitReady" : state.fitLoading || state.capturePassed ? "fitLoading" : "fitLocked";
   const tryOn = state.previewKey ? "tryOnReady" : state.jobStatus === "running" ? "tryOnGenerating" : "tryOnLocked";
 
   return { fit, scan, tryOn };

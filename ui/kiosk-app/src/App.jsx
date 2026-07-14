@@ -13,7 +13,17 @@ import {
   SettingsIcon,
   TryOnIcon,
 } from "./components/icons.jsx";
-import { checkReadiness, resolveDefaultApiBase, trimTrailingSlash } from "./lib/api.js";
+import {
+  analyzeCapture,
+  analyzeFit,
+  checkReadiness,
+  createSession,
+  listSizeCharts,
+  resolveDefaultApiBase,
+  trimTrailingSlash,
+  uploadCapture,
+  uploadGarment,
+} from "./lib/api.js";
 import {
   displayCaptureLabel,
   displayGarmentLabel,
@@ -32,6 +42,16 @@ const appNavItems = [
 const initialSessionState = {
   garmentId: "local-demo-garment",
   garmentName: "T-Shirt",
+  garmentCategory: "tops",
+  garmentType: "regular_top",
+  sessionId: "",
+  sizeChartId: "",
+  sizeChartName: "",
+  sizeChartSizes: "",
+  fitRecommendationLabel: "",
+  fitRecommendationStatus: "",
+  scanBusy: false,
+  fitLoading: false,
   captureUploaded: false,
   capturePassed: false,
   visualPreviewReady: false,
@@ -47,10 +67,20 @@ function FittingRoomApp() {
   const [eventLog, setEventLog] = useState(["App loaded"]);
   const [diagnosticsDrawer, setDiagnosticsDrawer] = useState(false);
   const [productModalOpen, setProductModalOpen] = useState(false);
+  const [productError, setProductError] = useState("");
+  const [productSaving, setProductSaving] = useState(false);
+  const [sizeCharts, setSizeCharts] = useState([]);
+  const [sizeChartsStatus, setSizeChartsStatus] = useState("Idle");
   const [state, setState] = useState(() => ({
     ...initialSessionState,
     garmentId: localStorage.getItem("kioskGarmentId") || initialSessionState.garmentId,
     garmentName: localStorage.getItem("kioskGarmentName") || initialSessionState.garmentName,
+    garmentCategory: localStorage.getItem("kioskGarmentCategory") || initialSessionState.garmentCategory,
+    garmentType: localStorage.getItem("kioskGarmentType") || initialSessionState.garmentType,
+    sessionId: localStorage.getItem("kioskSessionId") || initialSessionState.sessionId,
+    sizeChartId: localStorage.getItem("kioskSizeChartId") || initialSessionState.sizeChartId,
+    sizeChartName: localStorage.getItem("kioskSizeChartName") || initialSessionState.sizeChartName,
+    sizeChartSizes: localStorage.getItem("kioskSizeChartSizes") || initialSessionState.sizeChartSizes,
   }));
 
   const hasSession = Boolean(state.garmentId || state.captureUploaded || state.jobId || state.previewKey);
@@ -76,6 +106,30 @@ function FittingRoomApp() {
     };
   }, [apiBase]);
 
+  useEffect(() => {
+    if (!productModalOpen) return undefined;
+
+    let cancelled = false;
+    setSizeChartsStatus("Loading");
+    listSizeCharts(apiBase)
+      .then((payload) => {
+        if (cancelled) return;
+        const charts = Array.isArray(payload.size_charts) ? payload.size_charts : [];
+        setSizeCharts(charts);
+        setSizeChartsStatus(charts.length ? "Ready" : "Empty");
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setSizeCharts([]);
+        setSizeChartsStatus("Unavailable");
+        setProductError(`Could not load size charts: ${error.message}`);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBase, productModalOpen]);
+
   const applicationShell = "product-application-shell min-h-screen overflow-x-hidden bg-canvas text-ink";
   const bottomNavigation = "fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 px-2 py-2 backdrop-blur lg:hidden";
 
@@ -86,24 +140,67 @@ function FittingRoomApp() {
   function resetSession() {
     localStorage.removeItem("kioskGarmentId");
     localStorage.removeItem("kioskGarmentName");
+    localStorage.removeItem("kioskGarmentCategory");
+    localStorage.removeItem("kioskGarmentType");
+    localStorage.removeItem("kioskSessionId");
+    localStorage.removeItem("kioskSizeChartId");
+    localStorage.removeItem("kioskSizeChartName");
+    localStorage.removeItem("kioskSizeChartSizes");
     setState(initialSessionState);
     appendLog("New fitting session prepared");
   }
 
-  function saveProduct(event) {
+  async function saveProduct(event) {
     event.preventDefault();
+    setProductError("");
+    setProductSaving(true);
     const form = new FormData(event.currentTarget);
+    const garmentImage = form.get("garmentImage");
     const garmentName = String(form.get("garmentName") || "Coach demo garment").trim();
-    const nextState = {
-      ...state,
-      garmentId: "local-demo-garment",
-      garmentName,
-    };
-    localStorage.setItem("kioskGarmentId", nextState.garmentId);
-    localStorage.setItem("kioskGarmentName", nextState.garmentName);
-    setState(nextState);
-    setProductModalOpen(false);
-    appendLog(`Product selected: ${garmentName}`);
+    const garmentCategory = String(form.get("category") || "tops");
+    const garmentType = String(form.get("garmentType") || "").trim();
+    const sizeChartId = String(form.get("sizeChartId") || "").trim();
+    const selectedSizeChart = sizeCharts.find((chart) => chart.size_chart_id === sizeChartId);
+
+    if (!(garmentImage instanceof File) || !garmentImage.name) {
+      setProductError("Choose a garment image before saving the product.");
+      setProductSaving(false);
+      return;
+    }
+
+    try {
+      const uploadPayload = new FormData();
+      uploadPayload.append("file", garmentImage);
+      uploadPayload.append("category", garmentCategory);
+      uploadPayload.append("name", garmentName);
+      if (garmentType) uploadPayload.append("garment_type", garmentType);
+      if (sizeChartId) uploadPayload.append("size_chart_id", sizeChartId);
+
+      const garmentResponse = await uploadGarment(apiBase, uploadPayload);
+      const garment = garmentResponse.garment;
+      const sessionResponse = await createSession(apiBase, garment.garment_id);
+      const nextState = {
+        ...initialSessionState,
+        garmentId: garment.garment_id,
+        garmentName: garment.name || garmentName,
+        garmentCategory: garment.category || garmentCategory,
+        garmentType: garment.garment_type || garmentType,
+        sessionId: sessionResponse.session?.session_id || "",
+        sizeChartId: garment.size_chart_id || sizeChartId,
+        sizeChartName: selectedSizeChart?.name || "",
+        sizeChartSizes: formatSizeRange(selectedSizeChart?.size_chart || garment.size_chart || []),
+      };
+
+      persistSessionState(nextState);
+      setState(nextState);
+      setProductModalOpen(false);
+      appendLog(`Product uploaded: ${nextState.garmentName}`);
+    } catch (error) {
+      setProductError(error.message || "Could not upload product.");
+      appendLog(`Product upload failed: ${error.message || "unknown error"}`);
+    } finally {
+      setProductSaving(false);
+    }
   }
 
   function simulateCapture() {
@@ -115,6 +212,58 @@ function FittingRoomApp() {
       fitReady: true,
     }));
     appendLog("Guided scan marked ready");
+  }
+
+  async function handleCapturePhoto(file, captureSource = "file_upload") {
+    if (!state.sessionId) {
+      setProductError("Upload a garment and create a session before scanning the shopper.");
+      setProductModalOpen(true);
+      return;
+    }
+
+    setState((current) => ({
+      ...current,
+      captureUploaded: true,
+      capturePassed: false,
+      fitLoading: true,
+      fitReady: false,
+      fitRecommendationLabel: "",
+      fitRecommendationStatus: "",
+      scanBusy: true,
+    }));
+    appendLog("Uploading shopper scan");
+
+    try {
+      await uploadCapture(apiBase, state.sessionId, file, captureSource);
+      const captureResponse = await analyzeCapture(apiBase, state.sessionId);
+      const capturePassed = captureResponse.session?.capture_analysis?.passed !== false;
+      setState((current) => ({
+        ...current,
+        capturePassed,
+        scanBusy: false,
+      }));
+      appendLog(capturePassed ? "Capture analysis passed" : "Capture analysis needs review");
+
+      const fitResponse = await analyzeFit(apiBase, state.sessionId);
+      const recommendation = fitResponse.size_recommendation || {};
+      const recommendedSize = recommendation.recommended_size;
+      setState((current) => ({
+        ...current,
+        capturePassed,
+        fitLoading: false,
+        fitReady: true,
+        fitRecommendationLabel: recommendedSize ? `Recommended size ${recommendedSize}` : recommendation.reason || "Fit result ready",
+        fitRecommendationStatus: recommendation.status || "ready",
+      }));
+      appendLog(recommendedSize ? `Fit recommendation: ${recommendedSize}` : `Fit result: ${recommendation.status || "ready"}`);
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        fitLoading: false,
+        scanBusy: false,
+      }));
+      appendLog(`Scan or fit failed: ${error.message || "unknown error"}`);
+    }
   }
 
   function queueTryOn() {
@@ -211,6 +360,7 @@ function FittingRoomApp() {
               activeStage={activeStage}
               captureLabel={captureLabel}
               garmentLabel={garmentLabel}
+              onCapturePhoto={handleCapturePhoto}
               onOpenProduct={() => setProductModalOpen(true)}
               onQueueTryOn={queueTryOn}
               onRunScan={simulateCapture}
@@ -229,7 +379,15 @@ function FittingRoomApp() {
         onClose={() => setDiagnosticsDrawer(false)}
       />
 
-      <ProductModal onClose={() => setProductModalOpen(false)} onSubmit={saveProduct} open={productModalOpen} />
+      <ProductModal
+        error={productError}
+        onClose={() => setProductModalOpen(false)}
+        onSubmit={saveProduct}
+        open={productModalOpen}
+        saving={productSaving}
+        sizeCharts={sizeCharts}
+        sizeChartsStatus={sizeChartsStatus}
+      />
     </AppShell>
   );
 }
@@ -256,7 +414,27 @@ function getActiveStage(state) {
   return "tryon";
 }
 
-function ProductModal({ onClose, onSubmit, open }) {
+function persistSessionState(nextState) {
+  localStorage.setItem("kioskGarmentId", nextState.garmentId);
+  localStorage.setItem("kioskGarmentName", nextState.garmentName);
+  localStorage.setItem("kioskGarmentCategory", nextState.garmentCategory);
+  localStorage.setItem("kioskGarmentType", nextState.garmentType || "");
+  localStorage.setItem("kioskSessionId", nextState.sessionId || "");
+  localStorage.setItem("kioskSizeChartId", nextState.sizeChartId || "");
+  localStorage.setItem("kioskSizeChartName", nextState.sizeChartName || "");
+  localStorage.setItem("kioskSizeChartSizes", nextState.sizeChartSizes || "");
+}
+
+function formatSizeRange(sizeChart) {
+  const sizes = Array.isArray(sizeChart) ? sizeChart.map((item) => item?.size).filter(Boolean) : [];
+  if (!sizes.length) return "";
+  return sizes.length === 1 ? sizes[0] : `${sizes[0]}-${sizes[sizes.length - 1]}`;
+}
+
+function ProductModal({ error, onClose, onSubmit, open, saving, sizeCharts, sizeChartsStatus }) {
+  const [productCategory, setProductCategory] = useState("tops");
+  const visibleSizeCharts = sizeCharts.filter((chart) => chart.category === productCategory);
+
   return (
     <Modal
       description="Use realistic product details so the fitting room reads like an operator app, not a demo wrapper."
@@ -267,24 +445,46 @@ function ProductModal({ onClose, onSubmit, open }) {
       <form className="grid gap-4" onSubmit={onSubmit}>
         <Input id="garmentName" label="Display name" name="garmentName" placeholder="Coach demo garment" />
         <div className="grid gap-4 sm:grid-cols-2">
-          <Select id="category" label="Category" name="category">
-            <option>Tops</option>
-            <option>Bottoms</option>
-            <option>One piece</option>
-            <option>Full outfit</option>
+          <Select
+            id="category"
+            label="Category"
+            name="category"
+            onChange={(event) => setProductCategory(event.target.value)}
+            value={productCategory}
+          >
+            <option value="tops">Tops</option>
+            <option value="bottoms">Bottoms</option>
+            <option value="one_pieces">One piece</option>
+            <option value="full_outfit">Full outfit</option>
           </Select>
           <Input id="garmentType" label="Garment type" name="garmentType" placeholder="t-shirt" />
         </div>
+        <Select
+          hint={sizeChartsStatus === "Loading" ? "Loading available charts..." : "Used by Fit Intelligence for deterministic size recommendation."}
+          id="sizeChartId"
+          label="Size chart"
+          name="sizeChartId"
+        >
+          <option value="">No size chart</option>
+          {visibleSizeCharts.map((chart) => (
+            <option key={chart.size_chart_id} value={chart.size_chart_id}>
+              {chart.name} · {chart.country_code} · {chart.category}
+            </option>
+          ))}
+        </Select>
         <label className="grid min-h-32 cursor-pointer place-items-center rounded-2xl border border-dashed border-line bg-slate-50 p-4 text-center transition hover:bg-brand-50">
-          <input className="sr-only" type="file" />
+          <input accept="image/*" className="sr-only" name="garmentImage" required type="file" />
           <span className="font-semibold text-ink">Choose garment image</span>
           <span className="mt-1 text-sm text-muted">PNG or JPG, clean front product photo</span>
         </label>
+        {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</p>}
         <div className="flex justify-end gap-2">
-          <Button onClick={onClose} variant="secondary">
+          <Button disabled={saving} onClick={onClose} variant="secondary">
             Cancel
           </Button>
-          <Button type="submit">Save product</Button>
+          <Button disabled={saving} type="submit">
+            {saving ? "Saving..." : "Save product"}
+          </Button>
         </div>
       </form>
     </Modal>

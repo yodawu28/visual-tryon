@@ -16,7 +16,7 @@ export function Input({ className = "", label, hint, id, ...props }) {
   );
 }
 
-export function Select({ children, className = "", label, id, ...props }) {
+export function Select({ children, className = "", hint, label, id, ...props }) {
   return (
     <label className="grid gap-1.5 text-sm font-medium text-slate-700" htmlFor={id}>
       {label}
@@ -31,6 +31,7 @@ export function Select({ children, className = "", label, id, ...props }) {
       >
         {children}
       </select>
+      {hint ? <span className="text-xs font-normal text-muted">{hint}</span> : null}
     </label>
   );
 }

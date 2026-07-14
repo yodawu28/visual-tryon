@@ -672,6 +672,9 @@ video {
 .h-20 {
   height: 5rem;
 }
+.h-28 {
+  height: 7rem;
+}
 .h-4 {
   height: 1rem;
 }
@@ -1125,6 +1128,14 @@ video {
 .bg-\[length\:58px_58px\] {
   background-size: 58px 58px;
 }
+.object-contain {
+  -o-object-fit: contain;
+     object-fit: contain;
+}
+.object-cover {
+  -o-object-fit: cover;
+     object-fit: cover;
+}
 .p-1 {
   padding: 0.25rem;
 }
@@ -1557,6 +1568,12 @@ select {
 .focus\:outline-none:focus {
   outline: 2px solid transparent;
   outline-offset: 2px;
+}
+
+.focus\:ring-2:focus {
+  --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+  box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
 }
 
 .focus\:ring-4:focus {

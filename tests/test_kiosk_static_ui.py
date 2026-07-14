@@ -113,6 +113,50 @@ def test_kiosk_ui_wires_scan_upload_and_fit_analysis_to_backend():
     assert "fileInputRef" in workflow_source
 
 
+def test_kiosk_ui_wires_garment_preview_and_visual_preview_jobs():
+    app_js = Path("ui/kiosk-app/src/App.jsx").read_text("utf-8")
+    api_js = Path("ui/kiosk-app/src/lib/api.js").read_text("utf-8")
+    workflow_source = Path("ui/kiosk-app/src/components/FittingWorkflow.jsx").read_text("utf-8")
+
+    assert "garmentPreviewUrl" in app_js
+    assert "URL.createObjectURL(garmentImage)" in app_js
+    assert "URL.revokeObjectURL" in app_js
+    assert "garmentPreviewUrl" in workflow_source
+    assert "<img" in workflow_source
+    assert "enqueueVisualPreviewJob" in api_js
+    assert 'visual-preview/jobs"' in api_js
+    assert "getKioskJob" in api_js
+    assert "JOBS_PATH" in api_js
+    assert "${JOBS_PATH}/${jobId}" in api_js
+    assert "handleQueueTryOn" in app_js
+    assert "local-demo-job" not in app_js
+    assert "local-demo-preview" not in app_js
+    assert "pollTryOnJob" in app_js
+    assert "previewImageUrl" in app_js + workflow_source
+    assert "visual-previews" in api_js
+    assert "onRunScan?.()" not in workflow_source
+    assert "visualPreviewReady: true" not in app_js
+
+
+def test_kiosk_ui_collects_fit_inputs_for_size_recommendation():
+    app_js = Path("ui/kiosk-app/src/App.jsx").read_text("utf-8")
+    workflow_source = Path("ui/kiosk-app/src/components/FittingWorkflow.jsx").read_text("utf-8")
+
+    assert "bodyMeasurements" in app_js
+    assert "height_cm" in app_js
+    assert "weight_kg" in app_js
+    assert "getBodyMeasurementsPayload" in app_js
+    assert "handleAnalyzeFit" in app_js
+    assert "fitNeedsMeasurements" in app_js + workflow_source
+    assert "FitRecommendationPanel" in workflow_source
+    assert "Shopper measurements" in workflow_source
+    assert "Height" in workflow_source
+    assert "Weight" in workflow_source
+    assert "Needs measurements" in workflow_source
+    assert "Update recommendation" in workflow_source
+    assert "hasBasicMeasurements" in workflow_source
+
+
 def test_kiosk_ui_presents_mobile_first_virtual_fitting_app_shell():
     index_html = Path("ui/kiosk-demo/index.html").read_text("utf-8")
     app_source = Path("ui/kiosk-app/src/App.jsx").read_text("utf-8")

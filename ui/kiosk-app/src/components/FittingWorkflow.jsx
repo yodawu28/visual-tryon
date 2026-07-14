@@ -19,6 +19,7 @@ const workflowStateLabels = {
   scanComplete: "Scan complete",
   fitLocked: "Locked",
   fitLoading: "Loading",
+  fitNeedsMeasurements: "Needs input",
   fitReady: "Ready",
   tryOnLocked: "Locked",
   tryOnGenerating: "Generating",
@@ -27,8 +28,11 @@ const workflowStateLabels = {
 
 export function FittingWorkflow({
   activeStage,
+  bodyMeasurements,
   captureLabel,
   garmentLabel,
+  onAnalyzeFit,
+  onBodyMeasurementChange,
   onCapturePhoto,
   onOpenProduct,
   onQueueTryOn,
@@ -56,6 +60,9 @@ export function FittingWorkflow({
         />
         <OperatorGuidancePanel
           onQueueTryOn={onQueueTryOn}
+          bodyMeasurements={bodyMeasurements}
+          onAnalyzeFit={onAnalyzeFit}
+          onBodyMeasurementChange={onBodyMeasurementChange}
           state={state}
           tryOnLabel={tryOnLabel}
           workflowState={workflowState}
@@ -160,7 +167,15 @@ export function SelectedGarmentBar({ garmentLabel, onOpenProduct, state }) {
     >
       <div className="flex min-w-0 items-center gap-3">
         <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-700 ring-1 ring-line/80">
-          <ProductIcon className="h-5 w-5" />
+          {state.garmentPreviewUrl ? (
+            <img
+              alt=""
+              className="h-8 w-8 rounded-md object-cover"
+              src={state.garmentPreviewUrl}
+            />
+          ) : (
+            <ProductIcon className="h-5 w-5" />
+          )}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
           <p className="truncate font-semibold text-ink">{displayName}</p>
@@ -238,8 +253,6 @@ export function CameraCaptureFrame({ onCapturePhoto, onRunScan, scanComplete, sc
     const file = event.target.files?.[0];
     if (file) {
       onCapturePhoto?.(file, captureSourceRef.current);
-    } else {
-      onRunScan?.();
     }
     event.target.value = "";
   }
@@ -323,7 +336,15 @@ export function ChecklistItem({ checked, label }) {
   );
 }
 
-export function OperatorGuidancePanel({ onQueueTryOn, state, tryOnLabel, workflowState }) {
+export function OperatorGuidancePanel({
+  bodyMeasurements,
+  onAnalyzeFit,
+  onBodyMeasurementChange,
+  onQueueTryOn,
+  state,
+  tryOnLabel,
+  workflowState,
+}) {
   const nextStepText = getNextStepText(workflowState);
 
   return (
@@ -345,12 +366,15 @@ export function OperatorGuidancePanel({ onQueueTryOn, state, tryOnLabel, workflo
       <section className="border-t border-line/70 pt-2.5">
         <h3 className="text-sm font-semibold text-ink">Output status</h3>
         <OutputStatusList state={state} workflowState={workflowState} />
-        {state.fitRecommendationLabel && (
-          <p className="mt-2 rounded-md bg-slate-50 px-2.5 py-2 text-sm font-medium text-ink">
-            {state.fitRecommendationLabel}
-          </p>
-        )}
       </section>
+
+      <FitRecommendationPanel
+        bodyMeasurements={bodyMeasurements}
+        onAnalyzeFit={onAnalyzeFit}
+        onBodyMeasurementChange={onBodyMeasurementChange}
+        state={state}
+        workflowState={workflowState}
+      />
 
       <EmptyPreview onQueueTryOn={onQueueTryOn} state={state} tryOnLabel={tryOnLabel} workflowState={workflowState} />
     </aside>
@@ -376,7 +400,7 @@ export function OutputStatusList({ state, workflowState }) {
       label: "Fit recommendation",
       sourceText: "Fit recommendation: Locked",
       value: workflowStateLabels[workflowState.fit],
-      tone: workflowState.fit === "fitReady" ? "success" : workflowState.fit === "fitLoading" ? "neutral" : "locked",
+      tone: workflowState.fit === "fitReady" ? "success" : workflowState.fit === "fitLoading" || workflowState.fit === "fitNeedsMeasurements" ? "neutral" : "locked",
     },
     {
       label: "Try-on preview",
@@ -392,6 +416,85 @@ export function OutputStatusList({ state, workflowState }) {
         <StatusRow key={row.label} {...row} />
       ))}
     </div>
+  );
+}
+
+export function FitRecommendationPanel({ bodyMeasurements, onAnalyzeFit, onBodyMeasurementChange, state, workflowState }) {
+  const recommendation = state.fitRecommendation || {};
+  const recommendedSize = recommendation.recommended_size;
+  const needsMeasurements = workflowState.fit === "fitNeedsMeasurements";
+  const fitLocked = workflowState.fit === "fitLocked";
+  const fitLoading = workflowState.fit === "fitLoading";
+  const hasBasicMeasurements = Boolean(bodyMeasurements?.heightCm && bodyMeasurements?.weightKg);
+  const canUpdate = Boolean(state.capturePassed && state.garmentId && !state.fitLoading);
+
+  return (
+    <section className="fit-recommendation-panel border-t border-line/70 pt-2.5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-ink">Fit Recommendation</h3>
+          <p className="mt-1 text-sm leading-5 text-muted">
+            {recommendedSize
+              ? "Deterministic recommendation from shopper measurements and garment chart."
+              : needsMeasurements
+                ? "Needs measurements before a size can be recommended."
+                : fitLoading
+                  ? "Calculating size recommendation."
+                  : "Unlocks after shopper scan."}
+          </p>
+        </div>
+        <StatusBadge tone={recommendedSize ? "success" : needsMeasurements ? "neutral" : "locked"}>
+          {recommendedSize ? `Size ${recommendedSize}` : needsMeasurements ? "Needs measurements" : fitLoading ? "Loading" : "Locked"}
+        </StatusBadge>
+      </div>
+
+      {state.fitRecommendationLabel && (
+        <p className="mt-2 rounded-md bg-slate-50 px-2.5 py-2 text-sm font-medium leading-5 text-ink">
+          {state.fitRecommendationLabel}
+        </p>
+      )}
+
+      <div className="mt-2 grid gap-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Shopper measurements</p>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="grid gap-1 text-xs font-semibold text-muted" htmlFor="fit-height-cm">
+            Height
+            <input
+              className="h-9 rounded-md border border-line bg-white px-2 text-sm font-medium text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              id="fit-height-cm"
+              inputMode="decimal"
+              min="1"
+              onChange={(event) => onBodyMeasurementChange?.("heightCm", event.target.value)}
+              placeholder="cm"
+              type="number"
+              value={bodyMeasurements?.heightCm || ""}
+            />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-muted" htmlFor="fit-weight-kg">
+            Weight
+            <input
+              className="h-9 rounded-md border border-line bg-white px-2 text-sm font-medium text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              id="fit-weight-kg"
+              inputMode="decimal"
+              min="1"
+              onChange={(event) => onBodyMeasurementChange?.("weightKg", event.target.value)}
+              placeholder="kg"
+              type="number"
+              value={bodyMeasurements?.weightKg || ""}
+            />
+          </label>
+        </div>
+        <Button
+          className="h-8 justify-center px-2.5 text-xs"
+          disabled={!canUpdate || fitLocked || !hasBasicMeasurements}
+          onClick={onAnalyzeFit}
+          size="sm"
+          variant={needsMeasurements ? "primary" : "secondary"}
+        >
+          {fitLoading ? "Updating..." : "Update recommendation"}
+        </Button>
+      </div>
+    </section>
   );
 }
 
@@ -436,16 +539,24 @@ export function EmptyPreview({ onQueueTryOn, state, tryOnLabel, workflowState })
       <div className="operator-preview-placeholder mt-2 grid min-h-[108px] place-items-center rounded-md bg-slate-50 p-3 text-center ring-1 ring-line/70">
         {previewReady ? (
           <div className="grid gap-2">
-            <div className="mx-auto grid h-20 w-14 place-items-end rounded-b-lg rounded-t-full bg-gradient-to-b from-slate-200 to-slate-700 p-1">
-              <span className="h-4 w-full rounded bg-emerald-100 text-[10px] font-semibold text-emerald-700">Ready</span>
-            </div>
+            {state.previewImageUrl ? (
+              <img
+                alt="Generated try-on preview"
+                className="mx-auto h-28 max-w-full rounded-md object-contain"
+                src={state.previewImageUrl}
+              />
+            ) : (
+              <div className="mx-auto grid h-20 w-14 place-items-end rounded-b-lg rounded-t-full bg-gradient-to-b from-slate-200 to-slate-700 p-1">
+                <span className="h-4 w-full rounded bg-emerald-100 text-[10px] font-semibold text-emerald-700">Ready</span>
+              </div>
+            )}
             <p className="text-sm font-semibold text-ink">Try-on preview ready</p>
           </div>
         ) : (
           <div className="max-w-[220px]">
             <DashboardIcon className="mx-auto h-5 w-5 text-slate-400" />
             <p className="mt-2 text-sm font-semibold text-ink">
-              {tryOnGenerating ? "Generating try-on preview" : "Preview unlocks after fit result."}
+              {tryOnGenerating ? "Generating try-on preview" : state.tryOnError || "Preview unlocks after fit result."}
             </p>
             {fitReady && <p className="mt-1 text-sm leading-5 text-muted">Preview generation is available from the session actions.</p>}
           </div>
@@ -486,14 +597,25 @@ function getCameraStatus(workflowState) {
 function getNextStepText(workflowState) {
   if (workflowState.tryOn === "tryOnReady") return "Try-on preview is ready for operator review.";
   if (workflowState.fit === "fitReady") return "Fit recommendation is ready. Review outputs before creating the try-on preview.";
+  if (workflowState.fit === "fitNeedsMeasurements") return "Add shopper height and weight, then update the fit recommendation.";
   if (workflowState.scan === "scanComplete") return "Scan is complete. Fit recommendation is being prepared.";
   return "Start a shopper scan to unlock fit recommendation and try-on preview.";
 }
 
 function getWorkflowState(state) {
   const scan = state.capturePassed ? "scanComplete" : state.scanBusy || state.captureUploaded ? "scanning" : "scanNotStarted";
-  const fit = state.fitReady ? "fitReady" : state.fitLoading || state.capturePassed ? "fitLoading" : "fitLocked";
-  const tryOn = state.previewKey ? "tryOnReady" : state.jobStatus === "running" ? "tryOnGenerating" : "tryOnLocked";
+  const fit = state.fitReady
+    ? "fitReady"
+    : state.fitLoading
+      ? "fitLoading"
+      : state.fitNeedsMeasurements || state.fitRecommendationStatus === "insufficient_measurements"
+        ? "fitNeedsMeasurements"
+        : "fitLocked";
+  const tryOn = state.previewKey
+    ? "tryOnReady"
+    : ["queued", "leased", "running"].includes(String(state.jobStatus || "").toLowerCase())
+      ? "tryOnGenerating"
+      : "tryOnLocked";
 
   return { fit, scan, tryOn };
 }

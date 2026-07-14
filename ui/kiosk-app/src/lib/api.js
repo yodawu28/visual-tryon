@@ -33,6 +33,8 @@ const SESSIONS_PATH = "/api/v1/kiosk/sessions";
 const CAPTURES_PATH = "captures";
 const CAPTURE_ANALYZE_PATH = "captures/analyze";
 const FIT_ANALYZE_PATH = "fit/analyze";
+const VISUAL_PREVIEW_JOBS_PATH = "visual-preview/jobs";
+const JOBS_PATH = "/api/v1/kiosk/jobs";
 
 export async function request(apiBase, path, options = {}) {
   const response = await fetch(`${apiBase}${path}`, options);
@@ -120,4 +122,24 @@ export async function analyzeFit(apiBase, sessionId, bodyMeasurements = {}) {
       use_ai_analysis: false,
     }),
   });
+}
+
+export async function enqueueVisualPreviewJob(apiBase, sessionId) {
+  return request(apiBase, `${SESSIONS_PATH}/${sessionId}/${VISUAL_PREVIEW_JOBS_PATH}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      use_multimodal_analysis: false,
+      size: "1024x1024",
+      max_attempts: 1,
+    }),
+  });
+}
+
+export async function getKioskJob(apiBase, jobId) {
+  return request(apiBase, `${JOBS_PATH}/${jobId}`);
+}
+
+export function visualPreviewImageUrl(apiBase, personalizedTryonKey) {
+  return `${apiBase}/api/v1/kiosk/visual-previews/${encodeURIComponent(personalizedTryonKey)}/image`;
 }

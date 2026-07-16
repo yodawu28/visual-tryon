@@ -5,6 +5,9 @@ def test_local_visual_engine_settings_default_to_subprocess_mode(monkeypatch):
     monkeypatch.delenv("LOCAL_VISUAL_ENGINE_MODE", raising=False)
     monkeypatch.delenv("LOCAL_VISUAL_ENGINE_SERVICE_URL", raising=False)
     monkeypatch.delenv("LOCAL_VISUAL_ENGINE_START_SERVICE", raising=False)
+    monkeypatch.delenv("LOCAL_LEFFA_REF_ACCELERATION", raising=False)
+    monkeypatch.delenv("LOCAL_LEFFA_REPAINT", raising=False)
+    monkeypatch.delenv("LOCAL_LEFFA_PREPROCESS_GARMENT", raising=False)
 
     settings = Settings(_env_file=None)
 
@@ -19,6 +22,9 @@ def test_local_visual_engine_settings_default_to_subprocess_mode(monkeypatch):
         == settings.local_leffa_timeout
     )
     assert settings.local_visual_engine_engine == "leffa"
+    assert settings.local_leffa_ref_acceleration is False
+    assert settings.local_leffa_repaint is False
+    assert settings.local_leffa_preprocess_garment is False
 
 
 def test_local_visual_engine_settings_read_environment(monkeypatch):
@@ -30,6 +36,9 @@ def test_local_visual_engine_settings_read_environment(monkeypatch):
     monkeypatch.setenv("LOCAL_VISUAL_ENGINE_SERVICE_READY_TIMEOUT", "120")
     monkeypatch.setenv("LOCAL_VISUAL_ENGINE_SERVICE_REQUEST_TIMEOUT", "600")
     monkeypatch.setenv("LOCAL_VISUAL_ENGINE_ENGINE", "leffa")
+    monkeypatch.setenv("LOCAL_LEFFA_REF_ACCELERATION", "true")
+    monkeypatch.setenv("LOCAL_LEFFA_REPAINT", "true")
+    monkeypatch.setenv("LOCAL_LEFFA_PREPROCESS_GARMENT", "true")
 
     settings = Settings(_env_file=None)
 
@@ -41,3 +50,6 @@ def test_local_visual_engine_settings_read_environment(monkeypatch):
     assert settings.local_visual_engine_service_ready_timeout == 120
     assert settings.local_visual_engine_service_request_timeout == 600
     assert settings.local_visual_engine_engine == "leffa"
+    assert settings.local_leffa_ref_acceleration is True
+    assert settings.local_leffa_repaint is True
+    assert settings.local_leffa_preprocess_garment is True

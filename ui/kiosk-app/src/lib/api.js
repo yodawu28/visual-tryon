@@ -112,12 +112,12 @@ export async function analyzeCapture(apiBase, sessionId) {
   });
 }
 
-export async function analyzeFit(apiBase, sessionId, bodyMeasurements = {}) {
+export async function analyzeFit(apiBase, sessionId, bodyMeasurements = {}, preferredFit = "regular") {
   return request(apiBase, `${SESSIONS_PATH}/${sessionId}/${FIT_ANALYZE_PATH}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      preferred_fit: "regular",
+      preferred_fit: preferredFit,
       body_measurements: bodyMeasurements,
       use_ai_analysis: false,
     }),

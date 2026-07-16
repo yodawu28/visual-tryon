@@ -157,6 +157,23 @@ def test_kiosk_ui_collects_fit_inputs_for_size_recommendation():
     assert "hasBasicMeasurements" in workflow_source
 
 
+def test_kiosk_ui_allows_operator_to_select_fit_intent_for_recommendation():
+    app_js = Path("ui/kiosk-app/src/App.jsx").read_text("utf-8")
+    api_js = Path("ui/kiosk-app/src/lib/api.js").read_text("utf-8")
+    workflow_source = Path("ui/kiosk-app/src/components/FittingWorkflow.jsx").read_text("utf-8")
+
+    assert "fitIntent" in app_js
+    assert "handleFitIntentChange" in app_js
+    assert "onFitIntentChange" in workflow_source
+    assert 'id="fit-intent"' in workflow_source
+    assert 'value: "slim"' in workflow_source
+    assert 'value: "regular"' in workflow_source
+    assert 'value: "relaxed"' in workflow_source
+    assert "preferredFit" in api_js
+    assert "preferred_fit: preferredFit" in api_js
+    assert 'preferred_fit: "regular"' not in api_js
+
+
 def test_kiosk_ui_presents_mobile_first_virtual_fitting_app_shell():
     index_html = Path("ui/kiosk-demo/index.html").read_text("utf-8")
     app_source = Path("ui/kiosk-app/src/App.jsx").read_text("utf-8")

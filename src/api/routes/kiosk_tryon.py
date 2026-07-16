@@ -426,6 +426,9 @@ def _build_kiosk_visual_generator(settings: Any) -> Any:
             steps=int(settings.local_leffa_steps),
             guidance_scale=float(settings.local_leffa_guidance_scale),
             seed=int(settings.local_leffa_seed),
+            ref_acceleration=bool(settings.local_leffa_ref_acceleration),
+            repaint=bool(settings.local_leffa_repaint),
+            preprocess_garment=bool(settings.local_leffa_preprocess_garment),
             timeout_seconds=int(settings.local_leffa_timeout),
         )
     raise RuntimeError(

@@ -68,6 +68,27 @@ def test_local_leffa_kiosk_generator_streams_subprocess_output(monkeypatch, tmp_
     assert _fake_run_kwargs[-1]["capture_output"] is False
 
 
+def test_local_leffa_kiosk_generator_passes_configured_controls_to_subprocess(
+    monkeypatch,
+    tmp_path,
+):
+    command = _run_fake_generation(
+        monkeypatch,
+        tmp_path,
+        garment_category="tops",
+        ref_acceleration=True,
+        repaint=True,
+        preprocess_garment=True,
+    )
+
+    assert "--ref-acceleration" in command
+    assert "--repaint" in command
+    assert "--preprocess-garment" in command
+    assert "--no-ref-acceleration" not in command
+    assert "--no-repaint" not in command
+    assert "--no-preprocess-garment" not in command
+
+
 def test_local_leffa_kiosk_generator_calls_service_in_service_mode(
     monkeypatch,
     tmp_path,
@@ -141,6 +162,9 @@ def test_local_leffa_kiosk_generator_calls_service_in_service_mode(
         tmp_path,
         execution_mode="service",
         service_url="http://127.0.0.1:8091/",
+        ref_acceleration=True,
+        repaint=True,
+        preprocess_garment=True,
     )
 
     result = generator.generate_kiosk_tryon(
@@ -172,9 +196,9 @@ def test_local_leffa_kiosk_generator_calls_service_in_service_mode(
         "steps": 30,
         "guidance_scale": 2.5,
         "seed": 42,
-        "ref_acceleration": False,
-        "repaint": False,
-        "preprocess_garment": False,
+        "ref_acceleration": True,
+        "repaint": True,
+        "preprocess_garment": True,
     }
     assert Path(request_json["output"]).read_bytes() == b"leffa-service-output"
     assert Path(request_json["report"]).exists()
@@ -223,6 +247,9 @@ def _run_fake_generation(
     *,
     garment_category: str,
     python_executable: Path | None = None,
+    ref_acceleration: bool = False,
+    repaint: bool = False,
+    preprocess_garment: bool = False,
 ) -> list[str]:
     commands = []
     _fake_condition_calls.clear()
@@ -259,7 +286,11 @@ def _run_fake_generation(
     monkeypatch.setattr(leffa_module.subprocess, "run", fake_run)
 
     result = _generator(
-        tmp_path, python_executable=python_executable
+        tmp_path,
+        python_executable=python_executable,
+        ref_acceleration=ref_acceleration,
+        repaint=repaint,
+        preprocess_garment=preprocess_garment,
     ).generate_kiosk_tryon(
         user_image=b"user-image",
         garment_image=b"garment-image",
@@ -282,6 +313,9 @@ def _generator(
     python_executable: Path | None = None,
     execution_mode: str = "subprocess",
     service_url: str = "http://127.0.0.1:8091",
+    ref_acceleration: bool = False,
+    repaint: bool = False,
+    preprocess_garment: bool = False,
 ) -> LocalLeffaKioskGenerator:
     return LocalLeffaKioskGenerator(
         work_dir=tmp_path / "work",
@@ -293,6 +327,9 @@ def _generator(
         no_clone=True,
         execution_mode=execution_mode,
         service_url=service_url,
+        ref_acceleration=ref_acceleration,
+        repaint=repaint,
+        preprocess_garment=preprocess_garment,
     )
 
 

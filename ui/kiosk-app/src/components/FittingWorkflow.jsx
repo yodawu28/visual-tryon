@@ -11,6 +11,12 @@ const workflowSteps = [
 
 const checklistItems = ["Full body visible", "Facing forward", "Good lighting", "Garment area visible"];
 
+const fitIntentOptions = [
+  { value: "slim", label: "Slim" },
+  { value: "regular", label: "Regular" },
+  { value: "relaxed", label: "Relaxed" },
+];
+
 const workflowStateLabels = {
   scanNotStarted: "Not started",
   scanReady: "Ready to capture",
@@ -29,12 +35,14 @@ export function FittingWorkflow({
   activeStage,
   bodyMeasurements,
   captureLabel,
+  fitIntent,
   garmentLabel,
   onAnalyzeFit,
   onBodyMeasurementChange,
   onCapturePhoto,
   onContinueToReview,
   onContinueToScan,
+  onFitIntentChange,
   onOpenProduct,
   onQueueTryOn,
   onWorkflowViewChange,
@@ -74,9 +82,11 @@ export function FittingWorkflow({
       {activeWorkflowView === "review" && (
         <ReviewStep
           bodyMeasurements={bodyMeasurements}
+          fitIntent={fitIntent}
           garmentLabel={garmentLabel}
           onAnalyzeFit={onAnalyzeFit}
           onBodyMeasurementChange={onBodyMeasurementChange}
+          onFitIntentChange={onFitIntentChange}
           onQueueTryOn={onQueueTryOn}
           state={state}
           tryOnLabel={tryOnLabel}
@@ -382,15 +392,28 @@ export function ChecklistItem({ checked, label }) {
   );
 }
 
-export function ReviewStep({ bodyMeasurements, garmentLabel, onAnalyzeFit, onBodyMeasurementChange, onQueueTryOn, state, tryOnLabel, workflowState }) {
+export function ReviewStep({
+  bodyMeasurements,
+  fitIntent,
+  garmentLabel,
+  onAnalyzeFit,
+  onBodyMeasurementChange,
+  onFitIntentChange,
+  onQueueTryOn,
+  state,
+  tryOnLabel,
+  workflowState,
+}) {
   return (
     <div className="grid gap-4">
       <SelectedGarmentSummary compact garmentLabel={garmentLabel} state={state} />
       <div className="review-output-grid grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <SizeRecommendationPanel
           bodyMeasurements={bodyMeasurements}
+          fitIntent={fitIntent}
           onAnalyzeFit={onAnalyzeFit}
           onBodyMeasurementChange={onBodyMeasurementChange}
+          onFitIntentChange={onFitIntentChange}
           state={state}
           workflowState={workflowState}
         />
@@ -401,16 +424,26 @@ export function ReviewStep({ bodyMeasurements, garmentLabel, onAnalyzeFit, onBod
   );
 }
 
-export function SizeRecommendationPanel({ bodyMeasurements, onAnalyzeFit, onBodyMeasurementChange, state, workflowState }) {
+export function SizeRecommendationPanel({
+  bodyMeasurements,
+  fitIntent,
+  onAnalyzeFit,
+  onBodyMeasurementChange,
+  onFitIntentChange,
+  state,
+  workflowState,
+}) {
   const recommendation = state.fitRecommendation || {};
   const recommendedSize = recommendation.recommended_size;
   const confidence = formatConfidence(recommendation.confidence);
-  const fitIntent = recommendation.preferred_fit || "regular";
+  const selectedFitIntent = fitIntent || recommendation.preferred_fit || "regular";
   const needsMeasurements = workflowState.fit === "fitNeedsMeasurements";
   const fitLocked = workflowState.fit === "fitLocked";
   const fitLoading = workflowState.fit === "fitLoading";
   const hasBasicMeasurements = Boolean(bodyMeasurements?.heightCm && bodyMeasurements?.weightKg);
   const canUpdate = Boolean(state.capturePassed && state.garmentId && !state.fitLoading);
+  const fitIntentNeedsUpdate = state.fitRecommendationStatus === "needs_update";
+  const hasRecommendationInput = hasBasicMeasurements || fitIntentNeedsUpdate || !state.fitRecommendation;
   const candidates = Array.isArray(recommendation.candidates) ? recommendation.candidates.slice(0, 3) : [];
 
   return (
@@ -428,7 +461,11 @@ export function SizeRecommendationPanel({ bodyMeasurements, onAnalyzeFit, onBody
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
         <MetricBlock label="Recommended size" value={recommendedSize ? `Size ${recommendedSize}` : "Not ready"} />
         <MetricBlock label="Confidence" value={confidence} />
-        <MetricBlock label="Fit intent" value={fitIntent} />
+        <FitIntentSelect
+          disabled={!state.capturePassed || fitLoading}
+          onChange={onFitIntentChange}
+          value={selectedFitIntent}
+        />
       </div>
 
       <p className="mt-4 rounded-md bg-slate-50 px-3 py-2 text-sm font-medium leading-5 text-ink">
@@ -486,7 +523,7 @@ export function SizeRecommendationPanel({ bodyMeasurements, onAnalyzeFit, onBody
           </div>
           <Button
             className="h-9 justify-center px-3 text-sm"
-            disabled={!canUpdate || fitLocked || !hasBasicMeasurements}
+            disabled={!canUpdate || fitLocked || !hasRecommendationInput}
             onClick={onAnalyzeFit}
             size="sm"
             variant={needsMeasurements ? "primary" : "secondary"}
@@ -496,6 +533,27 @@ export function SizeRecommendationPanel({ bodyMeasurements, onAnalyzeFit, onBody
         </div>
       </div>
     </section>
+  );
+}
+
+function FitIntentSelect({ disabled, onChange, value }) {
+  return (
+    <label className="grid gap-1 rounded-md bg-slate-50 px-3 py-2" htmlFor="fit-intent">
+      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Fit intent</span>
+      <select
+        className="h-8 rounded-md border border-line bg-white px-2 text-sm font-semibold text-ink outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+        disabled={disabled}
+        id="fit-intent"
+        onChange={(event) => onChange?.(event.target.value)}
+        value={value}
+      >
+        {fitIntentOptions.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

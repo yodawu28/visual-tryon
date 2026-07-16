@@ -84,6 +84,7 @@ function FittingRoomApp() {
     heightCm: "",
     weightKg: "",
   });
+  const [fitIntent, setFitIntent] = useState(() => normalizeFitIntent(localStorage.getItem("kioskFitIntent") || "regular"));
   const [state, setState] = useState(() => ({
     ...initialSessionState,
     garmentId: storedSessionValue("kioskGarmentId") || initialSessionState.garmentId,
@@ -106,6 +107,10 @@ function FittingRoomApp() {
   useEffect(() => {
     localStorage.setItem("kioskApiBase", apiBase);
   }, [apiBase]);
+
+  useEffect(() => {
+    localStorage.setItem("kioskFitIntent", fitIntent);
+  }, [fitIntent]);
 
   useEffect(() => {
     return () => {
@@ -173,6 +178,7 @@ function FittingRoomApp() {
     setState(initialSessionState);
     setWorkflowView("garment");
     setBodyMeasurements({ heightCm: "", weightKg: "" });
+    setFitIntent("regular");
     appendLog("New fitting session prepared");
   }
 
@@ -321,7 +327,7 @@ function FittingRoomApp() {
     }));
 
     try {
-      const fitResponse = await analyzeFit(apiBase, state.sessionId, getBodyMeasurementsPayload(bodyMeasurements));
+      const fitResponse = await analyzeFit(apiBase, state.sessionId, getBodyMeasurementsPayload(bodyMeasurements), fitIntent);
       const recommendation = fitResponse.size_recommendation || {};
       setState((current) => ({
         ...current,
@@ -347,6 +353,32 @@ function FittingRoomApp() {
       ...current,
       [field]: value,
     }));
+  }
+
+  function handleFitIntentChange(value) {
+    const nextFitIntent = normalizeFitIntent(value);
+    setFitIntent(nextFitIntent);
+    setState((current) => {
+      if (!current.fitRecommendation && !current.fitReady && !current.previewKey && !current.jobId) {
+        return current;
+      }
+
+      return {
+        ...current,
+        fitRecommendation: null,
+        fitRecommendationLabel: current.capturePassed ? "Update recommendation for selected fit intent." : "",
+        fitRecommendationStatus: current.capturePassed ? "needs_update" : "",
+        fitNeedsMeasurements: Boolean(current.capturePassed),
+        fitReady: false,
+        previewKey: "",
+        previewImageUrl: "",
+        visualPreviewReady: false,
+        jobId: "",
+        jobStatus: "",
+        tryOnError: "",
+      };
+    });
+    appendLog(`Fit intent selected: ${nextFitIntent}`);
   }
 
   async function handleQueueTryOn() {
@@ -497,10 +529,12 @@ function FittingRoomApp() {
               activeStage={activeStage}
               bodyMeasurements={bodyMeasurements}
               captureLabel={captureLabel}
+              fitIntent={fitIntent}
               garmentLabel={garmentLabel}
               onAnalyzeFit={handleAnalyzeFit}
               onBodyMeasurementChange={handleBodyMeasurementChange}
               onCapturePhoto={handleCapturePhoto}
+              onFitIntentChange={handleFitIntentChange}
               onContinueToReview={() => setWorkflowView("review")}
               onContinueToScan={() => setWorkflowView("scan")}
               onOpenProduct={() => setProductModalOpen(true)}
@@ -566,6 +600,10 @@ function getBodyMeasurementsPayload(bodyMeasurements) {
   return payload;
 }
 
+function normalizeFitIntent(value) {
+  return ["slim", "regular", "relaxed"].includes(value) ? value : "regular";
+}
+
 function fitRecommendationState(recommendation) {
   const recommendedSize = recommendation.recommended_size;
   const status = recommendation.status || "ready";
@@ -610,6 +648,7 @@ function clearStoredSessionState() {
     "kioskSizeChartId",
     "kioskSizeChartName",
     "kioskSizeChartSizes",
+    "kioskFitIntent",
   ].forEach((key) => localStorage.removeItem(key));
 }
 

@@ -47,6 +47,9 @@ class LocalLeffaKioskGenerator(ImageGeneratorBase):
         steps: int = 30,
         guidance_scale: float = 2.5,
         seed: int = 42,
+        ref_acceleration: bool = False,
+        repaint: bool = False,
+        preprocess_garment: bool = False,
         timeout_seconds: int = 900,
         execution_mode: str = "subprocess",
         service_url: str = "http://127.0.0.1:8091",
@@ -76,6 +79,9 @@ class LocalLeffaKioskGenerator(ImageGeneratorBase):
         self.steps = steps
         self.guidance_scale = guidance_scale
         self.seed = seed
+        self.ref_acceleration = ref_acceleration
+        self.repaint = repaint
+        self.preprocess_garment = preprocess_garment
         self.timeout_seconds = timeout_seconds
         self.execution_mode = normalized_execution_mode
         self.service_url = service_url.rstrip("/")
@@ -90,7 +96,10 @@ class LocalLeffaKioskGenerator(ImageGeneratorBase):
         return {
             "preview_model": (
                 f"Leffa:{self.model_repo_id}:{self.vt_model_type}:"
-                f"{self.size}:steps{self.steps}:cfg{self.guidance_scale}"
+                f"{self.size}:steps{self.steps}:cfg{self.guidance_scale}:"
+                f"refaccel{int(self.ref_acceleration)}:"
+                f"repaint{int(self.repaint)}:"
+                f"preprocess{int(self.preprocess_garment)}"
             ),
             "preview_input_mapping": self.INPUT_MAPPING,
             "preview_prompt_version": self.PROMPT_VERSION,
@@ -263,9 +272,12 @@ class LocalLeffaKioskGenerator(ImageGeneratorBase):
                 str(self.guidance_scale),
                 "--seed",
                 str(self.seed),
-                "--no-ref-acceleration",
-                "--no-repaint",
-                "--no-preprocess-garment",
+                _boolean_option("--ref-acceleration", self.ref_acceleration),
+                _boolean_option("--repaint", self.repaint),
+                _boolean_option(
+                    "--preprocess-garment",
+                    self.preprocess_garment,
+                ),
             ]
             if self.no_clone:
                 command.append("--no-clone")
@@ -334,6 +346,9 @@ class LocalLeffaKioskGenerator(ImageGeneratorBase):
             "conditioning": conditioning,
             "leffa": leffa_payload,
             "execution_mode": self.execution_mode,
+            "ref_acceleration": self.ref_acceleration,
+            "repaint": self.repaint,
+            "preprocess_garment": self.preprocess_garment,
             "service": (
                 {"url": self.service_url, "response": service_payload}
                 if self.execution_mode == "service"
@@ -368,9 +383,9 @@ class LocalLeffaKioskGenerator(ImageGeneratorBase):
             "steps": self.steps,
             "guidance_scale": self.guidance_scale,
             "seed": self.seed,
-            "ref_acceleration": False,
-            "repaint": False,
-            "preprocess_garment": False,
+            "ref_acceleration": self.ref_acceleration,
+            "repaint": self.repaint,
+            "preprocess_garment": self.preprocess_garment,
         }
         response = httpx.post(
             f"{self.service_url}/v1/generate",
@@ -571,6 +586,10 @@ def _decode_process_output(value: str | bytes | None) -> str:
     if isinstance(value, str):
         return value
     return value.decode("utf-8", errors="replace")
+
+
+def _boolean_option(flag: str, enabled: bool) -> str:
+    return flag if enabled else f"--no-{flag[2:]}"
 
 
 def _read_json(path: Path) -> dict[str, Any]:

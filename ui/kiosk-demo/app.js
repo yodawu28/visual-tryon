@@ -7214,6 +7214,11 @@ const workflowSteps = [
   { key: "review", label: "Review" }
 ];
 const checklistItems = ["Full body visible", "Facing forward", "Good lighting", "Garment area visible"];
+const fitIntentOptions = [
+  { value: "slim", label: "Slim" },
+  { value: "regular", label: "Regular" },
+  { value: "relaxed", label: "Relaxed" }
+];
 const workflowStateLabels = {
   scanNotStarted: "Not started",
   scanReady: "Ready to capture",
@@ -7231,12 +7236,14 @@ function FittingWorkflow({
   activeStage,
   bodyMeasurements,
   captureLabel,
+  fitIntent,
   garmentLabel,
   onAnalyzeFit,
   onBodyMeasurementChange,
   onCapturePhoto,
   onContinueToReview,
   onContinueToScan,
+  onFitIntentChange,
   onOpenProduct,
   onQueueTryOn,
   onWorkflowViewChange,
@@ -7278,9 +7285,11 @@ function FittingWorkflow({
           ReviewStep,
           {
             bodyMeasurements,
+            fitIntent,
             garmentLabel,
             onAnalyzeFit,
             onBodyMeasurementChange,
+            onFitIntentChange,
             onQueueTryOn,
             state,
             tryOnLabel,
@@ -7522,7 +7531,18 @@ function ChecklistItem({ checked, label }) {
     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm font-medium text-ink", children: label })
   ] });
 }
-function ReviewStep({ bodyMeasurements, garmentLabel, onAnalyzeFit, onBodyMeasurementChange, onQueueTryOn, state, tryOnLabel, workflowState }) {
+function ReviewStep({
+  bodyMeasurements,
+  fitIntent,
+  garmentLabel,
+  onAnalyzeFit,
+  onBodyMeasurementChange,
+  onFitIntentChange,
+  onQueueTryOn,
+  state,
+  tryOnLabel,
+  workflowState
+}) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-4", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(SelectedGarmentSummary, { compact: true, garmentLabel, state }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "review-output-grid grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]", children: [
@@ -7530,8 +7550,10 @@ function ReviewStep({ bodyMeasurements, garmentLabel, onAnalyzeFit, onBodyMeasur
         SizeRecommendationPanel,
         {
           bodyMeasurements,
+          fitIntent,
           onAnalyzeFit,
           onBodyMeasurementChange,
+          onFitIntentChange,
           state,
           workflowState
         }
@@ -7541,16 +7563,26 @@ function ReviewStep({ bodyMeasurements, garmentLabel, onAnalyzeFit, onBodyMeasur
     /* @__PURE__ */ jsxRuntimeExports.jsx(ReviewActions, { onQueueTryOn, state, workflowState })
   ] });
 }
-function SizeRecommendationPanel({ bodyMeasurements, onAnalyzeFit, onBodyMeasurementChange, state, workflowState }) {
+function SizeRecommendationPanel({
+  bodyMeasurements,
+  fitIntent,
+  onAnalyzeFit,
+  onBodyMeasurementChange,
+  onFitIntentChange,
+  state,
+  workflowState
+}) {
   const recommendation = state.fitRecommendation || {};
   const recommendedSize = recommendation.recommended_size;
   const confidence = formatConfidence(recommendation.confidence);
-  const fitIntent = recommendation.preferred_fit || "regular";
+  const selectedFitIntent = fitIntent || recommendation.preferred_fit || "regular";
   const needsMeasurements = workflowState.fit === "fitNeedsMeasurements";
   const fitLocked = workflowState.fit === "fitLocked";
   const fitLoading = workflowState.fit === "fitLoading";
   const hasBasicMeasurements = Boolean((bodyMeasurements == null ? void 0 : bodyMeasurements.heightCm) && (bodyMeasurements == null ? void 0 : bodyMeasurements.weightKg));
   const canUpdate = Boolean(state.capturePassed && state.garmentId && !state.fitLoading);
+  const fitIntentNeedsUpdate = state.fitRecommendationStatus === "needs_update";
+  const hasRecommendationInput = hasBasicMeasurements || fitIntentNeedsUpdate || !state.fitRecommendation;
   const candidates = Array.isArray(recommendation.candidates) ? recommendation.candidates.slice(0, 3) : [];
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "fit-recommendation-panel rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start justify-between gap-3", children: [
@@ -7563,7 +7595,14 @@ function SizeRecommendationPanel({ bodyMeasurements, onAnalyzeFit, onBodyMeasure
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-5 grid gap-3 sm:grid-cols-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(MetricBlock, { label: "Recommended size", value: recommendedSize ? `Size ${recommendedSize}` : "Not ready" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(MetricBlock, { label: "Confidence", value: confidence }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(MetricBlock, { label: "Fit intent", value: fitIntent })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        FitIntentSelect,
+        {
+          disabled: !state.capturePassed || fitLoading,
+          onChange: onFitIntentChange,
+          value: selectedFitIntent
+        }
+      )
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-4 rounded-md bg-slate-50 px-3 py-2 text-sm font-medium leading-5 text-ink", children: state.fitRecommendationLabel || recommendation.reason || "Run the shopper scan and add measurements if needed to produce a deterministic recommendation." }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-4 grid gap-3", children: [
@@ -7620,7 +7659,7 @@ function SizeRecommendationPanel({ bodyMeasurements, onAnalyzeFit, onBodyMeasure
           Button,
           {
             className: "h-9 justify-center px-3 text-sm",
-            disabled: !canUpdate || fitLocked || !hasBasicMeasurements,
+            disabled: !canUpdate || fitLocked || !hasRecommendationInput,
             onClick: onAnalyzeFit,
             size: "sm",
             variant: needsMeasurements ? "primary" : "secondary",
@@ -7629,6 +7668,22 @@ function SizeRecommendationPanel({ bodyMeasurements, onAnalyzeFit, onBodyMeasure
         )
       ] })
     ] })
+  ] });
+}
+function FitIntentSelect({ disabled, onChange, value }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid gap-1 rounded-md bg-slate-50 px-3 py-2", htmlFor: "fit-intent", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold uppercase tracking-[0.12em] text-muted", children: "Fit intent" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "select",
+      {
+        className: "h-8 rounded-md border border-line bg-white px-2 text-sm font-semibold text-ink outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400",
+        disabled,
+        id: "fit-intent",
+        onChange: (event) => onChange == null ? void 0 : onChange(event.target.value),
+        value,
+        children: fitIntentOptions.map((option) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: option.value, children: option.label }, option.value))
+      }
+    )
   ] });
 }
 function TryOnPreviewPanel({ onQueueTryOn, state, tryOnLabel, workflowState }) {
@@ -7983,12 +8038,12 @@ async function analyzeCapture(apiBase, sessionId) {
     method: "POST"
   });
 }
-async function analyzeFit(apiBase, sessionId, bodyMeasurements = {}) {
+async function analyzeFit(apiBase, sessionId, bodyMeasurements = {}, preferredFit = "regular") {
   return request(apiBase, `${SESSIONS_PATH}/${sessionId}/${FIT_ANALYZE_PATH}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      preferred_fit: "regular",
+      preferred_fit: preferredFit,
       body_measurements: bodyMeasurements,
       use_ai_analysis: false
     })
@@ -8081,6 +8136,7 @@ function FittingRoomApp() {
     heightCm: "",
     weightKg: ""
   });
+  const [fitIntent, setFitIntent] = reactExports.useState(() => normalizeFitIntent(localStorage.getItem("kioskFitIntent") || "regular"));
   const [state, setState] = reactExports.useState(() => ({
     ...initialSessionState,
     garmentId: storedSessionValue("kioskGarmentId") || initialSessionState.garmentId,
@@ -8101,6 +8157,9 @@ function FittingRoomApp() {
   reactExports.useEffect(() => {
     localStorage.setItem("kioskApiBase", apiBase);
   }, [apiBase]);
+  reactExports.useEffect(() => {
+    localStorage.setItem("kioskFitIntent", fitIntent);
+  }, [fitIntent]);
   reactExports.useEffect(() => {
     return () => {
       if (state.garmentPreviewUrl) {
@@ -8157,6 +8216,7 @@ function FittingRoomApp() {
     setState(initialSessionState);
     setWorkflowView("garment");
     setBodyMeasurements({ heightCm: "", weightKg: "" });
+    setFitIntent("regular");
     appendLog("New fitting session prepared");
   }
   async function saveProduct(event) {
@@ -8283,7 +8343,7 @@ function FittingRoomApp() {
       fitReady: false
     }));
     try {
-      const fitResponse = await analyzeFit(apiBase, state.sessionId, getBodyMeasurementsPayload(bodyMeasurements));
+      const fitResponse = await analyzeFit(apiBase, state.sessionId, getBodyMeasurementsPayload(bodyMeasurements), fitIntent);
       const recommendation = fitResponse.size_recommendation || {};
       setState((current) => ({
         ...current,
@@ -8306,6 +8366,30 @@ function FittingRoomApp() {
       ...current,
       [field]: value
     }));
+  }
+  function handleFitIntentChange(value) {
+    const nextFitIntent = normalizeFitIntent(value);
+    setFitIntent(nextFitIntent);
+    setState((current) => {
+      if (!current.fitRecommendation && !current.fitReady && !current.previewKey && !current.jobId) {
+        return current;
+      }
+      return {
+        ...current,
+        fitRecommendation: null,
+        fitRecommendationLabel: current.capturePassed ? "Update recommendation for selected fit intent." : "",
+        fitRecommendationStatus: current.capturePassed ? "needs_update" : "",
+        fitNeedsMeasurements: Boolean(current.capturePassed),
+        fitReady: false,
+        previewKey: "",
+        previewImageUrl: "",
+        visualPreviewReady: false,
+        jobId: "",
+        jobStatus: "",
+        tryOnError: ""
+      };
+    });
+    appendLog(`Fit intent selected: ${nextFitIntent}`);
   }
   async function handleQueueTryOn() {
     if (!state.sessionId || !state.fitReady) {
@@ -8434,10 +8518,12 @@ function FittingRoomApp() {
             activeStage,
             bodyMeasurements,
             captureLabel,
+            fitIntent,
             garmentLabel,
             onAnalyzeFit: handleAnalyzeFit,
             onBodyMeasurementChange: handleBodyMeasurementChange,
             onCapturePhoto: handleCapturePhoto,
+            onFitIntentChange: handleFitIntentChange,
             onContinueToReview: () => setWorkflowView("review"),
             onContinueToScan: () => setWorkflowView("scan"),
             onOpenProduct: () => setProductModalOpen(true),
@@ -8502,6 +8588,9 @@ function getBodyMeasurementsPayload(bodyMeasurements) {
   if (Number.isFinite(weightKg) && weightKg > 0) payload.weight_kg = weightKg;
   return payload;
 }
+function normalizeFitIntent(value) {
+  return ["slim", "regular", "relaxed"].includes(value) ? value : "regular";
+}
 function fitRecommendationState(recommendation) {
   const recommendedSize = recommendation.recommended_size;
   const status = recommendation.status || "ready";
@@ -8540,7 +8629,8 @@ function clearStoredSessionState() {
     "kioskSessionId",
     "kioskSizeChartId",
     "kioskSizeChartName",
-    "kioskSizeChartSizes"
+    "kioskSizeChartSizes",
+    "kioskFitIntent"
   ].forEach((key) => localStorage.removeItem(key));
 }
 function formatSizeRange(sizeChart) {

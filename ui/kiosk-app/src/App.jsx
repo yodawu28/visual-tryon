@@ -77,6 +77,7 @@ function FittingRoomApp() {
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [productError, setProductError] = useState("");
   const [productSaving, setProductSaving] = useState(false);
+  const [workflowView, setWorkflowView] = useState("garment");
   const [sizeCharts, setSizeCharts] = useState([]);
   const [sizeChartsStatus, setSizeChartsStatus] = useState("Idle");
   const [bodyMeasurements, setBodyMeasurements] = useState({
@@ -100,7 +101,7 @@ function FittingRoomApp() {
   const garmentLabel = displayGarmentLabel(state);
   const captureLabel = displayCaptureLabel(state);
   const tryOnLabel = displayTryOnLabel(state);
-  const activeStage = getActiveStage(state);
+  const activeStage = getAvailableWorkflowView(workflowView, state);
 
   useEffect(() => {
     localStorage.setItem("kioskApiBase", apiBase);
@@ -150,6 +151,13 @@ function FittingRoomApp() {
     };
   }, [apiBase, productModalOpen]);
 
+  useEffect(() => {
+    const nextWorkflowView = getAvailableWorkflowView(workflowView, state);
+    if (nextWorkflowView !== workflowView) {
+      setWorkflowView(nextWorkflowView);
+    }
+  }, [state.garmentId, state.capturePassed, workflowView]);
+
   const applicationShell = "product-application-shell min-h-screen overflow-x-hidden bg-canvas text-ink";
   const bottomNavigation = "fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 px-2 py-2 backdrop-blur lg:hidden";
 
@@ -163,6 +171,7 @@ function FittingRoomApp() {
       URL.revokeObjectURL(state.garmentPreviewUrl);
     }
     setState(initialSessionState);
+    setWorkflowView("garment");
     setBodyMeasurements({ heightCm: "", weightKg: "" });
     appendLog("New fitting session prepared");
   }
@@ -218,6 +227,7 @@ function FittingRoomApp() {
         return nextState;
       });
       setProductModalOpen(false);
+      setWorkflowView("scan");
       appendLog(`Product uploaded: ${nextState.garmentName}`);
     } catch (error) {
       setProductError(error.message || "Could not upload product.");
@@ -416,10 +426,10 @@ function FittingRoomApp() {
       return;
     }
     if (!state.capturePassed) {
-      simulateCapture();
+      setWorkflowView("scan");
       return;
     }
-    handleQueueTryOn();
+    setWorkflowView("review");
   }
 
   async function checkApi() {
@@ -491,11 +501,14 @@ function FittingRoomApp() {
               onAnalyzeFit={handleAnalyzeFit}
               onBodyMeasurementChange={handleBodyMeasurementChange}
               onCapturePhoto={handleCapturePhoto}
+              onContinueToReview={() => setWorkflowView("review")}
+              onContinueToScan={() => setWorkflowView("scan")}
               onOpenProduct={() => setProductModalOpen(true)}
               onQueueTryOn={handleQueueTryOn}
-              onRunScan={simulateCapture}
+              onWorkflowViewChange={(view) => setWorkflowView(getAvailableWorkflowView(view, state))}
               state={state}
               tryOnLabel={tryOnLabel}
+              workflowView={activeStage}
             />
       </main>
 
@@ -537,11 +550,11 @@ function AppShell({ bottomNavigation, children, className, header, sidebar }) {
   );
 }
 
-function getActiveStage(state) {
-  if (!state.garmentId) return "product";
-  if (!state.capturePassed) return "capture";
-  if (!state.previewKey) return "fit";
-  return "tryon";
+function getAvailableWorkflowView(view, state) {
+  if (!state.garmentId) return "garment";
+  if (view === "review" && !state.capturePassed) return "scan";
+  if (view === "garment" || view === "scan" || view === "review") return view;
+  return state.capturePassed ? "review" : "scan";
 }
 
 function getBodyMeasurementsPayload(bodyMeasurements) {

@@ -7209,10 +7209,9 @@ function Sidebar({ items, onSelect }) {
   ] });
 }
 const workflowSteps = [
-  { key: "product", label: "Garment" },
-  { key: "capture", label: "Shopper scan" },
-  { key: "fit", label: "Fit result" },
-  { key: "tryon", label: "Try-on" }
+  { key: "garment", label: "Garment" },
+  { key: "scan", label: "Shopper scan" },
+  { key: "review", label: "Review" }
 ];
 const checklistItems = ["Full body visible", "Facing forward", "Good lighting", "Garment area visible"];
 const workflowStateLabels = {
@@ -7236,71 +7235,120 @@ function FittingWorkflow({
   onAnalyzeFit,
   onBodyMeasurementChange,
   onCapturePhoto,
+  onContinueToReview,
+  onContinueToScan,
   onOpenProduct,
   onQueueTryOn,
-  onRunScan,
+  onWorkflowViewChange,
   state,
-  tryOnLabel
+  tryOnLabel,
+  workflowView
 }) {
   const workflowState = getWorkflowState(state);
+  const activeWorkflowView = resolveWorkflowView(workflowView || activeStage, state);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "section",
+    FittingRoomShell,
     {
-      className: "operator-workspace-layout grid max-w-full gap-3 overflow-x-hidden",
-      "data-workspace-shell": "fitting-session-workspace",
+      activeWorkflowView,
+      onWorkflowViewChange,
+      state,
+      workflowState,
       children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(WorkflowHeader, { activeStage, state }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(SelectedGarmentBar, { garmentLabel, onOpenProduct, state }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "fitting-console-grid fitting-workflow-layout grid items-start gap-3 xl:grid-cols-[minmax(0,68fr)_minmax(320px,32fr)]", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            ScanWorkspace,
-            {
-              captureLabel,
-              onCapturePhoto,
-              onRunScan,
-              state,
-              workflowState
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            OperatorGuidancePanel,
-            {
-              onQueueTryOn,
-              bodyMeasurements,
-              onAnalyzeFit,
-              onBodyMeasurementChange,
-              state,
-              tryOnLabel,
-              workflowState
-            }
-          )
-        ] })
+        activeWorkflowView === "garment" && /* @__PURE__ */ jsxRuntimeExports.jsx(
+          GarmentStep,
+          {
+            garmentLabel,
+            onContinueToScan,
+            onOpenProduct,
+            state
+          }
+        ),
+        activeWorkflowView === "scan" && /* @__PURE__ */ jsxRuntimeExports.jsx(
+          ShopperScanStep,
+          {
+            captureLabel,
+            garmentLabel,
+            onCapturePhoto,
+            onContinueToReview,
+            state,
+            workflowState
+          }
+        ),
+        activeWorkflowView === "review" && /* @__PURE__ */ jsxRuntimeExports.jsx(
+          ReviewStep,
+          {
+            bodyMeasurements,
+            garmentLabel,
+            onAnalyzeFit,
+            onBodyMeasurementChange,
+            onQueueTryOn,
+            state,
+            tryOnLabel,
+            workflowState
+          }
+        )
       ]
     }
   );
 }
-function WorkflowHeader({ activeStage, state }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("header", { className: "workflow-header border-b border-line/80 pb-2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-2 xl:grid-cols-[240px_minmax(0,1fr)] xl:items-end", children: [
+function FittingRoomShell({ activeWorkflowView, children, onWorkflowViewChange, state, workflowState }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "section",
+    {
+      className: "operator-workspace-layout grid max-w-full gap-4 overflow-x-hidden",
+      "data-workspace-shell": "fitting-session-workspace",
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          WorkflowHeader,
+          {
+            activeWorkflowView,
+            onWorkflowViewChange,
+            state,
+            workflowState
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "min-h-[520px]", children })
+      ]
+    }
+  );
+}
+function WorkflowHeader({ activeWorkflowView, onWorkflowViewChange, state, workflowState }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("header", { className: "workflow-header border-b border-line/80 pb-3", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-3 xl:grid-cols-[260px_minmax(0,1fr)] xl:items-end", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-lg font-semibold tracking-tight text-ink", children: "Fitting Room" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm font-medium text-muted", children: currentStepLabel(activeStage, state) })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm font-medium text-muted", children: currentStepLabel(activeWorkflowView) })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(WorkflowStepper, { activeStage, state })
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      WorkflowStepper,
+      {
+        activeWorkflowView,
+        onWorkflowViewChange,
+        state,
+        workflowState
+      }
+    )
   ] }) });
 }
-function WorkflowStepper({ activeStage, state }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("ol", { "aria-label": "Fitting progress", className: "grid gap-2 sm:grid-cols-4", children: workflowSteps.map((step, index) => {
-    const status = stepStatus(step.key, activeStage, state);
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "li",
+function WorkflowStepper({ activeWorkflowView, onWorkflowViewChange, state, workflowState }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("ol", { "aria-label": "Fitting progress", className: "grid gap-2 sm:grid-cols-3", children: workflowSteps.map((step, index) => {
+    const status = stepStatus(step.key, activeWorkflowView, state, workflowState);
+    const locked = status === "locked";
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("li", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "button",
       {
+        "aria-current": status === "current" ? "step" : void 0,
+        "aria-disabled": locked,
         "aria-label": `${step.label}: ${status}`,
         className: [
-          "workflow-step flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5",
-          status === "complete" && "workflow-step-complete text-emerald-700",
+          "workflow-step flex min-h-10 w-full min-w-0 items-center gap-2 rounded-md px-2.5 py-2 text-left transition",
+          status === "available" && "text-slate-600 hover:bg-slate-50",
+          status === "complete" && "workflow-step-complete text-emerald-700 hover:bg-emerald-50",
           status === "current" && "workflow-step-current bg-brand-50 text-brand-700",
-          status === "disabled" && "workflow-step-disabled text-slate-400"
+          status === "locked" && "workflow-step-disabled cursor-not-allowed text-slate-400"
         ].filter(Boolean).join(" "),
+        disabled: locked,
+        onClick: () => onWorkflowViewChange == null ? void 0 : onWorkflowViewChange(step.key),
+        type: "button",
         children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "span",
@@ -7309,109 +7357,85 @@ function WorkflowStepper({ activeStage, state }) {
                 "grid h-6 w-6 shrink-0 place-items-center rounded-full border text-xs font-semibold",
                 status === "complete" && "border-emerald-500 bg-emerald-500 text-white",
                 status === "current" && "border-brand-600 bg-brand-600 text-white",
-                status === "disabled" && "border-slate-200 bg-slate-50 text-slate-400"
+                status === "available" && "border-slate-300 bg-white text-slate-600",
+                status === "locked" && "border-slate-200 bg-slate-50 text-slate-400"
               ].filter(Boolean).join(" "),
               children: status === "complete" ? "✓" : index + 1
             }
           ),
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate text-sm font-medium leading-5", children: step.label })
         ]
-      },
-      step.key
-    );
+      }
+    ) }, step.key);
   }) });
 }
-function currentStepLabel(activeStage, state) {
-  if (!state.garmentId) return "Step 1 of 4 · Garment";
-  if (activeStage === "capture") return "Step 2 of 4 · Shopper scan";
-  if (activeStage === "fit") return "Step 3 of 4 · Fit result";
-  return "Step 4 of 4 · Try-on";
-}
-function stepStatus(key, activeStage, state) {
-  if (key === activeStage) return "current";
-  if (isStepComplete(key, state)) return "complete";
-  return workflowSteps.findIndex((step) => step.key === key) > workflowSteps.findIndex((step) => step.key === activeStage) ? "disabled" : "complete";
-}
-function isStepComplete(key, state) {
-  if (key === "product") return Boolean(state.garmentId);
-  if (key === "capture") return Boolean(state.capturePassed);
-  if (key === "fit") return Boolean(state.fitReady);
-  return Boolean(state.previewKey);
-}
-function SelectedGarmentBar({ garmentLabel, onOpenProduct, state }) {
-  const selected = Boolean(state.garmentId);
-  const displayName = selected ? garmentLabel : "No garment selected";
-  const categoryLabel = selected ? formatCategoryLabel(state.garmentCategory || "tops") : "Upload a product to start";
-  const garmentTypeLabel = state.garmentType ? state.garmentType.replaceAll("_", " ") : "";
-  const chartLabel = state.sizeChartName ? `${state.sizeChartName}${state.sizeChartSizes ? ` · ${state.sizeChartSizes}` : ""}` : state.sizeChartId ? `Chart linked${state.sizeChartSizes ? ` · ${state.sizeChartSizes}` : ""}` : selected ? "No chart linked" : "Size chart loads after upload";
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "section",
-    {
-      className: "selected-garment-context-bar flex min-h-[52px] max-w-full flex-col gap-2 rounded-lg bg-white px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80 sm:flex-row sm:items-center sm:justify-between sm:px-4",
-      "data-selected-garment-bar": "visible-after-upload",
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 items-center gap-3", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid h-8 w-8 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-700 ring-1 ring-line/80", children: state.garmentPreviewUrl ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "img",
-            {
-              alt: "",
-              className: "h-8 w-8 rounded-md object-cover",
-              src: state.garmentPreviewUrl
-            }
-          ) : /* @__PURE__ */ jsxRuntimeExports.jsx(ProductIcon, { className: "h-5 w-5" }) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "truncate font-semibold text-ink", children: displayName }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-muted", children: categoryLabel }),
-            selected && garmentTypeLabel && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-1 w-1 rounded-full bg-slate-300" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "capitalize text-muted", children: garmentTypeLabel })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-1 w-1 rounded-full bg-slate-300" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: state.sizeChartId ? "text-muted" : "font-medium text-amber-700", children: chartLabel })
-          ] })
+function GarmentStep({ garmentLabel, onContinueToScan, onOpenProduct, state }) {
+  const garmentSelected = Boolean(state.garmentId);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-4 xl:grid-cols-[minmax(0,0.96fr)_minmax(360px,0.54fr)]", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "product-preview-surface grid min-h-[320px] place-items-center rounded-lg bg-slate-100 p-4 ring-1 ring-line/70", children: state.garmentPreviewUrl ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "img",
+        {
+          alt: "Selected garment",
+          className: "max-h-[300px] w-full rounded-md object-contain",
+          src: state.garmentPreviewUrl
+        }
+      ) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid place-items-center gap-3 text-center", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid h-14 w-14 place-items-center rounded-md bg-white text-slate-500 ring-1 ring-line/80", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ProductIcon, { className: "h-7 w-7" }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-semibold text-ink", children: "No garment selected" })
+      ] }) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid content-between gap-5", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-xl font-semibold tracking-tight text-ink", children: "Choose garment" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-2 max-w-2xl text-sm leading-6 text-muted", children: "Select the product image and size chart before scanning the shopper." }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-5", children: /* @__PURE__ */ jsxRuntimeExports.jsx(SelectedGarmentSummary, { garmentLabel, state }) })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "w-full sm:w-auto", onClick: onOpenProduct, size: "sm", variant: selected ? "ghost" : "primary", children: selected ? "Change product" : "Upload product" })
-      ]
-    }
-  );
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2 sm:flex-row", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "w-full sm:w-auto", onClick: onOpenProduct, variant: garmentSelected ? "secondary" : "primary", children: garmentSelected ? "Change product" : "Upload product" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "w-full sm:w-auto", disabled: !garmentSelected, onClick: onContinueToScan, children: "Continue to shopper scan" })
+        ] })
+      ] })
+    ] }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { className: "grid content-start gap-3 rounded-lg bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-sm font-semibold text-ink", children: "Garment details" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(DetailRow, { label: "Product", value: garmentSelected ? garmentLabel : "Waiting for upload" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(DetailRow, { label: "Category", value: garmentSelected ? formatCategoryLabel(state.garmentCategory || "tops") : "Not selected" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(DetailRow, { label: "Garment type", value: state.garmentType ? state.garmentType.replaceAll("_", " ") : "Not provided" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(DetailRow, { label: "Size chart status", value: getSizeChartLabel(state), valueTone: state.sizeChartId ? "text-emerald-700" : "text-amber-700" })
+    ] })
+  ] });
 }
-function formatCategoryLabel(category) {
-  const labels = {
-    bottoms: "Bottoms",
-    full_outfit: "Full outfit",
-    one_pieces: "One piece",
-    tops: "Tops"
-  };
-  return labels[category] || String(category);
+function ShopperScanStep({ captureLabel, garmentLabel, onCapturePhoto, onContinueToReview, state, workflowState }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      CameraCapturePanel,
+      {
+        captureLabel,
+        onCapturePhoto,
+        onContinueToReview,
+        state,
+        workflowState
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { className: "grid content-start gap-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(SelectedGarmentSummary, { compact: true, garmentLabel, state }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "rounded-lg bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid h-9 w-9 shrink-0 place-items-center rounded-md bg-brand-50 text-brand-700", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ScanIcon, { className: "h-5 w-5" }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-sm font-semibold text-ink", children: "Scan status" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm leading-5 text-muted", children: getScanGuidance(workflowState) })
+        ] })
+      ] }) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "rounded-lg bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80", children: /* @__PURE__ */ jsxRuntimeExports.jsx(CaptureChecklist, { checked: workflowState.scan === "scanComplete" }) })
+    ] })
+  ] });
 }
-function ScanWorkspace({ captureLabel, onCapturePhoto, onRunScan, state, workflowState }) {
+function CameraCapturePanel({ captureLabel, onCapturePhoto, onContinueToReview, state, workflowState }) {
+  const fileInputRef = reactExports.useRef(null);
+  const captureSourceRef = reactExports.useRef("file_upload");
   const scanComplete = workflowState.scan === "scanComplete";
   const scanStarted = workflowState.scan === "scanning" || scanComplete;
   const cameraStatus = getCameraStatus(workflowState);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "scan-workspace rounded-lg bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "scan-panel-header flex flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-5", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-lg font-semibold tracking-tight text-ink", children: "Capture shopper photo" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm text-muted", children: "Position the shopper inside the frame, facing forward." })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { sourceText: cameraStatus, tone: scanComplete ? "success" : "neutral", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "scan-panel-status", children: cameraStatus }) })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "px-4 pb-3 sm:px-5", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-      CameraCaptureFrame,
-      {
-        onCapturePhoto,
-        onRunScan,
-        scanComplete,
-        scanLabel: cameraStatus,
-        scanStarted,
-        state
-      }
-    ) })
-  ] });
-}
-function CameraCaptureFrame({ onCapturePhoto, onRunScan, scanComplete, scanLabel, scanStarted, state }) {
-  const fileInputRef = reactExports.useRef(null);
-  const captureSourceRef = reactExports.useRef("file_upload");
   const disabled = !state.garmentId || state.scanBusy || state.fitLoading;
   function openCapturePicker(captureSource) {
     var _a;
@@ -7426,50 +7450,60 @@ function CameraCaptureFrame({ onCapturePhoto, onRunScan, scanComplete, scanLabel
     }
     event.target.value = "";
   }
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "scan-stage relative grid h-[360px] overflow-hidden rounded-lg bg-slate-950 text-white shadow-soft sm:h-[420px] xl:h-[440px]", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "input",
-      {
-        accept: "image/*",
-        className: "sr-only",
-        onChange: handleFileChange,
-        ref: fileInputRef,
-        type: "file"
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(148,163,184,0.16),transparent_32%),linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,1))]" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute inset-x-4 top-4 z-10 flex items-center justify-between gap-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { tone: scanComplete ? "success" : "dark", children: scanLabel }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-md bg-white/10 px-2 py-1 text-xs font-medium text-white/70", children: "Camera frame" })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative mx-auto my-10 w-[min(64vw,320px)] rounded-[22px] border border-white/14 bg-white/[0.025]", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-none absolute inset-0 rounded-[24px] bg-[linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[length:58px_58px]" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-none absolute inset-y-7 left-1/2 w-px -translate-x-1/2 bg-white/12" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-none absolute inset-x-7 top-1/3 h-px bg-white/12" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-none absolute inset-x-7 top-2/3 h-px bg-white/12" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative mx-auto h-[260px] w-full sm:h-[314px]", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute left-1/2 top-7 h-[52px] w-[52px] -translate-x-1/2 rounded-full border border-white/28 bg-white/10" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute left-1/2 top-[92px] h-[150px] w-[108px] -translate-x-1/2 rounded-b-[26px] rounded-t-[56px] border border-white/28 bg-white/[0.06]" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute left-1/2 top-[116px] h-[94px] w-[158px] -translate-x-1/2 rounded-[38px] border border-dashed border-white/25" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute bottom-8 left-1/2 h-[66px] w-[84px] -translate-x-1/2 rounded-b-[36px] border border-white/20 bg-white/[0.035]" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute left-8 right-8 top-[156px] h-px bg-emerald-200/70 shadow-[0_0_24px_rgba(167,243,208,0.7)]" })
-      ] })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute bottom-3 left-3 right-3 z-10 flex flex-col gap-2 rounded-lg bg-black/32 px-3 py-2 backdrop-blur sm:flex-row sm:items-center sm:justify-between", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-semibold text-white", children: scanStarted ? scanLabel : "Ready to capture" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-0.5 text-xs text-white/68", children: "Keep head, torso, and garment area inside the guide." })
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "scan-workspace rounded-lg bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "scan-panel-header flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-xl font-semibold tracking-tight text-ink", children: "Shopper scan" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm text-muted", children: "Capture or upload a front-facing shopper photo for fit analysis." })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "scan-action-row grid grid-cols-2 gap-2 sm:flex sm:shrink-0", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "h-9 min-w-28 px-3 text-sm", disabled, onClick: () => openCapturePicker("guided_scan"), children: state.scanBusy || state.fitLoading ? "Analyzing..." : scanComplete ? "Retake scan" : "Start scan" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "h-9 min-w-28 px-3 text-sm", disabled, onClick: () => openCapturePicker("file_upload"), variant: "secondary", children: "Upload photo" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { sourceText: cameraStatus, tone: scanComplete ? "success" : "neutral", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "scan-panel-status", children: cameraStatus }) })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "px-4 pb-4 sm:px-5", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "scan-stage relative grid h-[360px] overflow-hidden rounded-lg bg-slate-950 text-white shadow-soft sm:h-[420px] xl:h-[440px]", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "input",
+        {
+          accept: "image/*",
+          className: "sr-only",
+          onChange: handleFileChange,
+          ref: fileInputRef,
+          type: "file"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(148,163,184,0.16),transparent_32%),linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,1))]" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute inset-x-4 top-4 z-10 flex items-center justify-between gap-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { tone: scanComplete ? "success" : "dark", children: captureLabel || cameraStatus }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rounded-md bg-white/10 px-2 py-1 text-xs font-medium text-white/70", children: "Camera frame" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative mx-auto my-10 w-[min(64vw,320px)] rounded-[22px] border border-white/14 bg-white/[0.025]", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-none absolute inset-0 rounded-[24px] bg-[linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[length:58px_58px]" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-none absolute inset-y-7 left-1/2 w-px -translate-x-1/2 bg-white/12" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-none absolute inset-x-7 top-1/3 h-px bg-white/12" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "pointer-events-none absolute inset-x-7 top-2/3 h-px bg-white/12" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative mx-auto h-[260px] w-full sm:h-[314px]", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute left-1/2 top-7 h-[52px] w-[52px] -translate-x-1/2 rounded-full border border-white/28 bg-white/10" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute left-1/2 top-[92px] h-[150px] w-[108px] -translate-x-1/2 rounded-b-[26px] rounded-t-[56px] border border-white/28 bg-white/[0.06]" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute left-1/2 top-[116px] h-[94px] w-[158px] -translate-x-1/2 rounded-[38px] border border-dashed border-white/25" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute bottom-8 left-1/2 h-[66px] w-[84px] -translate-x-1/2 rounded-b-[36px] border border-white/20 bg-white/[0.035]" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute left-8 right-8 top-[156px] h-px bg-emerald-200/70 shadow-[0_0_24px_rgba(167,243,208,0.7)]" })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute bottom-3 left-3 right-3 z-10 flex flex-col gap-2 rounded-lg bg-black/32 px-3 py-2 backdrop-blur sm:flex-row sm:items-center sm:justify-between", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-semibold text-white", children: scanStarted ? cameraStatus : "Ready to capture" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-0.5 text-xs text-white/68", children: "Keep head, torso, and garment area inside the guide." })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "scan-action-row grid grid-cols-2 gap-2 sm:flex sm:shrink-0", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "h-9 min-w-28 px-3 text-sm", disabled, onClick: () => openCapturePicker("guided_scan"), children: state.scanBusy || state.fitLoading ? "Analyzing..." : scanComplete ? "Retake scan" : "Start scan" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "h-9 min-w-28 px-3 text-sm", disabled, onClick: () => openCapturePicker("file_upload"), variant: "secondary", children: "Upload photo" }),
+          scanComplete && /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "col-span-2 h-9 min-w-32 px-3 text-sm sm:col-span-1", onClick: onContinueToReview, variant: "secondary", children: "Continue to review" })
+        ] })
       ] })
-    ] })
+    ] }) })
   ] });
 }
 function CaptureChecklist({ checked }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { className: "quality-checklist grid content-start gap-2", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-sm font-semibold text-ink", children: "Photo checklist" }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-sm font-semibold text-ink", children: "Capture checklist" }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid gap-1.5", children: checklistItems.map((label) => /* @__PURE__ */ jsxRuntimeExports.jsx(ChecklistItem, { checked, label }, label)) })
   ] });
 }
@@ -7488,182 +7522,209 @@ function ChecklistItem({ checked, label }) {
     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm font-medium text-ink", children: label })
   ] });
 }
-function OperatorGuidancePanel({
-  bodyMeasurements,
-  onAnalyzeFit,
-  onBodyMeasurementChange,
-  onQueueTryOn,
-  state,
-  tryOnLabel,
-  workflowState
-}) {
-  const nextStepText = getNextStepText(workflowState);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { className: "operator-guidance-panel sticky top-20 grid self-start content-start gap-2.5 rounded-lg bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "flex items-start gap-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid h-9 w-9 shrink-0 place-items-center rounded-md bg-brand-50 text-brand-700", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ScanIcon, { className: "h-5 w-5" }) }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-sm font-semibold text-ink", children: "Next step" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm leading-5 text-muted", children: nextStepText })
-      ] })
+function ReviewStep({ bodyMeasurements, garmentLabel, onAnalyzeFit, onBodyMeasurementChange, onQueueTryOn, state, tryOnLabel, workflowState }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-4", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(SelectedGarmentSummary, { compact: true, garmentLabel, state }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "review-output-grid grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        SizeRecommendationPanel,
+        {
+          bodyMeasurements,
+          onAnalyzeFit,
+          onBodyMeasurementChange,
+          state,
+          workflowState
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(TryOnPreviewPanel, { onQueueTryOn, state, tryOnLabel, workflowState })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "border-t border-line/70 pt-2.5", children: /* @__PURE__ */ jsxRuntimeExports.jsx(CaptureChecklist, { checked: workflowState.scan === "scanComplete" }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "border-t border-line/70 pt-2.5", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-sm font-semibold text-ink", children: "Output status" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(OutputStatusList, { state, workflowState })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(
-      FitRecommendationPanel,
-      {
-        bodyMeasurements,
-        onAnalyzeFit,
-        onBodyMeasurementChange,
-        state,
-        workflowState
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyPreview, { onQueueTryOn, state, tryOnLabel, workflowState })
+    /* @__PURE__ */ jsxRuntimeExports.jsx(ReviewActions, { onQueueTryOn, state, workflowState })
   ] });
 }
-function OutputStatusList({ state, workflowState }) {
-  const garmentReady = Boolean(state.garmentId);
-  const rows = [
-    {
-      label: "Garment",
-      sourceText: garmentReady ? "Garment: Ready" : "Garment: Not selected",
-      value: garmentReady ? "Ready" : "Not selected",
-      tone: garmentReady ? "success" : "locked"
-    },
-    {
-      label: "Shopper scan",
-      sourceText: "Shopper scan: Not started",
-      value: workflowStateLabels[workflowState.scan],
-      tone: workflowState.scan === "scanComplete" ? "success" : "neutral"
-    },
-    {
-      label: "Fit recommendation",
-      sourceText: "Fit recommendation: Locked",
-      value: workflowStateLabels[workflowState.fit],
-      tone: workflowState.fit === "fitReady" ? "success" : workflowState.fit === "fitLoading" || workflowState.fit === "fitNeedsMeasurements" ? "neutral" : "locked"
-    },
-    {
-      label: "Try-on preview",
-      sourceText: "Try-on preview: Locked",
-      value: workflowStateLabels[workflowState.tryOn],
-      tone: workflowState.tryOn === "tryOnReady" ? "success" : workflowState.tryOn === "tryOnGenerating" ? "neutral" : "locked"
-    }
-  ];
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 grid gap-1", children: rows.map((row) => /* @__PURE__ */ jsxRuntimeExports.jsx(StatusRow, { ...row }, row.label)) });
-}
-function FitRecommendationPanel({ bodyMeasurements, onAnalyzeFit, onBodyMeasurementChange, state, workflowState }) {
+function SizeRecommendationPanel({ bodyMeasurements, onAnalyzeFit, onBodyMeasurementChange, state, workflowState }) {
   const recommendation = state.fitRecommendation || {};
   const recommendedSize = recommendation.recommended_size;
+  const confidence = formatConfidence(recommendation.confidence);
+  const fitIntent = recommendation.preferred_fit || "regular";
   const needsMeasurements = workflowState.fit === "fitNeedsMeasurements";
   const fitLocked = workflowState.fit === "fitLocked";
   const fitLoading = workflowState.fit === "fitLoading";
   const hasBasicMeasurements = Boolean((bodyMeasurements == null ? void 0 : bodyMeasurements.heightCm) && (bodyMeasurements == null ? void 0 : bodyMeasurements.weightKg));
   const canUpdate = Boolean(state.capturePassed && state.garmentId && !state.fitLoading);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "fit-recommendation-panel border-t border-line/70 pt-2.5", children: [
+  const candidates = Array.isArray(recommendation.candidates) ? recommendation.candidates.slice(0, 3) : [];
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "fit-recommendation-panel rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start justify-between gap-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-sm font-semibold text-ink", children: "Fit Recommendation" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm leading-5 text-muted", children: recommendedSize ? "Deterministic recommendation from shopper measurements and garment chart." : needsMeasurements ? "Needs measurements before a size can be recommended." : fitLoading ? "Calculating size recommendation." : "Unlocks after shopper scan." })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs font-semibold uppercase tracking-[0.12em] text-muted", children: "Fit result" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "mt-1 text-xl font-semibold tracking-tight text-ink", children: "Size recommendation" })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { tone: recommendedSize ? "success" : needsMeasurements ? "neutral" : "locked", children: recommendedSize ? `Size ${recommendedSize}` : needsMeasurements ? "Needs measurements" : fitLoading ? "Loading" : "Locked" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { tone: recommendedSize ? "success" : needsMeasurements || fitLoading ? "neutral" : "locked", children: recommendedSize ? `Size ${recommendedSize}` : needsMeasurements ? "Needs measurements" : fitLoading ? "Loading" : "Locked" })
     ] }),
-    state.fitRecommendationLabel && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-2 rounded-md bg-slate-50 px-2.5 py-2 text-sm font-medium leading-5 text-ink", children: state.fitRecommendationLabel }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-2 grid gap-2", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs font-semibold uppercase tracking-[0.12em] text-muted", children: "Shopper measurements" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-2 gap-2", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid gap-1 text-xs font-semibold text-muted", htmlFor: "fit-height-cm", children: [
-          "Height",
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "input",
-            {
-              className: "h-9 rounded-md border border-line bg-white px-2 text-sm font-medium text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100",
-              id: "fit-height-cm",
-              inputMode: "decimal",
-              min: "1",
-              onChange: (event) => onBodyMeasurementChange == null ? void 0 : onBodyMeasurementChange("heightCm", event.target.value),
-              placeholder: "cm",
-              type: "number",
-              value: (bodyMeasurements == null ? void 0 : bodyMeasurements.heightCm) || ""
-            }
-          )
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid gap-1 text-xs font-semibold text-muted", htmlFor: "fit-weight-kg", children: [
-          "Weight",
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "input",
-            {
-              className: "h-9 rounded-md border border-line bg-white px-2 text-sm font-medium text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100",
-              id: "fit-weight-kg",
-              inputMode: "decimal",
-              min: "1",
-              onChange: (event) => onBodyMeasurementChange == null ? void 0 : onBodyMeasurementChange("weightKg", event.target.value),
-              placeholder: "kg",
-              type: "number",
-              value: (bodyMeasurements == null ? void 0 : bodyMeasurements.weightKg) || ""
-            }
-          )
-        ] })
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-5 grid gap-3 sm:grid-cols-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(MetricBlock, { label: "Recommended size", value: recommendedSize ? `Size ${recommendedSize}` : "Not ready" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(MetricBlock, { label: "Confidence", value: confidence }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(MetricBlock, { label: "Fit intent", value: fitIntent })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-4 rounded-md bg-slate-50 px-3 py-2 text-sm font-medium leading-5 text-ink", children: state.fitRecommendationLabel || recommendation.reason || "Run the shopper scan and add measurements if needed to produce a deterministic recommendation." }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-4 grid gap-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs font-semibold uppercase tracking-[0.12em] text-muted", children: "Key measurements or deltas" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-2 grid gap-2", children: candidates.length ? candidates.map((candidate) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-h-9 items-center justify-between gap-3 border-b border-line/70 py-1.5 last:border-b-0", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-sm font-medium text-ink", children: [
+            "Size ",
+            candidate.size
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-sm text-muted", children: [
+            formatConfidence(candidate.confidence),
+            " match"
+          ] })
+        ] }, candidate.size)) : /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "rounded-md bg-slate-50 px-3 py-2 text-sm leading-5 text-muted", children: "Candidate deltas appear after a size chart and shopper measurements overlap." }) })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        Button,
-        {
-          className: "h-8 justify-center px-2.5 text-xs",
-          disabled: !canUpdate || fitLocked || !hasBasicMeasurements,
-          onClick: onAnalyzeFit,
-          size: "sm",
-          variant: needsMeasurements ? "primary" : "secondary",
-          children: fitLoading ? "Updating..." : "Update recommendation"
-        }
-      )
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs font-semibold uppercase tracking-[0.12em] text-muted", children: "Shopper measurements" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-2 gap-2", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid gap-1 text-xs font-semibold text-muted", htmlFor: "fit-height-cm", children: [
+            "Height",
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "input",
+              {
+                className: "h-9 rounded-md border border-line bg-white px-2 text-sm font-medium text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100",
+                id: "fit-height-cm",
+                inputMode: "decimal",
+                min: "1",
+                onChange: (event) => onBodyMeasurementChange == null ? void 0 : onBodyMeasurementChange("heightCm", event.target.value),
+                placeholder: "cm",
+                type: "number",
+                value: (bodyMeasurements == null ? void 0 : bodyMeasurements.heightCm) || ""
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid gap-1 text-xs font-semibold text-muted", htmlFor: "fit-weight-kg", children: [
+            "Weight",
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "input",
+              {
+                className: "h-9 rounded-md border border-line bg-white px-2 text-sm font-medium text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100",
+                id: "fit-weight-kg",
+                inputMode: "decimal",
+                min: "1",
+                onChange: (event) => onBodyMeasurementChange == null ? void 0 : onBodyMeasurementChange("weightKg", event.target.value),
+                placeholder: "kg",
+                type: "number",
+                value: (bodyMeasurements == null ? void 0 : bodyMeasurements.weightKg) || ""
+              }
+            )
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Button,
+          {
+            className: "h-9 justify-center px-3 text-sm",
+            disabled: !canUpdate || fitLocked || !hasBasicMeasurements,
+            onClick: onAnalyzeFit,
+            size: "sm",
+            variant: needsMeasurements ? "primary" : "secondary",
+            children: fitLoading ? "Updating..." : "Update recommendation"
+          }
+        )
+      ] })
     ] })
   ] });
 }
-function StatusRow({ label, sourceText, tone, value }) {
-  const title = `${label}: ${value}`;
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-h-8 items-center justify-between gap-3 border-b border-line/70 py-1.5 last:border-b-0", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate text-sm text-muted", children: label }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { sourceText: title || sourceText, tone, children: value })
-  ] });
-}
-function EmptyPreview({ onQueueTryOn, state, tryOnLabel, workflowState }) {
+function TryOnPreviewPanel({ onQueueTryOn, state, tryOnLabel, workflowState }) {
   const previewReady = workflowState.tryOn === "tryOnReady";
   const tryOnGenerating = workflowState.tryOn === "tryOnGenerating";
   const fitReady = workflowState.fit === "fitReady";
-  const canGenerateTryOn = fitReady && !state.previewKey;
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "border-t border-line/70 pt-2.5", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-3", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-sm font-semibold text-ink", children: tryOnLabel }),
-      canGenerateTryOn ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-        Button,
-        {
-          className: "h-8 px-2.5 text-xs",
-          disabled: !canGenerateTryOn || tryOnGenerating,
-          onClick: onQueueTryOn,
-          size: "sm",
-          variant: tryOnGenerating ? "secondary" : "primary",
-          children: tryOnGenerating ? "Generating..." : "Generate try-on"
-        }
-      ) : /* @__PURE__ */ jsxRuntimeExports.jsx(TryOnIcon, { className: "h-4 w-4 shrink-0 text-slate-500" })
+  const canRequestTryOn = fitReady && !tryOnGenerating;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "tryon-review-panel rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start justify-between gap-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs font-semibold uppercase tracking-[0.12em] text-muted", children: "Try-on review" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "mt-1 text-xl font-semibold tracking-tight text-ink", children: tryOnLabel })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusBadge, { tone: previewReady ? "success" : tryOnGenerating ? "neutral" : "locked", children: workflowStateLabels[workflowState.tryOn] })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "operator-preview-placeholder mt-2 grid min-h-[108px] place-items-center rounded-md bg-slate-50 p-3 text-center ring-1 ring-line/70", children: previewReady ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-2", children: [
-      state.previewImageUrl ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "img",
-        {
-          alt: "Generated try-on preview",
-          className: "mx-auto h-28 max-w-full rounded-md object-contain",
-          src: state.previewImageUrl
-        }
-      ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mx-auto grid h-20 w-14 place-items-end rounded-b-lg rounded-t-full bg-gradient-to-b from-slate-200 to-slate-700 p-1", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-4 w-full rounded bg-emerald-100 text-[10px] font-semibold text-emerald-700", children: "Ready" }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "tryon-result-stage mt-5 grid min-h-[420px] place-items-center rounded-lg bg-slate-100 p-4 ring-1 ring-line/70", children: previewReady ? state.previewImageUrl ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "img",
+      {
+        alt: "Generated try-on preview",
+        className: "max-h-[390px] w-full rounded-md object-contain",
+        src: state.previewImageUrl
+      }
+    ) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-2 text-center", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mx-auto grid h-24 w-16 place-items-end rounded-b-lg rounded-t-full bg-gradient-to-b from-slate-200 to-slate-700 p-1", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-4 w-full rounded bg-emerald-100 text-[10px] font-semibold text-emerald-700", children: "Ready" }) }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-semibold text-ink", children: "Try-on preview ready" })
-    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "max-w-[220px]", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(DashboardIcon, { className: "mx-auto h-5 w-5 text-slate-400" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-2 text-sm font-semibold text-ink", children: tryOnGenerating ? "Generating try-on preview" : state.tryOnError || "Preview unlocks after fit result." }),
-      fitReady && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm leading-5 text-muted", children: "Preview generation is available from the session actions." })
-    ] }) })
+    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "max-w-[280px] text-center", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(DashboardIcon, { className: "mx-auto h-6 w-6 text-slate-400" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-3 text-sm font-semibold text-ink", children: tryOnGenerating ? "Generating try-on preview" : state.tryOnError || "Preview unlocks after fit result." }),
+      fitReady && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm leading-5 text-muted", children: "Generate the visual review from the current recommendation." })
+    ] }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-4 flex flex-col gap-2 sm:flex-row", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      Button,
+      {
+        className: "w-full sm:w-auto",
+        disabled: !canRequestTryOn,
+        onClick: onQueueTryOn,
+        size: "sm",
+        variant: canRequestTryOn ? "primary" : "secondary",
+        children: tryOnGenerating ? "Generating..." : previewReady ? "Regenerate try-on" : "Generate try-on"
+      }
+    ) })
   ] });
+}
+function ReviewActions({ onQueueTryOn, state, workflowState }) {
+  const previewReady = workflowState.tryOn === "tryOnReady";
+  const tryOnGenerating = workflowState.tryOn === "tryOnGenerating";
+  const fitReady = workflowState.fit === "fitReady";
+  const canRegenerate = fitReady && !tryOnGenerating;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "flex flex-col gap-2 rounded-lg bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80 sm:flex-row sm:items-center sm:justify-between", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-sm font-semibold text-ink", children: "Review actions" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm text-muted", children: previewReady ? "Approve the output or regenerate the try-on with the current session data." : "Generate the try-on once the recommendation is ready." })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2 sm:flex-row", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { disabled: !previewReady, size: "sm", variant: "secondary", children: "Approve result" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { disabled: !canRegenerate || Boolean(state.scanBusy), onClick: onQueueTryOn, size: "sm", variant: previewReady ? "secondary" : "primary", children: tryOnGenerating ? "Generating..." : previewReady ? "Regenerate try-on" : "Generate try-on" })
+    ] })
+  ] });
+}
+function SelectedGarmentSummary({ compact = false, garmentLabel, state }) {
+  const selected = Boolean(state.garmentId);
+  const displayName = selected ? garmentLabel : "No garment selected";
+  const categoryLabel = selected ? formatCategoryLabel(state.garmentCategory || "tops") : "Upload a product to start";
+  const garmentTypeLabel = state.garmentType ? state.garmentType.replaceAll("_", " ") : "";
+  const chartLabel = getSizeChartLabel(state);
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "section",
+    {
+      className: [
+        "selected-garment-context-bar rounded-lg bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80",
+        compact ? "p-3" : "p-4"
+      ].join(" "),
+      "data-selected-garment-bar": "visible-after-upload",
+      children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 items-center gap-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: compact ? "grid h-10 w-10 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-700 ring-1 ring-line/80" : "grid h-12 w-12 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-700 ring-1 ring-line/80", children: state.garmentPreviewUrl ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "img",
+          {
+            alt: "",
+            className: compact ? "h-10 w-10 rounded-md object-cover" : "h-12 w-12 rounded-md object-cover",
+            src: state.garmentPreviewUrl
+          }
+        ) : /* @__PURE__ */ jsxRuntimeExports.jsx(ProductIcon, { className: compact ? "h-5 w-5" : "h-6 w-6" }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "truncate text-sm font-semibold text-ink", children: displayName }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: categoryLabel }),
+            selected && garmentTypeLabel && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "h-1 w-1 rounded-full bg-slate-300" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "capitalize", children: garmentTypeLabel })
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: state.sizeChartId ? "mt-1 truncate text-sm text-muted" : "mt-1 truncate text-sm font-medium text-amber-700", children: chartLabel })
+        ] })
+      ] })
+    }
+  );
 }
 function StatusBadge({ children, sourceText, tone = "neutral" }) {
   const tones = {
@@ -7684,17 +7745,84 @@ function StatusBadge({ children, sourceText, tone = "neutral" }) {
     }
   );
 }
+function DetailRow({ label, value, valueTone = "text-ink" }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-h-9 items-center justify-between gap-3 border-b border-line/70 py-2 last:border-b-0", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm text-muted", children: label }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `text-right text-sm font-semibold ${valueTone}`, children: value })
+  ] });
+}
+function MetricBlock({ label, value }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-md bg-slate-50 px-3 py-2", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs font-semibold uppercase tracking-[0.12em] text-muted", children: label }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 truncate text-sm font-semibold text-ink", children: value })
+  ] });
+}
+function currentStepLabel(activeWorkflowView) {
+  if (activeWorkflowView === "garment") return "Step 1 of 3 · Garment";
+  if (activeWorkflowView === "scan") return "Step 2 of 3 · Shopper scan";
+  return "Step 3 of 3 · Review";
+}
+function stepStatus(key, activeWorkflowView, state, workflowState) {
+  if (key === activeWorkflowView) return "current";
+  if (isStepComplete(key, state, workflowState)) return "complete";
+  if (!isStepAvailable(key, state)) return "locked";
+  return "available";
+}
+function isStepAvailable(key, state) {
+  if (key === "garment") return true;
+  if (key === "scan") return Boolean(state.garmentId);
+  return Boolean(state.capturePassed);
+}
+function isStepComplete(key, state, workflowState) {
+  if (key === "garment") return Boolean(state.garmentId);
+  if (key === "scan") return Boolean(state.capturePassed);
+  return workflowState.tryOn === "tryOnReady";
+}
+function resolveWorkflowView(view, state) {
+  const normalized = {
+    capture: "scan",
+    fit: "review",
+    product: "garment",
+    tryon: "review"
+  }[view] || view;
+  if (!state.garmentId) return "garment";
+  if (normalized === "review" && !state.capturePassed) return "scan";
+  if (normalized === "garment" || normalized === "scan" || normalized === "review") return normalized;
+  return state.capturePassed ? "review" : "scan";
+}
+function formatCategoryLabel(category) {
+  const labels = {
+    bottoms: "Bottoms",
+    full_outfit: "Full outfit",
+    one_pieces: "One piece",
+    tops: "Tops"
+  };
+  return labels[category] || String(category || "Tops");
+}
+function getSizeChartLabel(state) {
+  if (state.sizeChartName) {
+    return `${state.sizeChartName}${state.sizeChartSizes ? ` · ${state.sizeChartSizes}` : ""}`;
+  }
+  if (state.sizeChartId) {
+    return `Chart linked${state.sizeChartSizes ? ` · ${state.sizeChartSizes}` : ""}`;
+  }
+  if (state.garmentId) return "No chart linked";
+  return "Size chart loads after upload";
+}
 function getCameraStatus(workflowState) {
   if (workflowState.scan === "scanComplete") return workflowStateLabels.scanComplete;
   if (workflowState.scan === "scanning") return workflowStateLabels.scanning;
   return workflowStateLabels.scanReady;
 }
-function getNextStepText(workflowState) {
-  if (workflowState.tryOn === "tryOnReady") return "Try-on preview is ready for operator review.";
-  if (workflowState.fit === "fitReady") return "Fit recommendation is ready. Review outputs before creating the try-on preview.";
-  if (workflowState.fit === "fitNeedsMeasurements") return "Add shopper height and weight, then update the fit recommendation.";
-  if (workflowState.scan === "scanComplete") return "Scan is complete. Fit recommendation is being prepared.";
-  return "Start a shopper scan to unlock fit recommendation and try-on preview.";
+function getScanGuidance(workflowState) {
+  if (workflowState.scan === "scanComplete") return "Scan succeeded. Continue to review when the operator is ready.";
+  if (workflowState.scan === "scanning") return "Capture is being analyzed for fit readiness.";
+  return "Start scan or upload a shopper photo. Review outputs stay locked until scan completes.";
+}
+function formatConfidence(confidence) {
+  const numeric = Number.parseFloat(confidence);
+  if (!Number.isFinite(numeric) || numeric <= 0) return "Not ready";
+  return `${Math.round(numeric * 100)}%`;
 }
 function getWorkflowState(state) {
   const scan = state.capturePassed ? "scanComplete" : state.scanBusy || state.captureUploaded ? "scanning" : "scanNotStarted";
@@ -7946,6 +8074,7 @@ function FittingRoomApp() {
   const [productModalOpen, setProductModalOpen] = reactExports.useState(false);
   const [productError, setProductError] = reactExports.useState("");
   const [productSaving, setProductSaving] = reactExports.useState(false);
+  const [workflowView, setWorkflowView] = reactExports.useState("garment");
   const [sizeCharts, setSizeCharts] = reactExports.useState([]);
   const [sizeChartsStatus, setSizeChartsStatus] = reactExports.useState("Idle");
   const [bodyMeasurements, setBodyMeasurements] = reactExports.useState({
@@ -7968,7 +8097,7 @@ function FittingRoomApp() {
   const garmentLabel = displayGarmentLabel(state);
   const captureLabel = displayCaptureLabel(state);
   const tryOnLabel = displayTryOnLabel(state);
-  const activeStage = getActiveStage(state);
+  const activeStage = getAvailableWorkflowView(workflowView, state);
   reactExports.useEffect(() => {
     localStorage.setItem("kioskApiBase", apiBase);
   }, [apiBase]);
@@ -8009,6 +8138,12 @@ function FittingRoomApp() {
       cancelled = true;
     };
   }, [apiBase, productModalOpen]);
+  reactExports.useEffect(() => {
+    const nextWorkflowView = getAvailableWorkflowView(workflowView, state);
+    if (nextWorkflowView !== workflowView) {
+      setWorkflowView(nextWorkflowView);
+    }
+  }, [state.garmentId, state.capturePassed, workflowView]);
   const applicationShell = "product-application-shell min-h-screen overflow-x-hidden bg-canvas text-ink";
   const bottomNavigation = "fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 px-2 py-2 backdrop-blur lg:hidden";
   function appendLog(message) {
@@ -8020,6 +8155,7 @@ function FittingRoomApp() {
       URL.revokeObjectURL(state.garmentPreviewUrl);
     }
     setState(initialSessionState);
+    setWorkflowView("garment");
     setBodyMeasurements({ heightCm: "", weightKg: "" });
     appendLog("New fitting session prepared");
   }
@@ -8070,6 +8206,7 @@ function FittingRoomApp() {
         return nextState;
       });
       setProductModalOpen(false);
+      setWorkflowView("scan");
       appendLog(`Product uploaded: ${nextState.garmentName}`);
     } catch (error) {
       setProductError(error.message || "Could not upload product.");
@@ -8077,15 +8214,6 @@ function FittingRoomApp() {
     } finally {
       setProductSaving(false);
     }
-  }
-  function simulateCapture() {
-    setState((current) => ({
-      ...current,
-      captureUploaded: true,
-      capturePassed: true,
-      visualPreviewReady: false
-    }));
-    appendLog("Guided scan marked ready");
   }
   async function handleCapturePhoto(file, captureSource = "file_upload") {
     var _a, _b;
@@ -8310,11 +8438,14 @@ function FittingRoomApp() {
             onAnalyzeFit: handleAnalyzeFit,
             onBodyMeasurementChange: handleBodyMeasurementChange,
             onCapturePhoto: handleCapturePhoto,
+            onContinueToReview: () => setWorkflowView("review"),
+            onContinueToScan: () => setWorkflowView("scan"),
             onOpenProduct: () => setProductModalOpen(true),
             onQueueTryOn: handleQueueTryOn,
-            onRunScan: simulateCapture,
+            onWorkflowViewChange: (view) => setWorkflowView(getAvailableWorkflowView(view, state)),
             state,
-            tryOnLabel
+            tryOnLabel,
+            workflowView: activeStage
           }
         ) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -8357,11 +8488,11 @@ function AppShell({ bottomNavigation, children, className, header, sidebar }) {
     bottomNavigation
   ] });
 }
-function getActiveStage(state) {
-  if (!state.garmentId) return "product";
-  if (!state.capturePassed) return "capture";
-  if (!state.previewKey) return "fit";
-  return "tryon";
+function getAvailableWorkflowView(view, state) {
+  if (!state.garmentId) return "garment";
+  if (view === "review" && !state.capturePassed) return "scan";
+  if (view === "garment" || view === "scan" || view === "review") return view;
+  return state.capturePassed ? "review" : "scan";
 }
 function getBodyMeasurementsPayload(bodyMeasurements) {
   const payload = {};

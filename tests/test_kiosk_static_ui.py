@@ -148,7 +148,7 @@ def test_kiosk_ui_collects_fit_inputs_for_size_recommendation():
     assert "getBodyMeasurementsPayload" in app_js
     assert "handleAnalyzeFit" in app_js
     assert "fitNeedsMeasurements" in app_js + workflow_source
-    assert "FitRecommendationPanel" in workflow_source
+    assert "SizeRecommendationPanel" in workflow_source
     assert "Shopper measurements" in workflow_source
     assert "Height" in workflow_source
     assert "Weight" in workflow_source
@@ -187,6 +187,52 @@ def test_kiosk_ui_has_screen_navigation_state_contract():
     assert "storedSessionValue" in app_js
 
 
+def test_kiosk_ui_uses_three_view_fitting_room_workflow():
+    app_source = Path("ui/kiosk-app/src/App.jsx").read_text("utf-8")
+    workflow_source = Path("ui/kiosk-app/src/components/FittingWorkflow.jsx").read_text("utf-8")
+    combined_source = app_source + workflow_source
+
+    for component_name in (
+        "FittingRoomShell",
+        "WorkflowStepper",
+        "GarmentStep",
+        "ShopperScanStep",
+        "ReviewStep",
+        "SelectedGarmentSummary",
+        "CameraCapturePanel",
+        "CaptureChecklist",
+        "SizeRecommendationPanel",
+        "TryOnPreviewPanel",
+        "ReviewActions",
+    ):
+        assert f"function {component_name}" in combined_source
+
+    assert 'workflowView, setWorkflowView' in app_source
+    assert 'key: "garment", label: "Garment"' in workflow_source
+    assert 'key: "scan", label: "Shopper scan"' in workflow_source
+    assert 'key: "review", label: "Review"' in workflow_source
+    assert 'key: "fit"' not in workflow_source
+    assert 'key: "tryon"' not in workflow_source
+    assert "Step 1 of 3" in workflow_source
+    assert "Step 2 of 3" in workflow_source
+    assert "Step 3 of 3" in workflow_source
+    assert "Step 4 of 4" not in workflow_source
+    assert "activeWorkflowView === \"garment\"" in workflow_source
+    assert "activeWorkflowView === \"scan\"" in workflow_source
+    assert "activeWorkflowView === \"review\"" in workflow_source
+    assert "Continue to shopper scan" in workflow_source
+    assert "Continue to review" in workflow_source
+    assert "Fit result" in workflow_source
+    assert "Try-on review" in workflow_source
+    assert "review-output-grid" in workflow_source
+    assert "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" in workflow_source
+    assert "Only render the active workflow view" in workflow_source
+    assert "OperatorGuidancePanel" not in workflow_source
+    assert "OutputStatusList" not in workflow_source
+    assert "EmptyPreview" not in workflow_source
+    assert "fitting-console-grid" not in workflow_source
+
+
 def test_kiosk_ui_uses_backend_session_id_after_product_upload():
     app_js = Path("ui/kiosk-app/src/App.jsx").read_text("utf-8")
     workflow_source = Path("ui/kiosk-app/src/components/FittingWorkflow.jsx").read_text("utf-8")
@@ -213,16 +259,17 @@ def test_kiosk_ui_first_viewport_is_visual_fitting_room_not_status_dashboard():
 
     assert 'data-workspace-shell="fitting-session-workspace"' in combined_source
     assert "FittingWorkflow" in combined_source
-    assert "SelectedGarmentBar" in combined_source
-    assert "ScanWorkspace" in combined_source
-    assert "OperatorGuidancePanel" in combined_source
-    assert "EmptyPreview" in combined_source
+    assert "SelectedGarmentSummary" in combined_source
+    assert "CameraCapturePanel" in combined_source
+    assert "ReviewStep" in combined_source
     assert "WorkflowStepper" in combined_source
     assert "Garment" in combined_source
     assert "Shopper scan" in combined_source
     assert "Fit result" in combined_source
-    assert "Try-on" in combined_source
-    assert "fitting-console-grid" in combined_source
+    assert "Try-on review" in combined_source
+    assert "Review" in combined_source
+    assert "review-output-grid" in combined_source
+    assert "fitting-console-grid" not in combined_source
     assert "Run a polished virtual fitting room" not in app_source
     assert "Application settings" not in app_source
     assert "Configure local development" not in app_source
@@ -239,12 +286,15 @@ def test_kiosk_ui_reads_as_product_application_not_operator_console():
 
     assert "product-application-shell" in app_source
     assert "Application navigation" in sidebar_source
-    assert "ProductStrip" in workflow_source
-    assert "MainFittingCanvas" in workflow_source
-    assert "OperatorGuidancePanel" in workflow_source
-    assert "OutputStatusList" in workflow_source
-    assert "fitting-console-grid fitting-workflow-layout grid items-start gap-3 xl:grid-cols-[minmax(0,68fr)_minmax(320px,32fr)]" in workflow_source
+    assert "GarmentStep" in workflow_source
+    assert "ShopperScanStep" in workflow_source
+    assert "ReviewStep" in workflow_source
+    assert "SelectedGarmentSummary" in workflow_source
+    assert "review-output-grid" in workflow_source
+    assert "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" in workflow_source
     assert "Try-on preview" in workflow_source
+    assert "OperatorGuidancePanel" not in workflow_source
+    assert "OutputStatusList" not in workflow_source
     assert "Session flow" not in sidebar_source
     assert "Keep product, scan" not in sidebar_source
     assert "xl:grid-cols-[300px_minmax(0,1fr)_360px]" not in workflow_source
@@ -264,13 +314,16 @@ def test_kiosk_ui_guides_real_fitting_workflow_with_product_components():
         "AppHeader",
         "TopBar",
         "WorkflowStepper",
-        "SelectedGarmentBar",
-        "ScanWorkspace",
-        "CameraCaptureFrame",
+        "GarmentStep",
+        "ShopperScanStep",
+        "ReviewStep",
+        "SelectedGarmentSummary",
+        "CameraCapturePanel",
         "CaptureChecklist",
         "ChecklistItem",
-        "OperatorGuidancePanel",
-        "EmptyPreview",
+        "SizeRecommendationPanel",
+        "TryOnPreviewPanel",
+        "ReviewActions",
         "StatusBadge",
     ):
         assert f"function {component_name}" in app_source + sidebar_source + header_source + workflow_source
@@ -278,8 +331,8 @@ def test_kiosk_ui_guides_real_fitting_workflow_with_product_components():
     assert "Garment" in workflow_source
     assert "Shopper scan" in workflow_source
     assert "Fit result" in workflow_source
-    assert "Try-on" in workflow_source
-    assert "Position the shopper inside the frame, facing forward." in workflow_source
+    assert "Try-on review" in workflow_source
+    assert "Capture or upload a front-facing shopper photo for fit analysis." in workflow_source
     assert "Full body visible" in workflow_source
     assert "Facing forward" in workflow_source
     assert "Good lighting" in workflow_source
@@ -287,7 +340,7 @@ def test_kiosk_ui_guides_real_fitting_workflow_with_product_components():
     assert "Start scan" in workflow_source
     assert "Upload photo" in workflow_source
     assert "Preview unlocks after fit result." in workflow_source
-    assert "fitting-workflow-layout" in workflow_source
+    assert "Only render the active workflow view" in workflow_source
     assert "workflow-step-current" in workflow_source
     assert "workflow-step-complete" in workflow_source
     assert "workflow-step-disabled" in workflow_source
@@ -306,31 +359,33 @@ def test_kiosk_ui_prioritizes_scan_workspace_over_demo_dashboard_cards():
         "TopBar",
         "WorkflowHeader",
         "WorkflowStepper",
-        "SelectedGarmentBar",
-        "ScanWorkspace",
-        "CameraCaptureFrame",
+        "GarmentStep",
+        "ShopperScanStep",
+        "ReviewStep",
+        "SelectedGarmentSummary",
+        "CameraCapturePanel",
         "CaptureChecklist",
-        "OperatorGuidancePanel",
-        "OutputStatusList",
+        "SizeRecommendationPanel",
+        "TryOnPreviewPanel",
+        "ReviewActions",
         "StatusBadge",
-        "EmptyPreview",
     ):
         assert f"function {component_name}" in app_source + sidebar_source + header_source + workflow_source
 
     assert "Guided fitting session" not in workflow_source
-    assert "Step 2 of 4 · Shopper scan" in workflow_source
+    assert "Step 2 of 3 · Shopper scan" in workflow_source
     assert "operator-workspace-layout" in workflow_source
     assert "selected-garment-context-bar" in workflow_source
-    assert "operator-guidance-panel" in workflow_source
-    assert "Capture shopper photo" in workflow_source
-    assert "Position the shopper inside the frame, facing forward." in workflow_source
-    assert "Photo checklist" in workflow_source
-    assert "Start a shopper scan to unlock fit recommendation and try-on preview." in workflow_source
+    assert "operator-guidance-panel" not in workflow_source
+    assert "Shopper scan" in workflow_source
+    assert "Capture or upload a front-facing shopper photo for fit analysis." in workflow_source
+    assert "Capture checklist" in workflow_source
+    assert "Review outputs stay locked until scan completes." in workflow_source
     assert "Preview unlocks after fit result." in workflow_source
-    assert "Garment: Ready" in workflow_source
-    assert "Shopper scan: Not started" in workflow_source
-    assert "Fit recommendation: Locked" in workflow_source
-    assert "Try-on preview: Locked" in workflow_source
+    assert "Garment: Ready" not in workflow_source
+    assert "Shopper scan: Not started" not in workflow_source
+    assert "Fit recommendation: Locked" not in workflow_source
+    assert "Try-on preview: Locked" not in workflow_source
     assert "scanNotStarted" in workflow_source
     assert "scanReady" in workflow_source
     assert "scanning" in workflow_source
@@ -361,7 +416,7 @@ def test_kiosk_ui_rebuild_removes_demo_dashboard_fragments():
 
     assert "data-selected-garment-bar" in workflow_source
     assert "scan-action-row" in workflow_source
-    assert "operator-preview-placeholder" in workflow_source
+    assert "tryon-result-stage" in workflow_source
     assert "selected-garment-context-bar" in workflow_source
     assert "Session active" in header_source
     assert "Sessions" in sidebar_source
@@ -371,7 +426,7 @@ def test_kiosk_ui_rebuild_removes_demo_dashboard_fragments():
     assert "Settings" in sidebar_source
 
     assert "Selected garment context" not in workflow_source
-    assert "Guided scan marked ready" in app_source
+    assert "workflowView" in app_source
     assert "Run a polished virtual fitting room" not in app_source
     assert "Fitting performance" not in app_source
 
@@ -382,15 +437,15 @@ def test_kiosk_ui_density_pass_keeps_primary_scan_task_above_the_fold():
     assert "scan-panel-header" in workflow_source
     assert "scan-panel-status" in workflow_source
     assert "scan-action-row" in workflow_source
-    assert "Photo checklist" in workflow_source
-    assert "sticky top-20 grid self-start" in workflow_source
-    assert "xl:grid-cols-[minmax(0,68fr)_minmax(320px,32fr)]" in workflow_source
+    assert "Capture checklist" in workflow_source
+    assert "xl:grid-cols-[minmax(0,1fr)_320px]" in workflow_source
     assert "sm:h-[420px]" in workflow_source
     assert "Preview unlocks after fit result." in workflow_source
     assert workflow_source.count('"Start scan"') == 1
 
     assert "Quality checklist" not in workflow_source
     assert "Fit recommendation unlocks after a successful scan." not in workflow_source
+    assert "sticky top-20 grid self-start" not in workflow_source
     assert "2xl:grid-cols-[minmax(0,1fr)_280px]" not in workflow_source
     assert "sm:min-h-[460px]" not in workflow_source
     assert "sm:min-h-[600px]" not in workflow_source
@@ -405,7 +460,7 @@ def test_kiosk_ui_exposes_tryon_generation_loading_action():
     assert "Generating..." in workflow_source
     assert "Generating try-on preview" in workflow_source
     assert "tryOnGenerating" in workflow_source
-    assert "disabled={!canGenerateTryOn || tryOnGenerating}" in workflow_source
+    assert "disabled={!canRequestTryOn}" in workflow_source
 
 
 def test_kiosk_ui_hides_technical_identifiers_from_primary_ui():

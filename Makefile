@@ -129,7 +129,7 @@ RUNPOD_TORCHAUDIO_CU124_VERSION ?= 2.6.0
 RUNPOD_TORCH_CU124_INDEX ?= https://download.pytorch.org/whl/cu124
 RUNPOD_LEFFA_FORCE_REINSTALL ?= 0
 
-.PHONY: help setup install install-kiosk run run-kiosk run-kiosk-all ui-kiosk kiosk-seed-size-charts kiosk-reset worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-bootstrap runpod-build runpod-workflow runpod-run runpod-workflow-with-ollama runpod-workflow-preflight runpod-workflow-check runpod-install-qwen-edit-deps runpod-install-torch-cu124 runpod-install-catvton-deps runpod-install-leffa-torch-cu124 runpod-install-leffa-deps runpod-leffa-deps-check runpod-install-omnivton-deps runpod-catvton-import-check runpod-leffa-import-check runpod-leffa-preload runpod-omnivton-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-vton-input-quality runpod-vton-condition-smoke-inputs runpod-leffa-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke runpod-catvton-quality-smoke runpod-leffa-smoke runpod-leffa-conditioned-smoke runpod-leffa-web-garment-smoke runpod-leffa-web-garment-detail-smoke runpod-leffa-upper-body-web-garment-smoke runpod-omnivton-smoke runpod-omnivton-outpainting-smoke runpod-omnivton-web-garment-smoke test clean lint format check
+.PHONY: help setup install install-kiosk run run-kiosk run-kiosk-all ui-kiosk kiosk-seed-size-charts kiosk-reset worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-bootstrap runpod-import-default-size-charts runpod-build runpod-workflow-bootstrap runpod-workflow runpod-run runpod-workflow-with-ollama runpod-workflow-preflight runpod-workflow-check runpod-install-qwen-edit-deps runpod-install-torch-cu124 runpod-install-catvton-deps runpod-install-leffa-torch-cu124 runpod-install-leffa-deps runpod-leffa-deps-check runpod-install-omnivton-deps runpod-catvton-import-check runpod-leffa-import-check runpod-leffa-preload runpod-omnivton-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-vton-input-quality runpod-vton-condition-smoke-inputs runpod-leffa-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke runpod-catvton-quality-smoke runpod-leffa-smoke runpod-leffa-conditioned-smoke runpod-leffa-web-garment-smoke runpod-leffa-web-garment-detail-smoke runpod-leffa-upper-body-web-garment-smoke runpod-omnivton-smoke runpod-omnivton-outpainting-smoke runpod-omnivton-web-garment-smoke test clean lint format check
 
 help:
 	@echo "Virtual Try-On MVP - Makefile commands"
@@ -152,9 +152,11 @@ help:
 	@echo "  make runpod-init - Create .env from template and runtime directories"
 	@echo "  make runpod-install - Install kiosk API dependencies and initialize paths"
 	@echo "  make runpod-bootstrap - Install kiosk API + isolated Leffa runtime dependencies"
-	@echo "  make runpod-build - Switch to feature/kiosk-gpu-flow and build kiosk UI"
-	@echo "  make runpod-workflow - Switch branch, build kiosk UI, init paths, then run API + worker"
-	@echo "  make runpod-workflow-with-ollama - Same workflow, plus ollama serve"
+	@echo "  make runpod-import-default-size-charts - Import default size charts into RunPod data"
+	@echo "  make runpod-build - Switch to feature/kiosk-gpu-flow, install Node if needed, and build kiosk UI"
+	@echo "  make runpod-workflow-bootstrap - Switch branch, install Node if needed, then run runpod-bootstrap"
+	@echo "  make runpod-workflow - Full setup: switch branch, install deps, import size charts, build UI, then run API + worker"
+	@echo "  make runpod-workflow-with-ollama - Same full workflow, plus ollama serve"
 	@echo "  make runpod-pull-ollama - Pull the configured Ollama analyzer model"
 	@echo "  make runpod-start - Run kiosk API + worker"
 	@echo "  make runpod-start-with-ollama - Run kiosk API + worker + ollama serve"
@@ -321,8 +323,14 @@ runpod-install: runpod-init install-kiosk
 runpod-bootstrap: runpod-install runpod-install-leffa-deps
 	@echo "RunPod kiosk app and isolated Leffa runtime dependencies are ready."
 
+runpod-import-default-size-charts:
+	python -m scripts.seed_size_charts --db-path $(RUNPOD_DATA_DIR)/size_charts/size_charts.sqlite3
+
 runpod-build:
 	bash scripts/workflow-runpod.sh build
+
+runpod-workflow-bootstrap:
+	bash scripts/workflow-runpod.sh bootstrap
 
 runpod-workflow:
 	bash scripts/workflow-runpod.sh run

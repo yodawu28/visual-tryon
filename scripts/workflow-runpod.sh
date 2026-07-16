@@ -7,6 +7,7 @@ if [[ $# -gt 0 ]]; then
 fi
 
 RUNPOD_BRANCH="${RUNPOD_BRANCH:-feature/kiosk-gpu-flow}"
+RUNPOD_INSTALL_SYSTEM_DEPS="${RUNPOD_INSTALL_SYSTEM_DEPS:-1}"
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8080}"
 API_PROFILE="${API_PROFILE:-kiosk}"
@@ -28,6 +29,38 @@ switch_branch() {
   git switch "$RUNPOD_BRANCH"
 }
 
+install_nodejs() {
+  log "install Node.js 20 and npm"
+  apt-get update
+  apt-get install -y ca-certificates curl gnupg
+  mkdir -p /etc/apt/keyrings
+  curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+    | gpg --batch --yes --dearmor -o /etc/apt/keyrings/nodesource.gpg
+  echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" \
+    > /etc/apt/sources.list.d/nodesource.list
+  apt-get update
+  apt-get install -y nodejs
+}
+
+install_system_dependencies() {
+  if command -v npm >/dev/null 2>&1; then
+    log "npm already available: $(npm -v)"
+    return
+  fi
+
+  if [[ "${RUNPOD_INSTALL_SYSTEM_DEPS}" != "1" ]]; then
+    printf '%s\n' "npm is required but was not found. Set RUNPOD_INSTALL_SYSTEM_DEPS=1 or install Node.js 20." >&2
+    exit 127
+  fi
+
+  if ! command -v apt-get >/dev/null 2>&1; then
+    printf '%s\n' "npm is required but was not found, and apt-get is unavailable in this image." >&2
+    exit 127
+  fi
+
+  install_nodejs
+}
+
 build_ui() {
   log "build kiosk UI"
   (
@@ -37,9 +70,14 @@ build_ui() {
   )
 }
 
-init_runtime() {
-  log "initialize RunPod runtime paths"
-  make runpod-init
+bootstrap_runtime() {
+  log "bootstrap RunPod Python/runtime dependencies"
+  make runpod-bootstrap
+}
+
+import_default_size_charts() {
+  log "import default size charts"
+  make runpod-import-default-size-charts
 }
 
 run_api() {
@@ -52,14 +90,18 @@ usage() {
 Usage: bash scripts/workflow-runpod.sh [mode]
 
 Modes:
-  build             git switch feature/kiosk-gpu-flow, then build kiosk UI
-  run               switch branch, build UI, init paths, start API + worker
-  run-with-ollama   switch branch, build UI, init paths, start API + worker + Ollama
+  build             switch branch, ensure Node/npm, then build kiosk UI
+  bootstrap         switch branch, ensure Node/npm, then run make runpod-bootstrap
+  import-default-size-charts
+                    switch branch, then import default RunPod size charts
+  run               switch branch, install deps, import size charts, build UI, start API + worker
+  run-with-ollama   switch branch, install deps, import size charts, build UI, start API + worker + Ollama
   preflight         switch branch, then run scripts.kiosk_preflight
-  check             switch branch, build UI, and run JSON readiness preflight
+  check             switch branch, install deps, import size charts, build UI, and run JSON readiness preflight
 
 Environment:
   RUNPOD_BRANCH     Git branch to switch to. Default: feature/kiosk-gpu-flow
+  RUNPOD_INSTALL_SYSTEM_DEPS  Install Node.js 20 via apt-get when npm is missing. Default: 1
   HOST              API host. Default: 0.0.0.0
   PORT              API port. Default: 8080
   API_PROFILE       API profile. Default: kiosk
@@ -71,18 +113,32 @@ EOF
 case "$MODE" in
   build)
     switch_branch
+    install_system_dependencies
     build_ui
+    ;;
+  bootstrap)
+    switch_branch
+    install_system_dependencies
+    bootstrap_runtime
+    ;;
+  import-default-size-charts)
+    switch_branch
+    import_default_size_charts
     ;;
   run)
     switch_branch
+    install_system_dependencies
+    bootstrap_runtime
+    import_default_size_charts
     build_ui
-    init_runtime
     run_api "$@"
     ;;
   run-with-ollama)
     switch_branch
+    install_system_dependencies
+    bootstrap_runtime
+    import_default_size_charts
     build_ui
-    init_runtime
     run_api --start-ollama "$@"
     ;;
   preflight)
@@ -91,6 +147,9 @@ case "$MODE" in
     ;;
   check)
     switch_branch
+    install_system_dependencies
+    bootstrap_runtime
+    import_default_size_charts
     build_ui
     python -m scripts.kiosk_preflight --json "$@"
     ;;

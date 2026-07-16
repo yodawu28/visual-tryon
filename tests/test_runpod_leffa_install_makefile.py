@@ -62,11 +62,45 @@ def test_runpod_workflow_script_switches_gpu_flow_branch_and_builds_ui():
 
     assert "RUNPOD_BRANCH=\"${RUNPOD_BRANCH:-feature/kiosk-gpu-flow}\"" in script
     assert 'git switch "$RUNPOD_BRANCH"' in script
+    assert "RUNPOD_INSTALL_SYSTEM_DEPS=\"${RUNPOD_INSTALL_SYSTEM_DEPS:-1}\"" in script
+    assert "install_nodejs" in script
+    assert "https://deb.nodesource.com/node_20.x" in script
+    assert "apt-get install -y nodejs" in script
+    assert "make runpod-bootstrap" in script
     assert "npm ci" in script
     assert "npm run build" in script
     assert "API_PROFILE=\"${API_PROFILE:-kiosk}\"" in script
     assert "KIOSK_UI_ENABLED=\"${KIOSK_UI_ENABLED:-true}\"" in script
     assert "python -m scripts.run_kiosk_all" in script
+
+
+def test_runpod_workflow_run_mode_bootstraps_before_building_ui():
+    script = Path("scripts/workflow-runpod.sh").read_text("utf-8")
+
+    run_block_start = script.index("  run)")
+    run_block_end = script.index("  run-with-ollama)")
+    run_block = script[run_block_start:run_block_end]
+
+    assert run_block.index("switch_branch") < run_block.index("install_system_dependencies")
+    assert run_block.index("install_system_dependencies") < run_block.index("bootstrap_runtime")
+    assert run_block.index("bootstrap_runtime") < run_block.index("build_ui")
+    assert run_block.index("build_ui") < run_block.index("run_api")
+
+
+def test_runpod_workflow_run_mode_imports_default_size_charts_before_building_ui():
+    script = Path("scripts/workflow-runpod.sh").read_text("utf-8")
+
+    assert "import_default_size_charts" in script
+    assert "make runpod-import-default-size-charts" in script
+
+    run_block_start = script.index("  run)")
+    run_block_end = script.index("  run-with-ollama)")
+    run_block = script[run_block_start:run_block_end]
+
+    assert run_block.index("bootstrap_runtime") < run_block.index(
+        "import_default_size_charts"
+    )
+    assert run_block.index("import_default_size_charts") < run_block.index("build_ui")
 
 
 def test_runpod_workflow_make_targets_call_script():
@@ -87,3 +121,15 @@ def test_runpod_workflow_make_targets_call_script():
     )
 
     assert "bash scripts/workflow-runpod.sh build" in build_result.stdout
+
+
+def test_runpod_import_default_size_charts_target_uses_runpod_data_dir():
+    result = subprocess.run(
+        ["make", "-n", "runpod-import-default-size-charts"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "python -m scripts.seed_size_charts" in result.stdout
+    assert "--db-path /workspace/tryon-data/size_charts/size_charts.sqlite3" in result.stdout

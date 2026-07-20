@@ -85,6 +85,7 @@ vto_request.json
 # MCP & Code Graph
 .vibe-map/code_graph.db
 .vibe-map/logs/
+.superpowers/
 
 .claude
 .codex

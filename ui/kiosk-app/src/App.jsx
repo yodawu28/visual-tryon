@@ -20,6 +20,7 @@ import {
   createSession,
   enqueueVisualPreviewJob,
   getKioskJob,
+  listGarments,
   listSizeCharts,
   resolveDefaultApiBase,
   trimTrailingSlash,
@@ -77,9 +78,27 @@ function FittingRoomApp() {
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [productError, setProductError] = useState("");
   const [productSaving, setProductSaving] = useState(false);
-  const [workflowView, setWorkflowView] = useState("garment");
+  const [workflowView, setWorkflowView] = useState("scan");
   const [sizeCharts, setSizeCharts] = useState([]);
   const [sizeChartsStatus, setSizeChartsStatus] = useState("Idle");
+  const [preparedGarments, setPreparedGarments] = useState([]);
+  const [preparedGarmentsStatus, setPreparedGarmentsStatus] = useState("Idle");
+  const [pendingCaptureFile, setPendingCaptureFile] = useState(null);
+  const [profileEditorOpen, setProfileEditorOpen] = useState(false);
+  const [operatorSensorOpen, setOperatorSensorOpen] = useState(false);
+  const [mockSensorProfile, setMockSensorProfile] = useState(() => ({
+    heightCm: localStorage.getItem("kioskMockHeightCm") || "170",
+    weightKg: localStorage.getItem("kioskMockWeightKg") || "68",
+    sensorStatus: "ready",
+  }));
+  const [confirmedProfile, setConfirmedProfile] = useState(() => ({
+    heightCm: "",
+    weightKg: "",
+    fitIntent: normalizeFitIntent(localStorage.getItem("kioskFitIntent") || "regular"),
+    profileSource: "unknown",
+    profileConfirmed: false,
+    sensorStatus: "ready",
+  }));
   const [bodyMeasurements, setBodyMeasurements] = useState({
     heightCm: "",
     weightKg: "",
@@ -102,7 +121,7 @@ function FittingRoomApp() {
   const garmentLabel = displayGarmentLabel(state);
   const captureLabel = displayCaptureLabel(state);
   const tryOnLabel = displayTryOnLabel(state);
-  const activeStage = getAvailableWorkflowView(workflowView, state);
+  const activeStage = getAvailableWorkflowView(workflowView, state, confirmedProfile);
 
   useEffect(() => {
     localStorage.setItem("kioskApiBase", apiBase);
@@ -157,11 +176,11 @@ function FittingRoomApp() {
   }, [apiBase, productModalOpen]);
 
   useEffect(() => {
-    const nextWorkflowView = getAvailableWorkflowView(workflowView, state);
+    const nextWorkflowView = getAvailableWorkflowView(workflowView, state, confirmedProfile);
     if (nextWorkflowView !== workflowView) {
       setWorkflowView(nextWorkflowView);
     }
-  }, [state.garmentId, state.capturePassed, workflowView]);
+  }, [confirmedProfile.profileConfirmed, state.fitReady, state.fitRecommendation, workflowView]);
 
   const applicationShell = "product-application-shell min-h-screen overflow-x-hidden bg-canvas text-ink";
   const bottomNavigation = "fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 px-2 py-2 backdrop-blur lg:hidden";
@@ -176,7 +195,7 @@ function FittingRoomApp() {
       URL.revokeObjectURL(state.garmentPreviewUrl);
     }
     setState(initialSessionState);
-    setWorkflowView("garment");
+    setWorkflowView("scan");
     setBodyMeasurements({ heightCm: "", weightKg: "" });
     setFitIntent("regular");
     appendLog("New fitting session prepared");
@@ -539,7 +558,7 @@ function FittingRoomApp() {
               onContinueToScan={() => setWorkflowView("scan")}
               onOpenProduct={() => setProductModalOpen(true)}
               onQueueTryOn={handleQueueTryOn}
-              onWorkflowViewChange={(view) => setWorkflowView(getAvailableWorkflowView(view, state))}
+              onWorkflowViewChange={(view) => setWorkflowView(getAvailableWorkflowView(view, state, confirmedProfile))}
               state={state}
               tryOnLabel={tryOnLabel}
               workflowView={activeStage}
@@ -584,11 +603,12 @@ function AppShell({ bottomNavigation, children, className, header, sidebar }) {
   );
 }
 
-function getAvailableWorkflowView(view, state) {
-  if (!state.garmentId) return "garment";
-  if (view === "review" && !state.capturePassed) return "scan";
-  if (view === "garment" || view === "scan" || view === "review") return view;
-  return state.capturePassed ? "review" : "scan";
+function getAvailableWorkflowView(view, state, confirmedProfile = {}) {
+  if (view === "review" && !state.fitReady && !state.fitRecommendation) {
+    return "scan";
+  }
+  if (view === "scan" || view === "garment" || view === "review") return view;
+  return "scan";
 }
 
 function getBodyMeasurementsPayload(bodyMeasurements) {

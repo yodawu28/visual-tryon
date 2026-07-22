@@ -88,6 +88,13 @@ export async function uploadGarment(apiBase, formData) {
   });
 }
 
+export async function listGarments(apiBase, filters = {}) {
+  const params = new URLSearchParams();
+  if (filters.limit) params.set("limit", String(filters.limit));
+  const query = params.toString();
+  return request(apiBase, `${GARMENTS_PATH}${query ? `?${query}` : ""}`);
+}
+
 export async function createSession(apiBase, garmentId) {
   return request(apiBase, SESSIONS_PATH, {
     method: "POST",

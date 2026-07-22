@@ -763,7 +763,7 @@ function resolveWorkflowView(view, state) {
     tryon: "review",
   }[view] || view;
 
-  if (!state.garmentId) return "garment";
+  if (!state.garmentId && normalized !== "scan") return "garment";
   if (normalized === "review" && !state.capturePassed) return "scan";
   if (normalized === "garment" || normalized === "scan" || normalized === "review") return normalized;
   return state.capturePassed ? "review" : "scan";

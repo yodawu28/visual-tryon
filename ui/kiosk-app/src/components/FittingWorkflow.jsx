@@ -40,11 +40,15 @@ export function FittingWorkflow({
   onAnalyzeFit,
   onBodyMeasurementChange,
   onCapturePhoto,
+  onConfirmedProfileChange,
   onContinueToReview,
   onDetectProfileFromSensor,
   onFitIntentChange,
+  onMockSensorProfileChange,
+  onOpenProduct,
   onQueueTryOn,
   onSelectPreparedGarment,
+  onToggleOperatorSensor,
   onWorkflowViewChange,
   operatorSensorOpen,
   pendingCaptureFile,
@@ -74,11 +78,13 @@ export function FittingWorkflow({
           confirmedProfile={confirmedProfile}
           fitIntent={fitIntent}
           mockSensorProfile={mockSensorProfile}
-          onBodyMeasurementChange={onBodyMeasurementChange}
+          onBodyMeasurementChange={onConfirmedProfileChange || onBodyMeasurementChange}
           onCapturePhoto={onCapturePhoto}
           onContinueToReview={onContinueToReview}
           onDetectProfileFromSensor={onDetectProfileFromSensor}
           onFitIntentChange={onFitIntentChange}
+          onMockSensorProfileChange={onMockSensorProfileChange}
+          onToggleOperatorSensor={onToggleOperatorSensor}
           operatorSensorOpen={operatorSensorOpen}
           pendingCaptureFile={pendingCaptureFile}
           profileEditorOpen={profileEditorOpen}
@@ -90,6 +96,7 @@ export function FittingWorkflow({
         <PreparedGarmentPicker
           confirmedProfile={confirmedProfile}
           garmentLabel={garmentLabel}
+          onOpenProduct={onOpenProduct}
           onSelectPreparedGarment={onSelectPreparedGarment}
           pendingCaptureFile={pendingCaptureFile}
           preparedGarments={preparedGarments}
@@ -105,6 +112,7 @@ export function FittingWorkflow({
           onAnalyzeFit={onAnalyzeFit}
           onFitIntentChange={onFitIntentChange}
           onQueueTryOn={onQueueTryOn}
+          onTryAnotherGarment={() => onWorkflowViewChange?.("garments")}
           state={state}
           tryOnLabel={tryOnLabel}
           workflowState={workflowState}
@@ -219,6 +227,8 @@ function ScanFirstFittingWorkflow({
   onContinueToReview,
   onDetectProfileFromSensor,
   onFitIntentChange,
+  onMockSensorProfileChange,
+  onToggleOperatorSensor,
   operatorSensorOpen,
   pendingCaptureFile,
   profileEditorOpen,
@@ -253,6 +263,8 @@ function ScanFirstFittingWorkflow({
         />
         <OperatorSensorPanel
           mockSensorProfile={mockSensorProfile}
+          onChange={onMockSensorProfileChange}
+          onClose={onToggleOperatorSensor}
           onDetectProfileFromSensor={onDetectProfileFromSensor}
           operatorSensorOpen={operatorSensorOpen}
         />
@@ -441,20 +453,63 @@ function DetectedProfileEditor({
   );
 }
 
-function OperatorSensorPanel({ mockSensorProfile, onDetectProfileFromSensor, operatorSensorOpen }) {
+function ProfileInput({ label, onChange, suffix, value }) {
+  return (
+    <label className="grid gap-1 text-xs font-semibold text-muted">
+      {label}
+      <span className="flex h-9 items-center gap-2 rounded-md border border-line bg-white px-2 text-sm font-medium text-ink">
+        <input
+          className="min-w-0 flex-1 bg-transparent outline-none"
+          inputMode="decimal"
+          onChange={(event) => onChange?.(event.target.value)}
+          type="number"
+          value={value}
+        />
+        <span className="text-xs font-semibold text-muted">{suffix}</span>
+      </span>
+    </label>
+  );
+}
+
+function OperatorSensorPanel({ mockSensorProfile, onChange, onClose, onDetectProfileFromSensor, operatorSensorOpen }) {
+  if (!operatorSensorOpen) {
+    return (
+      <p className="rounded-lg border border-dashed border-line bg-white px-4 py-3 text-xs font-semibold text-muted">
+        Operator shortcut: Shift+S
+      </p>
+    );
+  }
+
   return (
     <section className="rounded-lg bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80">
-      <div className="flex items-start gap-3">
+      <div className="flex items-start justify-between gap-3">
         <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-slate-50 text-slate-700 ring-1 ring-line">
           <ScanIcon className="h-5 w-5" />
         </div>
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-ink">Sensor shortcut</h3>
+          <h3 className="text-sm font-semibold text-ink">Operator sensor mock</h3>
           <p className="mt-1 text-sm leading-5 text-muted">
             Shift+S uses the mock sensor profile: {mockSensorProfile?.heightCm || "-"} cm, {mockSensorProfile?.weightKg || "-"} kg.
           </p>
-          <p className="mt-1 text-xs font-medium text-muted">{operatorSensorOpen ? "Sensor panel open" : "Sensor ready"}</p>
+          <p className="mt-1 text-xs font-medium text-muted">Sensor status: {mockSensorProfile?.sensorStatus || "ready"}</p>
         </div>
+        <button className="text-sm font-semibold text-brand-700" onClick={onClose} type="button">
+          Close
+        </button>
+      </div>
+      <div className="mt-3 grid gap-2">
+        <ProfileInput
+          label="Mock height"
+          onChange={(value) => onChange?.("heightCm", value)}
+          suffix="cm"
+          value={mockSensorProfile?.heightCm || ""}
+        />
+        <ProfileInput
+          label="Mock weight"
+          onChange={(value) => onChange?.("weightKg", value)}
+          suffix="kg"
+          value={mockSensorProfile?.weightKg || ""}
+        />
       </div>
       <Button className="mt-3 w-full" onClick={() => onDetectProfileFromSensor?.("mock_sensor")} size="sm" variant="secondary">
         Detect profile
@@ -466,6 +521,7 @@ function OperatorSensorPanel({ mockSensorProfile, onDetectProfileFromSensor, ope
 function PreparedGarmentPicker({
   confirmedProfile,
   garmentLabel,
+  onOpenProduct,
   onSelectPreparedGarment,
   pendingCaptureFile,
   preparedGarments = [],
@@ -485,7 +541,12 @@ function PreparedGarmentPicker({
             Select a product after the shopper scan. The backend session is created only for the chosen garment.
           </p>
         </div>
-        <DetectedProfileMini confirmedProfile={confirmedProfile} />
+        <div className="grid gap-2 sm:min-w-[220px]">
+          <DetectedProfileMini confirmedProfile={confirmedProfile} />
+          <Button onClick={onOpenProduct} size="sm" variant="secondary">
+            Products
+          </Button>
+        </div>
       </div>
 
       {!preparedGarments.length && !loading ? (
@@ -560,6 +621,7 @@ export function ReviewStep({
   onAnalyzeFit,
   onFitIntentChange,
   onQueueTryOn,
+  onTryAnotherGarment,
   state,
   tryOnLabel,
   workflowState,
@@ -578,7 +640,12 @@ export function ReviewStep({
         />
         <TryOnPreviewPanel onQueueTryOn={onQueueTryOn} state={state} tryOnLabel={tryOnLabel} workflowState={workflowState} />
       </div>
-      <ReviewActions onQueueTryOn={onQueueTryOn} state={state} workflowState={workflowState} />
+      <ReviewActions
+        onQueueTryOn={onQueueTryOn}
+        onTryAnotherGarment={onTryAnotherGarment}
+        state={state}
+        workflowState={workflowState}
+      />
     </div>
   );
 }
@@ -732,7 +799,7 @@ export function TryOnPreviewPanel({ onQueueTryOn, state, tryOnLabel, workflowSta
   );
 }
 
-export function ReviewActions({ onQueueTryOn, state, workflowState }) {
+export function ReviewActions({ onQueueTryOn, onTryAnotherGarment, state, workflowState }) {
   const previewReady = workflowState.tryOn === "tryOnReady";
   const tryOnGenerating = workflowState.tryOn === "tryOnGenerating";
   const fitReady = workflowState.fit === "fitReady";
@@ -748,6 +815,9 @@ export function ReviewActions({ onQueueTryOn, state, workflowState }) {
         </p>
       </div>
       <div className="flex flex-col gap-2 sm:flex-row">
+        <Button onClick={onTryAnotherGarment} size="sm" variant="secondary">
+          Try another garment
+        </Button>
         <Button disabled={!previewReady} size="sm" variant="secondary">
           Approve result
         </Button>

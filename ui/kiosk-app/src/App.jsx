@@ -202,6 +202,18 @@ function FittingRoomApp() {
   }, [apiBase, productModalOpen]);
 
   useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.shiftKey && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        setOperatorSensorOpen((open) => !open);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  useEffect(() => {
     const nextWorkflowView = getAvailableWorkflowView(workflowView, state, confirmedProfile);
     if (nextWorkflowView !== workflowView) {
       setWorkflowView(nextWorkflowView);
@@ -247,7 +259,7 @@ function FittingRoomApp() {
     setProductSaving(true);
     const form = new FormData(event.currentTarget);
     const garmentImage = form.get("garmentImage");
-    const garmentName = String(form.get("garmentName") || "Coach demo garment").trim();
+    const garmentName = String(form.get("garmentName") || "Prepared garment").trim();
     const garmentCategory = String(form.get("category") || "tops");
     const garmentType = String(form.get("garmentType") || "").trim();
     const sizeChartId = String(form.get("sizeChartId") || "").trim();
@@ -451,6 +463,11 @@ function FittingRoomApp() {
   }
 
   function handleBodyMeasurementChange(field, value) {
+    handleConfirmedProfileChange(field, value);
+  }
+
+  function handleConfirmedProfileChange(field, value) {
+    tryOnRequestRef.current += 1;
     setBodyMeasurements((current) => ({
       ...current,
       [field]: value,
@@ -459,20 +476,37 @@ function FittingRoomApp() {
       const nextProfile = {
         ...current,
         [field]: value,
+        profileSource: "manual_override",
       };
       return {
         ...nextProfile,
         profileConfirmed: Boolean(nextProfile.heightCm && nextProfile.weightKg),
       };
     });
+    setState((current) => ({
+      ...current,
+      fitRecommendation: null,
+      fitRecommendationLabel: current.capturePassed ? "Update recommendation for edited profile." : "",
+      fitRecommendationStatus: current.capturePassed ? "needs_update" : "",
+      fitNeedsMeasurements: Boolean(current.capturePassed),
+      fitReady: false,
+      previewKey: "",
+      previewImageUrl: "",
+      visualPreviewReady: false,
+      jobId: "",
+      jobStatus: "",
+      tryOnError: "",
+    }));
   }
 
   function handleFitIntentChange(value) {
     const nextFitIntent = normalizeFitIntent(value);
+    tryOnRequestRef.current += 1;
     setFitIntent(nextFitIntent);
     setConfirmedProfile((current) => ({
       ...current,
       fitIntent: nextFitIntent,
+      profileSource: current.profileSource === "unknown" ? "manual_override" : current.profileSource,
     }));
     setState((current) => {
       if (!current.fitRecommendation && !current.fitReady && !current.previewKey && !current.jobId) {
@@ -495,6 +529,19 @@ function FittingRoomApp() {
       };
     });
     appendLog(`Fit intent selected: ${nextFitIntent}`);
+  }
+
+  function handleMockSensorProfileChange(field, value) {
+    setMockSensorProfile((current) => {
+      const next = {
+        ...current,
+        [field]: value,
+        sensorStatus: "ready",
+      };
+      if (field === "heightCm") localStorage.setItem("kioskMockHeightCm", value);
+      if (field === "weightKg") localStorage.setItem("kioskMockWeightKg", value);
+      return next;
+    });
   }
 
   async function handleSelectPreparedGarment(garment) {
@@ -750,13 +797,16 @@ function FittingRoomApp() {
               onAnalyzeFit={handleAnalyzeFit}
               onBodyMeasurementChange={handleBodyMeasurementChange}
               onCapturePhoto={handleCapturePhoto}
+              onConfirmedProfileChange={handleConfirmedProfileChange}
               onFitIntentChange={handleFitIntentChange}
               onContinueToReview={() => setWorkflowView("garments")}
               onContinueToScan={() => setWorkflowView("scan")}
               onDetectProfileFromSensor={detectProfileFromSensor}
+              onMockSensorProfileChange={handleMockSensorProfileChange}
               onOpenProduct={() => setProductModalOpen(true)}
               onQueueTryOn={handleQueueTryOn}
               onSelectPreparedGarment={handleSelectPreparedGarment}
+              onToggleOperatorSensor={() => setOperatorSensorOpen((open) => !open)}
               onWorkflowViewChange={(view) => setWorkflowView(getAvailableWorkflowView(view, state, confirmedProfile))}
               operatorSensorOpen={operatorSensorOpen}
               pendingCaptureFile={pendingCaptureFile}
@@ -896,7 +946,7 @@ function ProductModal({ error, onClose, onSubmit, open, saving, sizeCharts, size
       title="Select product"
     >
       <form className="grid gap-4" onSubmit={onSubmit}>
-        <Input id="garmentName" label="Display name" name="garmentName" placeholder="Coach demo garment" />
+        <Input id="garmentName" label="Display name" name="garmentName" placeholder="Prepared product" />
         <div className="grid gap-4 sm:grid-cols-2">
           <Select
             id="category"

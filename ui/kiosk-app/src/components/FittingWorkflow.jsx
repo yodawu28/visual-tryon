@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "./Button.jsx";
 import { DashboardIcon, ProductIcon, ScanIcon } from "./icons.jsx";
@@ -284,11 +284,19 @@ function LightScanStage({
 }) {
   const fileInputRef = useRef(null);
   const captureSourceRef = useRef("file_upload");
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const countdownTimerRef = useRef(null);
+  const [cameraMode, setCameraMode] = useState("idle");
+  const [countdown, setCountdown] = useState(null);
+  const [cameraError, setCameraError] = useState("");
   const scanComplete = workflowState.scan === "scanComplete";
   const cameraStatus = getCameraStatus(workflowState);
   const profileReady = Boolean(confirmedProfile?.profileConfirmed);
   const canChooseGarments = scanComplete && profileReady && Boolean(pendingCaptureFile);
   const disabled = Boolean(state.scanBusy || state.fitLoading);
+  const cameraActive = cameraMode === "requesting" || cameraMode === "active" || cameraMode === "countdown";
 
   function openCapturePicker(captureSource) {
     captureSourceRef.current = captureSource;
@@ -301,6 +309,118 @@ function LightScanStage({
       onCapturePhoto?.(file, captureSourceRef.current);
     }
     event.target.value = "";
+  }
+
+  useEffect(() => {
+    return () => {
+      stopCamera(false);
+    };
+  }, []);
+
+  async function startCamera() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Camera is not available in this browser. Upload a photo instead.");
+      setCameraMode("error");
+      return;
+    }
+
+    setCameraError("");
+    setCountdown(null);
+    setCameraMode("requesting");
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 1600 },
+        },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setCameraMode("active");
+    } catch (error) {
+      handleCameraError(error);
+    }
+  }
+
+  function stopCamera(resetState = true) {
+    if (countdownTimerRef.current) {
+      window.clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    if (resetState) {
+      setCountdown(null);
+      setCameraMode("idle");
+    }
+  }
+
+  function handleCameraError(error) {
+    setCameraError(
+      error?.name === "NotAllowedError"
+        ? "Camera permission was blocked. Upload a photo instead."
+        : "Camera could not start. Upload a photo instead.",
+    );
+    setCountdown(null);
+    setCameraMode("error");
+  }
+
+  function handleCaptureCountdown() {
+    if (!videoRef.current || cameraMode !== "active") return;
+    setCameraError("");
+    setCameraMode("countdown");
+    setCountdown(3);
+
+    let nextCount = 3;
+    countdownTimerRef.current = window.setInterval(() => {
+      nextCount -= 1;
+      if (nextCount > 0) {
+        setCountdown(nextCount);
+        return;
+      }
+      window.clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+      captureFrame();
+    }, 850);
+  }
+
+  function captureFrame() {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) {
+      setCameraError("Camera frame was not ready. Try again.");
+      setCountdown(null);
+      setCameraMode("active");
+      return;
+    }
+
+    const width = video.videoWidth || 960;
+    const height = video.videoHeight || 1280;
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    context?.drawImage(video, 0, 0, width, height);
+
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        setCameraError("Could not capture the camera frame. Try again.");
+        setCountdown(null);
+        setCameraMode("active");
+        return;
+      }
+      const captureFile = new File([blob], `shopper-scan-${Date.now()}.jpg`, { type: "image/jpeg" });
+      stopCamera();
+      onCapturePhoto?.(captureFile, "kiosk_webcam");
+    }, "image/jpeg", 0.92);
   }
 
   return (
@@ -324,39 +444,88 @@ function LightScanStage({
             ref={fileInputRef}
             type="file"
           />
+          <canvas aria-hidden="true" className="hidden" ref={canvasRef} />
 
           <div className="absolute inset-x-4 top-4 z-10 flex items-center justify-between gap-3">
             <StatusBadge tone={scanComplete ? "success" : "neutral"}>{captureLabel || cameraStatus}</StatusBadge>
             <span className="rounded-md border border-line bg-white px-2 py-1 text-xs font-medium text-muted">
-              Camera frame
+              {cameraActive ? "Live camera" : "Camera frame"}
             </span>
           </div>
 
-          <div className="relative mx-auto my-12 w-[min(70vw,330px)] rounded-[20px] border border-slate-200 bg-white">
-            <div className="pointer-events-none absolute inset-y-7 left-1/2 w-px -translate-x-1/2 bg-slate-200" />
-            <div className="pointer-events-none absolute inset-x-7 top-1/3 h-px bg-slate-200" />
-            <div className="pointer-events-none absolute inset-x-7 top-2/3 h-px bg-slate-200" />
+          <div className="relative mx-auto my-12 w-[min(70vw,330px)] overflow-hidden rounded-[20px] border border-slate-200 bg-white">
+            {cameraActive && (
+              <video
+                aria-label="Live shopper camera preview"
+                className="absolute inset-0 h-full w-full object-cover"
+                muted
+                playsInline
+                ref={videoRef}
+              />
+            )}
+            <div className="pointer-events-none absolute inset-y-7 left-1/2 z-[2] w-px -translate-x-1/2 bg-slate-200/80" />
+            <div className="pointer-events-none absolute inset-x-7 top-1/3 z-[2] h-px bg-slate-200/80" />
+            <div className="pointer-events-none absolute inset-x-7 top-2/3 z-[2] h-px bg-slate-200/80" />
             <div className="relative mx-auto h-[270px] w-full sm:h-[322px]">
-              <div className="absolute left-1/2 top-7 h-[54px] w-[54px] -translate-x-1/2 rounded-full border-2 border-slate-500 bg-white" />
-              <div className="absolute left-1/2 top-[94px] h-[154px] w-[112px] -translate-x-1/2 rounded-b-[28px] rounded-t-[58px] border-2 border-slate-500 bg-white" />
-              <div className="absolute left-1/2 top-[118px] h-[96px] w-[162px] -translate-x-1/2 rounded-[38px] border border-dashed border-slate-400" />
-              <div className="absolute bottom-8 left-1/2 h-[68px] w-[86px] -translate-x-1/2 rounded-b-[36px] border-2 border-slate-500 bg-white" />
-              <div className="absolute left-8 right-8 top-[158px] h-0.5 bg-brand-500" />
+              {!cameraActive && (
+                <>
+                  <div className="absolute left-1/2 top-7 h-[54px] w-[54px] -translate-x-1/2 rounded-full border-2 border-slate-500 bg-white" />
+                  <div className="absolute left-1/2 top-[94px] h-[154px] w-[112px] -translate-x-1/2 rounded-b-[28px] rounded-t-[58px] border-2 border-slate-500 bg-white" />
+                  <div className="absolute left-1/2 top-[118px] h-[96px] w-[162px] -translate-x-1/2 rounded-[38px] border border-dashed border-slate-400" />
+                  <div className="absolute bottom-8 left-1/2 h-[68px] w-[86px] -translate-x-1/2 rounded-b-[36px] border-2 border-slate-500 bg-white" />
+                </>
+              )}
+              <div className="absolute left-8 right-8 top-[158px] z-[3] h-0.5 bg-brand-500" />
+              {cameraMode === "countdown" && (
+                <>
+                  <div className="scan-line absolute inset-x-6 top-8 z-[4] h-0.5 bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.65)]" />
+                  <div className="absolute inset-0 z-[5] grid place-items-center bg-white/20 backdrop-blur-[1px]">
+                    <span className="grid h-20 w-20 place-items-center rounded-full bg-white text-4xl font-semibold text-ink shadow-soft ring-1 ring-line">
+                      {countdown}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
           <div className="absolute bottom-3 left-3 right-3 z-10 flex flex-col gap-2 rounded-md border border-line bg-white px-3 py-2 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-ink">{scanComplete ? "Looks ready" : "Ready to capture"}</p>
-              <p className="mt-0.5 text-xs text-muted">Height and weight are detected after capture.</p>
+              <p className="text-sm font-semibold text-ink">
+                {cameraMode === "requesting"
+                  ? "Opening camera"
+                  : cameraMode === "active"
+                    ? "Camera ready"
+                    : cameraMode === "countdown"
+                      ? "Hold still"
+                      : scanComplete
+                        ? "Looks ready"
+                        : "Ready to capture"}
+              </p>
+              <p className={cameraError ? "mt-0.5 text-xs font-medium text-rose-600" : "mt-0.5 text-xs text-muted"}>
+                {cameraError || "Height and weight are detected after capture."}
+              </p>
             </div>
             <div className="scan-action-row grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
-              <Button className="h-9 min-w-28 px-3 text-sm" disabled={disabled} onClick={() => openCapturePicker("kiosk_webcam")}>
-                {state.scanBusy || state.fitLoading ? "Analyzing..." : scanComplete ? "Retake scan" : "Start scan"}
-              </Button>
-              <Button className="h-9 min-w-28 px-3 text-sm" disabled={disabled} onClick={() => openCapturePicker("file_upload")} variant="secondary">
-                Upload photo
-              </Button>
+              {cameraMode === "active" ? (
+                <>
+                  <Button className="h-9 min-w-28 px-3 text-sm" disabled={disabled} onClick={handleCaptureCountdown}>
+                    Capture
+                  </Button>
+                  <Button className="h-9 min-w-28 px-3 text-sm" disabled={disabled} onClick={stopCamera} variant="secondary">
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button className="h-9 min-w-28 px-3 text-sm" disabled={disabled || cameraMode === "requesting" || cameraMode === "countdown"} onClick={startCamera}>
+                    {state.scanBusy || state.fitLoading ? "Analyzing..." : cameraMode === "requesting" ? "Opening..." : scanComplete ? "Retake scan" : "Start scan"}
+                  </Button>
+                  <Button className="h-9 min-w-28 px-3 text-sm" disabled={disabled || cameraMode === "countdown"} onClick={() => openCapturePicker("file_upload")} variant="secondary">
+                    Upload photo
+                  </Button>
+                </>
+              )}
               {canChooseGarments && (
                 <Button className="col-span-2 h-9 min-w-32 px-3 text-sm sm:col-span-1" onClick={onContinueToReview} variant="secondary">
                   Choose garments

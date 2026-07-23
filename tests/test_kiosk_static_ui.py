@@ -499,6 +499,22 @@ def test_kiosk_ui_density_pass_keeps_primary_scan_task_above_the_fold():
     assert "Preview will appear here after scan." not in workflow_source
 
 
+def test_kiosk_ui_start_scan_uses_browser_camera_capture():
+    workflow_source = Path("ui/kiosk-app/src/components/FittingWorkflow.jsx").read_text("utf-8")
+
+    assert "navigator.mediaDevices.getUserMedia" in workflow_source
+    assert "videoRef" in workflow_source
+    assert "canvasRef" in workflow_source
+    assert "cameraMode" in workflow_source
+    assert "countdown" in workflow_source
+    assert "captureFrame" in workflow_source
+    assert "canvas.toBlob" in workflow_source
+    assert "new File([blob]" in workflow_source
+    assert 'onCapturePhoto?.(captureFile, "kiosk_webcam")' in workflow_source
+    assert 'openCapturePicker("kiosk_webcam")' not in workflow_source
+    assert 'openCapturePicker("file_upload")' in workflow_source
+
+
 def test_kiosk_ui_exposes_tryon_generation_loading_action():
     workflow_source = Path("ui/kiosk-app/src/components/FittingWorkflow.jsx").read_text("utf-8")
 

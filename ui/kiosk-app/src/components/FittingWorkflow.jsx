@@ -4,12 +4,10 @@ import { Button } from "./Button.jsx";
 import { DashboardIcon, ProductIcon, ScanIcon } from "./icons.jsx";
 
 const workflowSteps = [
-  { key: "garment", label: "Garment" },
-  { key: "scan", label: "Shopper scan" },
+  { key: "scan", label: "Scan" },
+  { key: "garments", label: "Garments" },
   { key: "review", label: "Review" },
 ];
-
-const checklistItems = ["Full body visible", "Facing forward", "Good lighting", "Garment area visible"];
 
 const fitIntentOptions = [
   { value: "slim", label: "Slim" },
@@ -19,12 +17,12 @@ const fitIntentOptions = [
 
 const workflowStateLabels = {
   scanNotStarted: "Not started",
-  scanReady: "Ready to capture",
+  scanReady: "Ready",
   scanning: "Scanning",
   scanComplete: "Scan complete",
   fitLocked: "Locked",
   fitLoading: "Loading",
-  fitNeedsMeasurements: "Needs input",
+  fitNeedsMeasurements: "Needs measurements",
   fitReady: "Ready",
   tryOnLocked: "Locked",
   tryOnGenerating: "Generating",
@@ -35,57 +33,76 @@ export function FittingWorkflow({
   activeStage,
   bodyMeasurements,
   captureLabel,
+  confirmedProfile,
   fitIntent,
   garmentLabel,
+  mockSensorProfile,
   onAnalyzeFit,
   onBodyMeasurementChange,
   onCapturePhoto,
   onContinueToReview,
-  onContinueToScan,
+  onDetectProfileFromSensor,
   onFitIntentChange,
-  onOpenProduct,
   onQueueTryOn,
+  onSelectPreparedGarment,
   onWorkflowViewChange,
+  operatorSensorOpen,
+  pendingCaptureFile,
+  preparedGarments,
+  preparedGarmentsStatus,
+  profileEditorOpen,
   state,
   tryOnLabel,
   workflowView,
 }) {
   const workflowState = getWorkflowState(state);
-  const activeWorkflowView = resolveWorkflowView(workflowView || activeStage, state);
+  const activeWorkflowView = resolveWorkflowView(workflowView || activeStage, state, confirmedProfile);
 
   return (
     <FittingRoomShell
       activeWorkflowView={activeWorkflowView}
+      confirmedProfile={confirmedProfile}
       onWorkflowViewChange={onWorkflowViewChange}
       state={state}
       workflowState={workflowState}
     >
       {/* Only render the active workflow view. */}
-      {activeWorkflowView === "garment" && (
-        <GarmentStep
-          garmentLabel={garmentLabel}
-          onContinueToScan={onContinueToScan}
-          onOpenProduct={onOpenProduct}
-          state={state}
-        />
-      )}
       {activeWorkflowView === "scan" && (
-        <ShopperScanStep
+        <ScanFirstFittingWorkflow
+          bodyMeasurements={bodyMeasurements}
           captureLabel={captureLabel}
-          garmentLabel={garmentLabel}
+          confirmedProfile={confirmedProfile}
+          fitIntent={fitIntent}
+          mockSensorProfile={mockSensorProfile}
+          onBodyMeasurementChange={onBodyMeasurementChange}
           onCapturePhoto={onCapturePhoto}
           onContinueToReview={onContinueToReview}
+          onDetectProfileFromSensor={onDetectProfileFromSensor}
+          onFitIntentChange={onFitIntentChange}
+          operatorSensorOpen={operatorSensorOpen}
+          pendingCaptureFile={pendingCaptureFile}
+          profileEditorOpen={profileEditorOpen}
           state={state}
           workflowState={workflowState}
         />
       )}
+      {activeWorkflowView === "garments" && (
+        <PreparedGarmentPicker
+          confirmedProfile={confirmedProfile}
+          garmentLabel={garmentLabel}
+          onSelectPreparedGarment={onSelectPreparedGarment}
+          pendingCaptureFile={pendingCaptureFile}
+          preparedGarments={preparedGarments}
+          preparedGarmentsStatus={preparedGarmentsStatus}
+          state={state}
+        />
+      )}
       {activeWorkflowView === "review" && (
         <ReviewStep
-          bodyMeasurements={bodyMeasurements}
+          confirmedProfile={confirmedProfile}
           fitIntent={fitIntent}
           garmentLabel={garmentLabel}
           onAnalyzeFit={onAnalyzeFit}
-          onBodyMeasurementChange={onBodyMeasurementChange}
           onFitIntentChange={onFitIntentChange}
           onQueueTryOn={onQueueTryOn}
           state={state}
@@ -97,7 +114,14 @@ export function FittingWorkflow({
   );
 }
 
-export function FittingRoomShell({ activeWorkflowView, children, onWorkflowViewChange, state, workflowState }) {
+export function FittingRoomShell({
+  activeWorkflowView,
+  children,
+  confirmedProfile,
+  onWorkflowViewChange,
+  state,
+  workflowState,
+}) {
   return (
     <section
       className="operator-workspace-layout grid max-w-full gap-4 overflow-x-hidden"
@@ -105,25 +129,28 @@ export function FittingRoomShell({ activeWorkflowView, children, onWorkflowViewC
     >
       <WorkflowHeader
         activeWorkflowView={activeWorkflowView}
+        confirmedProfile={confirmedProfile}
         onWorkflowViewChange={onWorkflowViewChange}
         state={state}
         workflowState={workflowState}
       />
-      <div className="min-h-[520px]">{children}</div>
+      <div className="min-h-[500px]">{children}</div>
     </section>
   );
 }
 
-export function WorkflowHeader({ activeWorkflowView, onWorkflowViewChange, state, workflowState }) {
+export function WorkflowHeader({ activeWorkflowView, confirmedProfile, onWorkflowViewChange, state, workflowState }) {
   return (
     <header className="workflow-header border-b border-line/80 pb-3">
-      <div className="grid gap-3 xl:grid-cols-[260px_minmax(0,1fr)] xl:items-end">
+      <div className="grid gap-3 xl:grid-cols-[240px_minmax(0,1fr)] xl:items-end">
         <div className="min-w-0">
-          <h1 className="text-lg font-semibold tracking-tight text-ink">Fitting Room</h1>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Step 1 of 3</p>
+          <h1 className="mt-1 text-lg font-semibold tracking-tight text-ink">Fitting Room</h1>
           <p className="mt-1 text-sm font-medium text-muted">{currentStepLabel(activeWorkflowView)}</p>
         </div>
         <WorkflowStepper
           activeWorkflowView={activeWorkflowView}
+          confirmedProfile={confirmedProfile}
           onWorkflowViewChange={onWorkflowViewChange}
           state={state}
           workflowState={workflowState}
@@ -133,11 +160,11 @@ export function WorkflowHeader({ activeWorkflowView, onWorkflowViewChange, state
   );
 }
 
-export function WorkflowStepper({ activeWorkflowView, onWorkflowViewChange, state, workflowState }) {
+export function WorkflowStepper({ activeWorkflowView, confirmedProfile, onWorkflowViewChange, state, workflowState }) {
   return (
     <ol aria-label="Fitting progress" className="grid gap-2 sm:grid-cols-3">
       {workflowSteps.map((step, index) => {
-        const status = stepStatus(step.key, activeWorkflowView, state, workflowState);
+        const status = stepStatus(step.key, activeWorkflowView, state, workflowState, confirmedProfile);
         const locked = status === "locked";
 
         return (
@@ -165,12 +192,12 @@ export function WorkflowStepper({ activeWorkflowView, onWorkflowViewChange, stat
                   status === "complete" && "border-emerald-500 bg-emerald-500 text-white",
                   status === "current" && "border-brand-600 bg-brand-600 text-white",
                   status === "available" && "border-slate-300 bg-white text-slate-600",
-                  status === "locked" && "border-slate-200 bg-slate-50 text-slate-400",
+                  status === "locked" && "border-slate-200 bg-white text-slate-400",
                 ]
                   .filter(Boolean)
                   .join(" ")}
               >
-                {status === "complete" ? "✓" : index + 1}
+                {status === "complete" ? "Done" : index + 1}
               </span>
               <span className="truncate text-sm font-medium leading-5">{step.label}</span>
             </button>
@@ -181,105 +208,75 @@ export function WorkflowStepper({ activeWorkflowView, onWorkflowViewChange, stat
   );
 }
 
-export function GarmentStep({ garmentLabel, onContinueToScan, onOpenProduct, state }) {
-  const garmentSelected = Boolean(state.garmentId);
-
+function ScanFirstFittingWorkflow({
+  bodyMeasurements,
+  captureLabel,
+  confirmedProfile,
+  fitIntent,
+  mockSensorProfile,
+  onBodyMeasurementChange,
+  onCapturePhoto,
+  onContinueToReview,
+  onDetectProfileFromSensor,
+  onFitIntentChange,
+  operatorSensorOpen,
+  pendingCaptureFile,
+  profileEditorOpen,
+  state,
+  workflowState,
+}) {
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,0.96fr)_minmax(360px,0.54fr)]">
-      <section className="rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80">
-        <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <div className="product-preview-surface grid min-h-[320px] place-items-center rounded-lg bg-slate-100 p-4 ring-1 ring-line/70">
-            {state.garmentPreviewUrl ? (
-              <img
-                alt="Selected garment"
-                className="max-h-[300px] w-full rounded-md object-contain"
-                src={state.garmentPreviewUrl}
-              />
-            ) : (
-              <div className="grid place-items-center gap-3 text-center">
-                <div className="grid h-14 w-14 place-items-center rounded-md bg-white text-slate-500 ring-1 ring-line/80">
-                  <ProductIcon className="h-7 w-7" />
-                </div>
-                <p className="text-sm font-semibold text-ink">No garment selected</p>
-              </div>
-            )}
-          </div>
-
-          <div className="grid content-between gap-5">
-            <div>
-              <h2 className="text-xl font-semibold tracking-tight text-ink">Choose garment</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-                Select the product image and size chart before scanning the shopper.
-              </p>
-              <div className="mt-5">
-                <SelectedGarmentSummary garmentLabel={garmentLabel} state={state} />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button className="w-full sm:w-auto" onClick={onOpenProduct} variant={garmentSelected ? "secondary" : "primary"}>
-                {garmentSelected ? "Change product" : "Upload product"}
-              </Button>
-              <Button className="w-full sm:w-auto" disabled={!garmentSelected} onClick={onContinueToScan}>
-                Continue to shopper scan
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <aside className="grid content-start gap-3 rounded-lg bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80">
-        <h3 className="text-sm font-semibold text-ink">Garment details</h3>
-        <DetailRow label="Product" value={garmentSelected ? garmentLabel : "Waiting for upload"} />
-        <DetailRow label="Category" value={garmentSelected ? formatCategoryLabel(state.garmentCategory || "tops") : "Not selected"} />
-        <DetailRow label="Garment type" value={state.garmentType ? state.garmentType.replaceAll("_", " ") : "Not provided"} />
-        <DetailRow label="Size chart status" value={getSizeChartLabel(state)} valueTone={state.sizeChartId ? "text-emerald-700" : "text-amber-700"} />
-      </aside>
-    </div>
-  );
-}
-
-export function ShopperScanStep({ captureLabel, garmentLabel, onCapturePhoto, onContinueToReview, state, workflowState }) {
-  return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <CameraCapturePanel
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+      <LightScanStage
         captureLabel={captureLabel}
+        confirmedProfile={confirmedProfile}
         onCapturePhoto={onCapturePhoto}
         onContinueToReview={onContinueToReview}
+        pendingCaptureFile={pendingCaptureFile}
         state={state}
         workflowState={workflowState}
       />
 
       <aside className="grid content-start gap-3">
-        <SelectedGarmentSummary compact garmentLabel={garmentLabel} state={state} />
-
-        <section className="rounded-lg bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80">
-          <div className="flex items-start gap-3">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-brand-50 text-brand-700">
-              <ScanIcon className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold text-ink">Scan status</h2>
-              <p className="mt-1 text-sm leading-5 text-muted">{getScanGuidance(workflowState)}</p>
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-lg bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80">
-          <CaptureChecklist checked={workflowState.scan === "scanComplete"} />
-        </section>
+        <DetectedProfileReceipt
+          confirmedProfile={confirmedProfile}
+          pendingCaptureFile={pendingCaptureFile}
+          workflowState={workflowState}
+        />
+        <DetectedProfileEditor
+          bodyMeasurements={bodyMeasurements}
+          confirmedProfile={confirmedProfile}
+          fitIntent={fitIntent}
+          onBodyMeasurementChange={onBodyMeasurementChange}
+          onFitIntentChange={onFitIntentChange}
+          profileEditorOpen={profileEditorOpen}
+        />
+        <OperatorSensorPanel
+          mockSensorProfile={mockSensorProfile}
+          onDetectProfileFromSensor={onDetectProfileFromSensor}
+          operatorSensorOpen={operatorSensorOpen}
+        />
       </aside>
     </div>
   );
 }
 
-export function CameraCapturePanel({ captureLabel, onCapturePhoto, onContinueToReview, state, workflowState }) {
+function LightScanStage({
+  captureLabel,
+  confirmedProfile,
+  onCapturePhoto,
+  onContinueToReview,
+  pendingCaptureFile,
+  state,
+  workflowState,
+}) {
   const fileInputRef = useRef(null);
   const captureSourceRef = useRef("file_upload");
   const scanComplete = workflowState.scan === "scanComplete";
-  const scanStarted = workflowState.scan === "scanning" || scanComplete;
   const cameraStatus = getCameraStatus(workflowState);
-  const disabled = !state.garmentId || state.scanBusy || state.fitLoading;
+  const profileReady = Boolean(confirmedProfile?.profileConfirmed);
+  const canChooseGarments = scanComplete && profileReady && Boolean(pendingCaptureFile);
+  const disabled = Boolean(state.scanBusy || state.fitLoading);
 
   function openCapturePicker(captureSource) {
     captureSourceRef.current = captureSource;
@@ -295,11 +292,11 @@ export function CameraCapturePanel({ captureLabel, onCapturePhoto, onContinueToR
   }
 
   return (
-    <section className="scan-workspace rounded-lg bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80">
+    <section className="scan-workspace rounded-lg bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80">
       <div className="scan-panel-header flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="min-w-0">
-          <h2 className="text-xl font-semibold tracking-tight text-ink">Shopper scan</h2>
-          <p className="mt-1 text-sm text-muted">Capture or upload a front-facing shopper photo for fit analysis.</p>
+          <h2 className="text-xl font-semibold tracking-tight text-ink">Scan shopper</h2>
+          <p className="mt-1 text-sm text-muted">Stand on the mark and keep the full body inside the guide.</p>
         </div>
         <StatusBadge sourceText={cameraStatus} tone={scanComplete ? "success" : "neutral"}>
           <span className="scan-panel-status">{cameraStatus}</span>
@@ -307,7 +304,7 @@ export function CameraCapturePanel({ captureLabel, onCapturePhoto, onContinueToR
       </div>
 
       <div className="px-4 pb-4 sm:px-5">
-        <div className="scan-stage relative grid h-[360px] overflow-hidden rounded-lg bg-slate-950 text-white shadow-soft sm:h-[420px] xl:h-[440px]">
+        <div className="scan-stage relative grid h-[390px] overflow-hidden rounded-lg bg-white ring-1 ring-line/80 sm:h-[430px] xl:h-[455px]">
           <input
             accept="image/*"
             className="sr-only"
@@ -315,31 +312,31 @@ export function CameraCapturePanel({ captureLabel, onCapturePhoto, onContinueToR
             ref={fileInputRef}
             type="file"
           />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(148,163,184,0.16),transparent_32%),linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,1))]" />
+
           <div className="absolute inset-x-4 top-4 z-10 flex items-center justify-between gap-3">
-            <StatusBadge tone={scanComplete ? "success" : "dark"}>{captureLabel || cameraStatus}</StatusBadge>
-            <span className="rounded-md bg-white/10 px-2 py-1 text-xs font-medium text-white/70">Camera frame</span>
+            <StatusBadge tone={scanComplete ? "success" : "neutral"}>{captureLabel || cameraStatus}</StatusBadge>
+            <span className="rounded-md border border-line bg-white px-2 py-1 text-xs font-medium text-muted">
+              Camera frame
+            </span>
           </div>
 
-          <div className="relative mx-auto my-10 w-[min(64vw,320px)] rounded-[22px] border border-white/14 bg-white/[0.025]">
-            <div className="pointer-events-none absolute inset-0 rounded-[24px] bg-[linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[length:58px_58px]" />
-            <div className="pointer-events-none absolute inset-y-7 left-1/2 w-px -translate-x-1/2 bg-white/12" />
-            <div className="pointer-events-none absolute inset-x-7 top-1/3 h-px bg-white/12" />
-            <div className="pointer-events-none absolute inset-x-7 top-2/3 h-px bg-white/12" />
-
-            <div className="relative mx-auto h-[260px] w-full sm:h-[314px]">
-              <div className="absolute left-1/2 top-7 h-[52px] w-[52px] -translate-x-1/2 rounded-full border border-white/28 bg-white/10" />
-              <div className="absolute left-1/2 top-[92px] h-[150px] w-[108px] -translate-x-1/2 rounded-b-[26px] rounded-t-[56px] border border-white/28 bg-white/[0.06]" />
-              <div className="absolute left-1/2 top-[116px] h-[94px] w-[158px] -translate-x-1/2 rounded-[38px] border border-dashed border-white/25" />
-              <div className="absolute bottom-8 left-1/2 h-[66px] w-[84px] -translate-x-1/2 rounded-b-[36px] border border-white/20 bg-white/[0.035]" />
-              <div className="absolute left-8 right-8 top-[156px] h-px bg-emerald-200/70 shadow-[0_0_24px_rgba(167,243,208,0.7)]" />
+          <div className="relative mx-auto my-12 w-[min(70vw,330px)] rounded-[20px] border border-slate-200 bg-white">
+            <div className="pointer-events-none absolute inset-y-7 left-1/2 w-px -translate-x-1/2 bg-slate-200" />
+            <div className="pointer-events-none absolute inset-x-7 top-1/3 h-px bg-slate-200" />
+            <div className="pointer-events-none absolute inset-x-7 top-2/3 h-px bg-slate-200" />
+            <div className="relative mx-auto h-[270px] w-full sm:h-[322px]">
+              <div className="absolute left-1/2 top-7 h-[54px] w-[54px] -translate-x-1/2 rounded-full border-2 border-slate-500 bg-white" />
+              <div className="absolute left-1/2 top-[94px] h-[154px] w-[112px] -translate-x-1/2 rounded-b-[28px] rounded-t-[58px] border-2 border-slate-500 bg-white" />
+              <div className="absolute left-1/2 top-[118px] h-[96px] w-[162px] -translate-x-1/2 rounded-[38px] border border-dashed border-slate-400" />
+              <div className="absolute bottom-8 left-1/2 h-[68px] w-[86px] -translate-x-1/2 rounded-b-[36px] border-2 border-slate-500 bg-white" />
+              <div className="absolute left-8 right-8 top-[158px] h-0.5 bg-brand-500" />
             </div>
           </div>
 
-          <div className="absolute bottom-3 left-3 right-3 z-10 flex flex-col gap-2 rounded-lg bg-black/32 px-3 py-2 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+          <div className="absolute bottom-3 left-3 right-3 z-10 flex flex-col gap-2 rounded-md border border-line bg-white px-3 py-2 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-white">{scanStarted ? cameraStatus : "Ready to capture"}</p>
-              <p className="mt-0.5 text-xs text-white/68">Keep head, torso, and garment area inside the guide.</p>
+              <p className="text-sm font-semibold text-ink">{scanComplete ? "Looks ready" : "Ready to capture"}</p>
+              <p className="mt-0.5 text-xs text-muted">Height and weight are detected after capture.</p>
             </div>
             <div className="scan-action-row grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
               <Button className="h-9 min-w-28 px-3 text-sm" disabled={disabled} onClick={() => openCapturePicker("kiosk_webcam")}>
@@ -348,9 +345,9 @@ export function CameraCapturePanel({ captureLabel, onCapturePhoto, onContinueToR
               <Button className="h-9 min-w-28 px-3 text-sm" disabled={disabled} onClick={() => openCapturePicker("file_upload")} variant="secondary">
                 Upload photo
               </Button>
-              {scanComplete && (
+              {canChooseGarments && (
                 <Button className="col-span-2 h-9 min-w-32 px-3 text-sm sm:col-span-1" onClick={onContinueToReview} variant="secondary">
-                  Continue to review
+                  Choose garments
                 </Button>
               )}
             </div>
@@ -361,43 +358,206 @@ export function CameraCapturePanel({ captureLabel, onCapturePhoto, onContinueToR
   );
 }
 
-export function CaptureChecklist({ checked }) {
+function DetectedProfileReceipt({ confirmedProfile, pendingCaptureFile, workflowState }) {
+  const profileReady = Boolean(confirmedProfile?.profileConfirmed);
+  const scanComplete = workflowState.scan === "scanComplete";
+
   return (
-    <aside className="quality-checklist grid content-start gap-2">
-      <div>
-        <h3 className="text-sm font-semibold text-ink">Capture checklist</h3>
+    <section
+      className="detected-profile-receipt rounded-lg bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80"
+      data-detected-profile-receipt="true"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-ink">Detected profile</h3>
+          <p className="mt-1 text-sm leading-5 text-muted">
+            {profileReady ? "Profile confirmed" : scanComplete ? "Confirm once before choosing garments." : "Scan unlocks the shopper profile."}
+          </p>
+        </div>
+        <StatusBadge tone={profileReady ? "success" : "neutral"}>
+          {profileReady ? "Looks ready" : workflowStateLabels[workflowState.scan]}
+        </StatusBadge>
       </div>
-      <div className="grid gap-1.5">
-        {checklistItems.map((label) => (
-          <ChecklistItem checked={checked} key={label} label={label} />
-        ))}
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <MetricBlock label="Height" value={confirmedProfile?.heightCm ? `${confirmedProfile.heightCm} cm` : "-"} />
+        <MetricBlock label="Weight" value={confirmedProfile?.weightKg ? `${confirmedProfile.weightKg} kg` : "-"} />
       </div>
-    </aside>
+      <p className="mt-3 text-xs font-medium text-muted">
+        {pendingCaptureFile ? "Shopper image ready for garment selection." : "Capture is required before product selection."}
+      </p>
+    </section>
   );
 }
 
-export function ChecklistItem({ checked, label }) {
+function DetectedProfileEditor({
+  bodyMeasurements,
+  confirmedProfile,
+  fitIntent,
+  onBodyMeasurementChange,
+  onFitIntentChange,
+  profileEditorOpen,
+}) {
+  const heightValue = bodyMeasurements?.heightCm || confirmedProfile?.heightCm || "";
+  const weightValue = bodyMeasurements?.weightKg || confirmedProfile?.weightKg || "";
+
   return (
-    <div className="flex min-h-8 items-center gap-2 rounded-md bg-slate-50 px-2.5 py-1.5">
-      <span
-        className={[
-          "grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px] font-bold",
-          checked ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 bg-white text-transparent",
-        ].join(" ")}
-      >
-        ✓
-      </span>
-      <span className="text-sm font-medium text-ink">{label}</span>
+    <section className="rounded-lg bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-ink">Edit profile</h3>
+        <span className="text-xs font-semibold text-muted">{profileEditorOpen ? "Open" : "Confirm once"}</span>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <label className="grid gap-1 text-xs font-semibold text-muted" htmlFor="profile-height-cm">
+          Height
+          <input
+            className="h-9 rounded-md border border-line bg-white px-2 text-sm font-medium text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            id="profile-height-cm"
+            inputMode="decimal"
+            min="1"
+            onChange={(event) => onBodyMeasurementChange?.("heightCm", event.target.value)}
+            placeholder="cm"
+            type="number"
+            value={heightValue}
+          />
+        </label>
+        <label className="grid gap-1 text-xs font-semibold text-muted" htmlFor="profile-weight-kg">
+          Weight
+          <input
+            className="h-9 rounded-md border border-line bg-white px-2 text-sm font-medium text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            id="profile-weight-kg"
+            inputMode="decimal"
+            min="1"
+            onChange={(event) => onBodyMeasurementChange?.("weightKg", event.target.value)}
+            placeholder="kg"
+            type="number"
+            value={weightValue}
+          />
+        </label>
+      </div>
+      <div className="mt-3">
+        <FitIntentSelect disabled={false} onChange={onFitIntentChange} value={fitIntent || confirmedProfile?.fitIntent || "regular"} />
+      </div>
+    </section>
+  );
+}
+
+function OperatorSensorPanel({ mockSensorProfile, onDetectProfileFromSensor, operatorSensorOpen }) {
+  return (
+    <section className="rounded-lg bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80">
+      <div className="flex items-start gap-3">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-slate-50 text-slate-700 ring-1 ring-line">
+          <ScanIcon className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-ink">Sensor shortcut</h3>
+          <p className="mt-1 text-sm leading-5 text-muted">
+            Shift+S uses the mock sensor profile: {mockSensorProfile?.heightCm || "-"} cm, {mockSensorProfile?.weightKg || "-"} kg.
+          </p>
+          <p className="mt-1 text-xs font-medium text-muted">{operatorSensorOpen ? "Sensor panel open" : "Sensor ready"}</p>
+        </div>
+      </div>
+      <Button className="mt-3 w-full" onClick={() => onDetectProfileFromSensor?.("mock_sensor")} size="sm" variant="secondary">
+        Detect profile
+      </Button>
+    </section>
+  );
+}
+
+function PreparedGarmentPicker({
+  confirmedProfile,
+  garmentLabel,
+  onSelectPreparedGarment,
+  pendingCaptureFile,
+  preparedGarments = [],
+  preparedGarmentsStatus,
+  state,
+}) {
+  const canChoose = Boolean(confirmedProfile?.profileConfirmed && pendingCaptureFile && !state.scanBusy && !state.fitLoading);
+  const loading = preparedGarmentsStatus === "Loading";
+
+  return (
+    <section className="prepared-garment-picker rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Choose garments</p>
+          <h2 className="mt-1 text-xl font-semibold tracking-tight text-ink">Prepared products</h2>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
+            Select a product after the shopper scan. The backend session is created only for the chosen garment.
+          </p>
+        </div>
+        <DetectedProfileMini confirmedProfile={confirmedProfile} />
+      </div>
+
+      {!preparedGarments.length && !loading ? (
+        <div className="mt-5 grid min-h-[260px] place-items-center rounded-lg border border-dashed border-line bg-white p-6 text-center">
+          <div>
+            <ProductIcon className="mx-auto h-7 w-7 text-slate-400" />
+            <p className="mt-3 text-sm font-semibold text-ink">Prepared products appear here</p>
+            <p className="mt-1 text-sm text-muted">Add products in the Products area before shopper sessions.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {preparedGarments.map((garment) => {
+            const selected = state.garmentId === garment.garment_id;
+            const chartReady = Boolean(garment.size_chart_id || garment.size_chart?.length || garment.size_chart_name);
+            const name = garment.name || "Prepared garment";
+            const categoryLabel = formatCategoryLabel(garment.category || "tops");
+
+            return (
+              <button
+                className={[
+                  "grid min-h-[168px] gap-3 rounded-lg border bg-white p-4 text-left transition",
+                  selected ? "border-brand-500 ring-2 ring-brand-100" : "border-line hover:border-slate-300 hover:bg-slate-50",
+                  !canChoose && "cursor-not-allowed opacity-60",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                disabled={!canChoose}
+                key={garment.garment_id}
+                onClick={() => onSelectPreparedGarment?.(garment)}
+                type="button"
+              >
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-md bg-slate-50 text-slate-600 ring-1 ring-line">
+                    <ProductIcon className="h-6 w-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-ink">{name}</p>
+                    <p className="mt-1 text-sm text-muted">{categoryLabel}</p>
+                  </div>
+                </div>
+                <div className="grid gap-1 text-sm">
+                  <span className={chartReady ? "font-semibold text-emerald-700" : "font-semibold text-amber-700"}>
+                    {chartReady ? "Size chart ready" : "Size chart missing"}
+                  </span>
+                  <span className="text-muted">{garment.size_chart_sizes || garmentLabel || "Select to start fitting"}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DetectedProfileMini({ confirmedProfile }) {
+  return (
+    <div className="grid min-w-[220px] gap-1 rounded-md border border-line bg-white px-3 py-2">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Profile confirmed</p>
+      <p className="text-sm font-semibold text-ink">
+        {confirmedProfile?.heightCm || "-"} cm / {confirmedProfile?.weightKg || "-"} kg
+      </p>
     </div>
   );
 }
 
 export function ReviewStep({
-  bodyMeasurements,
+  confirmedProfile,
   fitIntent,
   garmentLabel,
   onAnalyzeFit,
-  onBodyMeasurementChange,
   onFitIntentChange,
   onQueueTryOn,
   state,
@@ -409,10 +569,9 @@ export function ReviewStep({
       <SelectedGarmentSummary compact garmentLabel={garmentLabel} state={state} />
       <div className="review-output-grid grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <SizeRecommendationPanel
-          bodyMeasurements={bodyMeasurements}
+          confirmedProfile={confirmedProfile}
           fitIntent={fitIntent}
           onAnalyzeFit={onAnalyzeFit}
-          onBodyMeasurementChange={onBodyMeasurementChange}
           onFitIntentChange={onFitIntentChange}
           state={state}
           workflowState={workflowState}
@@ -424,30 +583,20 @@ export function ReviewStep({
   );
 }
 
-export function SizeRecommendationPanel({
-  bodyMeasurements,
-  fitIntent,
-  onAnalyzeFit,
-  onBodyMeasurementChange,
-  onFitIntentChange,
-  state,
-  workflowState,
-}) {
+export function SizeRecommendationPanel({ confirmedProfile, fitIntent, onAnalyzeFit, onFitIntentChange, state, workflowState }) {
   const recommendation = state.fitRecommendation || {};
   const recommendedSize = recommendation.recommended_size;
   const confidence = formatConfidence(recommendation.confidence);
-  const selectedFitIntent = fitIntent || recommendation.preferred_fit || "regular";
+  const selectedFitIntent = fitIntent || recommendation.preferred_fit || confirmedProfile?.fitIntent || "regular";
   const needsMeasurements = workflowState.fit === "fitNeedsMeasurements";
   const fitLocked = workflowState.fit === "fitLocked";
   const fitLoading = workflowState.fit === "fitLoading";
-  const hasBasicMeasurements = Boolean(bodyMeasurements?.heightCm && bodyMeasurements?.weightKg);
   const canUpdate = Boolean(state.capturePassed && state.garmentId && !state.fitLoading);
   const fitIntentNeedsUpdate = state.fitRecommendationStatus === "needs_update";
-  const hasRecommendationInput = hasBasicMeasurements || fitIntentNeedsUpdate || !state.fitRecommendation;
   const candidates = Array.isArray(recommendation.candidates) ? recommendation.candidates.slice(0, 3) : [];
 
   return (
-    <section className="fit-recommendation-panel rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80">
+    <section className="fit-recommendation-panel rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Fit result</p>
@@ -461,77 +610,43 @@ export function SizeRecommendationPanel({
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
         <MetricBlock label="Recommended size" value={recommendedSize ? `Size ${recommendedSize}` : "Not ready"} />
         <MetricBlock label="Confidence" value={confidence} />
-        <FitIntentSelect
-          disabled={!state.capturePassed || fitLoading}
-          onChange={onFitIntentChange}
-          value={selectedFitIntent}
-        />
+        <FitIntentSelect disabled={!state.capturePassed || fitLoading} onChange={onFitIntentChange} value={selectedFitIntent} />
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <MetricBlock label="Height" value={confirmedProfile?.heightCm ? `${confirmedProfile.heightCm} cm` : "-"} />
+        <MetricBlock label="Weight" value={confirmedProfile?.weightKg ? `${confirmedProfile.weightKg} kg` : "-"} />
       </div>
 
       <p className="mt-4 rounded-md bg-slate-50 px-3 py-2 text-sm font-medium leading-5 text-ink">
-        {state.fitRecommendationLabel || recommendation.reason || "Run the shopper scan and add measurements if needed to produce a deterministic recommendation."}
+        {state.fitRecommendationLabel || recommendation.reason || "Fit Intelligence uses the confirmed profile and selected garment size chart."}
       </p>
 
-      <div className="mt-4 grid gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Key measurements or deltas</p>
-          <div className="mt-2 grid gap-2">
-            {candidates.length ? (
-              candidates.map((candidate) => (
-                <div className="flex min-h-9 items-center justify-between gap-3 border-b border-line/70 py-1.5 last:border-b-0" key={candidate.size}>
-                  <span className="text-sm font-medium text-ink">Size {candidate.size}</span>
-                  <span className="text-sm text-muted">{formatConfidence(candidate.confidence)} match</span>
-                </div>
-              ))
-            ) : (
-              <p className="rounded-md bg-slate-50 px-3 py-2 text-sm leading-5 text-muted">
-                Candidate deltas appear after a size chart and shopper measurements overlap.
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="grid gap-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Shopper measurements</p>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="grid gap-1 text-xs font-semibold text-muted" htmlFor="fit-height-cm">
-              Height
-              <input
-                className="h-9 rounded-md border border-line bg-white px-2 text-sm font-medium text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-                id="fit-height-cm"
-                inputMode="decimal"
-                min="1"
-                onChange={(event) => onBodyMeasurementChange?.("heightCm", event.target.value)}
-                placeholder="cm"
-                type="number"
-                value={bodyMeasurements?.heightCm || ""}
-              />
-            </label>
-            <label className="grid gap-1 text-xs font-semibold text-muted" htmlFor="fit-weight-kg">
-              Weight
-              <input
-                className="h-9 rounded-md border border-line bg-white px-2 text-sm font-medium text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-                id="fit-weight-kg"
-                inputMode="decimal"
-                min="1"
-                onChange={(event) => onBodyMeasurementChange?.("weightKg", event.target.value)}
-                placeholder="kg"
-                type="number"
-                value={bodyMeasurements?.weightKg || ""}
-              />
-            </label>
-          </div>
-          <Button
-            className="h-9 justify-center px-3 text-sm"
-            disabled={!canUpdate || fitLocked || !hasRecommendationInput}
-            onClick={onAnalyzeFit}
-            size="sm"
-            variant={needsMeasurements ? "primary" : "secondary"}
-          >
-            {fitLoading ? "Updating..." : "Update recommendation"}
-          </Button>
-        </div>
+      <div className="mt-4 grid gap-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Key measurements or deltas</p>
+        {candidates.length ? (
+          candidates.map((candidate) => (
+            <div className="flex min-h-9 items-center justify-between gap-3 border-b border-line/70 py-1.5 last:border-b-0" key={candidate.size}>
+              <span className="text-sm font-medium text-ink">Size {candidate.size}</span>
+              <span className="text-sm text-muted">{formatConfidence(candidate.confidence)} match</span>
+            </div>
+          ))
+        ) : (
+          <p className="rounded-md bg-slate-50 px-3 py-2 text-sm leading-5 text-muted">
+            Candidate deltas appear after the size chart and profile overlap.
+          </p>
+        )}
       </div>
+
+      <Button
+        className="mt-4 h-9 justify-center px-3 text-sm"
+        disabled={!canUpdate || fitLocked || (!fitIntentNeedsUpdate && !needsMeasurements && Boolean(recommendedSize))}
+        onClick={onAnalyzeFit}
+        size="sm"
+        variant={needsMeasurements ? "primary" : "secondary"}
+      >
+        {fitLoading ? "Updating..." : "Update recommendation"}
+      </Button>
     </section>
   );
 }
@@ -564,18 +679,18 @@ export function TryOnPreviewPanel({ onQueueTryOn, state, tryOnLabel, workflowSta
   const canRequestTryOn = fitReady && !tryOnGenerating;
 
   return (
-    <section className="tryon-review-panel rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80">
+    <section className="tryon-review-panel rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Try-on review</p>
-          <h2 className="mt-1 text-xl font-semibold tracking-tight text-ink">{tryOnLabel}</h2>
+          <h2 className="mt-1 text-xl font-semibold tracking-tight text-ink">Try-on preview</h2>
         </div>
         <StatusBadge tone={previewReady ? "success" : tryOnGenerating ? "neutral" : "locked"}>
           {workflowStateLabels[workflowState.tryOn]}
         </StatusBadge>
       </div>
 
-      <div className="tryon-result-stage mt-5 grid min-h-[420px] place-items-center rounded-lg bg-slate-100 p-4 ring-1 ring-line/70">
+      <div className="tryon-result-stage mt-5 grid min-h-[420px] place-items-center rounded-lg bg-slate-50 p-4 ring-1 ring-line/70">
         {previewReady ? (
           state.previewImageUrl ? (
             <img
@@ -588,16 +703,16 @@ export function TryOnPreviewPanel({ onQueueTryOn, state, tryOnLabel, workflowSta
               <div className="mx-auto grid h-24 w-16 place-items-end rounded-b-lg rounded-t-full bg-gradient-to-b from-slate-200 to-slate-700 p-1">
                 <span className="h-4 w-full rounded bg-emerald-100 text-[10px] font-semibold text-emerald-700">Ready</span>
               </div>
-              <p className="text-sm font-semibold text-ink">Try-on preview ready</p>
+              <p className="text-sm font-semibold text-ink">{tryOnLabel || "Try-on preview ready"}</p>
             </div>
           )
         ) : (
           <div className="max-w-[280px] text-center">
             <DashboardIcon className="mx-auto h-6 w-6 text-slate-400" />
             <p className="mt-3 text-sm font-semibold text-ink">
-              {tryOnGenerating ? "Generating try-on preview" : state.tryOnError || "Preview unlocks after fit result."}
+              {tryOnGenerating ? "Generating try-on preview" : state.tryOnError || "Generate try-on from the current recommendation."}
             </p>
-            {fitReady && <p className="mt-1 text-sm leading-5 text-muted">Generate the visual review from the current recommendation.</p>}
+            {fitReady && <p className="mt-1 text-sm leading-5 text-muted">Create the visual review for this shopper and garment.</p>}
           </div>
         )}
       </div>
@@ -622,9 +737,10 @@ export function ReviewActions({ onQueueTryOn, state, workflowState }) {
   const tryOnGenerating = workflowState.tryOn === "tryOnGenerating";
   const fitReady = workflowState.fit === "fitReady";
   const canRegenerate = fitReady && !tryOnGenerating;
+  const canRequestTryOn = canRegenerate && !state.scanBusy;
 
   return (
-    <section className="flex flex-col gap-2 rounded-lg bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80 sm:flex-row sm:items-center sm:justify-between">
+    <section className="flex flex-col gap-2 rounded-lg bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h3 className="text-sm font-semibold text-ink">Review actions</h3>
         <p className="mt-1 text-sm text-muted">
@@ -635,7 +751,7 @@ export function ReviewActions({ onQueueTryOn, state, workflowState }) {
         <Button disabled={!previewReady} size="sm" variant="secondary">
           Approve result
         </Button>
-        <Button disabled={!canRegenerate || Boolean(state.scanBusy)} onClick={onQueueTryOn} size="sm" variant={previewReady ? "secondary" : "primary"}>
+        <Button disabled={!canRequestTryOn} onClick={onQueueTryOn} size="sm" variant={previewReady ? "secondary" : "primary"}>
           {tryOnGenerating ? "Generating..." : previewReady ? "Regenerate try-on" : "Generate try-on"}
         </Button>
       </div>
@@ -646,20 +762,20 @@ export function ReviewActions({ onQueueTryOn, state, workflowState }) {
 export function SelectedGarmentSummary({ compact = false, garmentLabel, state }) {
   const selected = Boolean(state.garmentId);
   const displayName = selected ? garmentLabel : "No garment selected";
-  const categoryLabel = selected ? formatCategoryLabel(state.garmentCategory || "tops") : "Upload a product to start";
+  const categoryLabel = selected ? formatCategoryLabel(state.garmentCategory || "tops") : "Add products before shopper sessions";
   const garmentTypeLabel = state.garmentType ? state.garmentType.replaceAll("_", " ") : "";
   const chartLabel = getSizeChartLabel(state);
 
   return (
     <section
       className={[
-        "selected-garment-context-bar rounded-lg bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-line/80",
+        "selected-garment-context-bar rounded-lg bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80",
         compact ? "p-3" : "p-4",
       ].join(" ")}
-      data-selected-garment-bar="visible-after-upload"
+      data-selected-garment-bar="visible-after-selection"
     >
       <div className="flex min-w-0 items-center gap-3">
-        <div className={compact ? "grid h-10 w-10 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-700 ring-1 ring-line/80" : "grid h-12 w-12 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-700 ring-1 ring-line/80"}>
+        <div className={compact ? "grid h-10 w-10 shrink-0 place-items-center rounded-md bg-slate-50 text-slate-700 ring-1 ring-line/80" : "grid h-12 w-12 shrink-0 place-items-center rounded-md bg-slate-50 text-slate-700 ring-1 ring-line/80"}>
           {state.garmentPreviewUrl ? (
             <img
               alt=""
@@ -681,7 +797,7 @@ export function SelectedGarmentSummary({ compact = false, garmentLabel, state })
               </>
             )}
           </div>
-          <p className={state.sizeChartId ? "mt-1 truncate text-sm text-muted" : "mt-1 truncate text-sm font-medium text-amber-700"}>
+          <p className={state.sizeChartId ? "mt-1 truncate text-sm text-emerald-700" : "mt-1 truncate text-sm font-medium text-amber-700"}>
             {chartLabel}
           </p>
         </div>
@@ -692,7 +808,7 @@ export function SelectedGarmentSummary({ compact = false, garmentLabel, state })
 
 export function StatusBadge({ children, sourceText, tone = "neutral" }) {
   const tones = {
-    dark: "bg-white/10 text-white ring-white/15",
+    dark: "bg-slate-900 text-white ring-slate-900",
     locked: "bg-slate-100 text-slate-500 ring-slate-200",
     neutral: "bg-slate-100 text-slate-700 ring-slate-200",
     success: "bg-emerald-50 text-emerald-700 ring-emerald-100",
@@ -712,15 +828,6 @@ export function StatusBadge({ children, sourceText, tone = "neutral" }) {
   );
 }
 
-function DetailRow({ label, value, valueTone = "text-ink" }) {
-  return (
-    <div className="flex min-h-9 items-center justify-between gap-3 border-b border-line/70 py-2 last:border-b-0">
-      <span className="text-sm text-muted">{label}</span>
-      <span className={`text-right text-sm font-semibold ${valueTone}`}>{value}</span>
-    </div>
-  );
-}
-
 function MetricBlock({ label, value }) {
   return (
     <div className="rounded-md bg-slate-50 px-3 py-2">
@@ -731,42 +838,49 @@ function MetricBlock({ label, value }) {
 }
 
 function currentStepLabel(activeWorkflowView) {
-  if (activeWorkflowView === "garment") return "Step 1 of 3 · Garment";
-  if (activeWorkflowView === "scan") return "Step 2 of 3 · Shopper scan";
-  return "Step 3 of 3 · Review";
+  if (activeWorkflowView === "scan") return "Scan shopper";
+  if (activeWorkflowView === "garments") return "Choose garments";
+  return "Review result";
 }
 
-function stepStatus(key, activeWorkflowView, state, workflowState) {
+function stepStatus(key, activeWorkflowView, state, workflowState, confirmedProfile) {
   if (key === activeWorkflowView) return "current";
-  if (isStepComplete(key, state, workflowState)) return "complete";
-  if (!isStepAvailable(key, state)) return "locked";
+  if (isStepComplete(key, state, workflowState, confirmedProfile)) return "complete";
+  if (!isStepAvailable(key, state, confirmedProfile)) return "locked";
   return "available";
 }
 
-function isStepAvailable(key, state) {
-  if (key === "garment") return true;
-  if (key === "scan") return Boolean(state.garmentId);
-  return Boolean(state.capturePassed);
+function isStepAvailable(key, state, confirmedProfile) {
+  if (key === "scan") return true;
+  if (key === "garments") return Boolean(state.capturePassed && confirmedProfile?.profileConfirmed);
+  return Boolean(state.fitReady || state.fitRecommendation);
 }
 
-function isStepComplete(key, state, workflowState) {
-  if (key === "garment") return Boolean(state.garmentId);
-  if (key === "scan") return Boolean(state.capturePassed);
+function isStepComplete(key, state, workflowState, confirmedProfile) {
+  if (key === "scan") return Boolean(state.capturePassed && confirmedProfile?.profileConfirmed);
+  if (key === "garments") return Boolean(state.garmentId);
   return workflowState.tryOn === "tryOnReady";
 }
 
-function resolveWorkflowView(view, state) {
+function resolveWorkflowView(view, state, confirmedProfile) {
   const normalized = {
     capture: "scan",
     fit: "review",
-    product: "garment",
+    garment: "garments",
+    product: "garments",
     tryon: "review",
   }[view] || view;
 
-  if (!state.garmentId && normalized !== "scan") return "garment";
-  if (normalized === "review" && !state.capturePassed) return "scan";
-  if (normalized === "garment" || normalized === "scan" || normalized === "review") return normalized;
-  return state.capturePassed ? "review" : "scan";
+  if (normalized === "review" && !state.fitReady && !state.fitRecommendation) {
+    return state.capturePassed && confirmedProfile?.profileConfirmed ? "garments" : "scan";
+  }
+  if (normalized === "garments" && (!state.capturePassed || !confirmedProfile?.profileConfirmed)) return "scan";
+  if (normalized === "scan" || normalized === "garments" || normalized === "review") return normalized;
+  return state.fitReady || state.fitRecommendation
+    ? "review"
+    : state.capturePassed && confirmedProfile?.profileConfirmed
+      ? "garments"
+      : "scan";
 }
 
 function formatCategoryLabel(category) {
@@ -780,46 +894,44 @@ function formatCategoryLabel(category) {
 }
 
 function getSizeChartLabel(state) {
-  if (state.sizeChartName) {
-    return `${state.sizeChartName}${state.sizeChartSizes ? ` · ${state.sizeChartSizes}` : ""}`;
-  }
-  if (state.sizeChartId) {
-    return `Chart linked${state.sizeChartSizes ? ` · ${state.sizeChartSizes}` : ""}`;
-  }
-  if (state.garmentId) return "No chart linked";
-  return "Size chart loads after upload";
+  if (state.sizeChartName && state.sizeChartSizes) return `${state.sizeChartName} (${state.sizeChartSizes})`;
+  if (state.sizeChartName) return state.sizeChartName;
+  if (state.sizeChartId) return "Size chart ready";
+  return "Size chart missing";
+}
+
+function formatConfidence(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) return "Not ready";
+  return `${Math.round(value * 100)}%`;
 }
 
 function getCameraStatus(workflowState) {
   if (workflowState.scan === "scanComplete") return workflowStateLabels.scanComplete;
   if (workflowState.scan === "scanning") return workflowStateLabels.scanning;
-  return workflowStateLabels.scanReady;
-}
-
-function getScanGuidance(workflowState) {
-  if (workflowState.scan === "scanComplete") return "Scan succeeded. Continue to review when the operator is ready.";
-  if (workflowState.scan === "scanning") return "Capture is being analyzed for fit readiness.";
-  return "Start scan or upload a shopper photo. Review outputs stay locked until scan completes.";
-}
-
-function formatConfidence(confidence) {
-  const numeric = Number.parseFloat(confidence);
-  if (!Number.isFinite(numeric) || numeric <= 0) return "Not ready";
-  return `${Math.round(numeric * 100)}%`;
+  if (workflowState.scan === "scanReady") return workflowStateLabels.scanReady;
+  return workflowStateLabels.scanNotStarted;
 }
 
 function getWorkflowState(state) {
-  const scan = state.capturePassed ? "scanComplete" : state.scanBusy || state.captureUploaded ? "scanning" : "scanNotStarted";
-  const fit = state.fitReady
-    ? "fitReady"
-    : state.fitLoading
-      ? "fitLoading"
-      : state.fitNeedsMeasurements || state.fitRecommendationStatus === "insufficient_measurements"
+  const scan = state.scanBusy
+    ? "scanning"
+    : state.capturePassed
+      ? "scanComplete"
+      : state.captureUploaded
+        ? "scanReady"
+        : "scanNotStarted";
+
+  const fit = state.fitLoading
+    ? "fitLoading"
+    : state.fitReady
+      ? "fitReady"
+      : state.fitNeedsMeasurements
         ? "fitNeedsMeasurements"
         : "fitLocked";
-  const tryOn = state.previewKey
+
+  const tryOn = state.visualPreviewReady || state.previewKey || state.previewImageUrl
     ? "tryOnReady"
-    : ["queued", "leased", "running"].includes(String(state.jobStatus || "").toLowerCase())
+    : ["queued", "running", "processing"].includes(String(state.jobStatus || "").toLowerCase())
       ? "tryOnGenerating"
       : "tryOnLocked";
 

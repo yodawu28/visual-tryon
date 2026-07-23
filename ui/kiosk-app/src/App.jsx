@@ -72,6 +72,7 @@ const initialSessionState = {
 
 function FittingRoomApp() {
   const fitRequestRef = useRef(0);
+  const tryOnRequestRef = useRef(0);
   const selectionRequestRef = useRef(0);
   const [apiBase, setApiBase] = useState(resolveDefaultApiBase());
   const [apiStatus, setApiStatus] = useState("Checking");
@@ -216,6 +217,7 @@ function FittingRoomApp() {
 
   function resetSession() {
     fitRequestRef.current += 1;
+    tryOnRequestRef.current += 1;
     selectionRequestRef.current += 1;
     clearStoredSessionState();
     if (state.garmentPreviewUrl) {
@@ -319,6 +321,7 @@ function FittingRoomApp() {
     }
 
     fitRequestRef.current += 1;
+    tryOnRequestRef.current += 1;
     selectionRequestRef.current += 1;
     clearStoredSessionState();
     setPendingCaptureFile(file);
@@ -396,7 +399,7 @@ function FittingRoomApp() {
   async function handleAnalyzeFit(sessionIdOverride = state.sessionId) {
     if (!sessionIdOverride) {
       appendLog("Choose a prepared garment before running Fit Intelligence.");
-      setWorkflowView("garment");
+      setWorkflowView("garments");
       return;
     }
 
@@ -452,6 +455,16 @@ function FittingRoomApp() {
       ...current,
       [field]: value,
     }));
+    setConfirmedProfile((current) => {
+      const nextProfile = {
+        ...current,
+        [field]: value,
+      };
+      return {
+        ...nextProfile,
+        profileConfirmed: Boolean(nextProfile.heightCm && nextProfile.weightKg),
+      };
+    });
   }
 
   function handleFitIntentChange(value) {
@@ -500,6 +513,7 @@ function FittingRoomApp() {
     const selectionRequestId = selectionRequestRef.current + 1;
     selectionRequestRef.current = selectionRequestId;
     fitRequestRef.current += 1;
+    tryOnRequestRef.current += 1;
     const selectedGarmentState = {
       garmentId: garment.garment_id,
       garmentName: garment.name || "Prepared garment",
@@ -574,16 +588,25 @@ function FittingRoomApp() {
       visualPreviewReady: false,
     }));
     appendLog("Try-on generation queued");
+    const tryOnRequestId = tryOnRequestRef.current + 1;
+    tryOnRequestRef.current = tryOnRequestId;
+    const sessionId = state.sessionId;
 
     try {
-      const job = await enqueueVisualPreviewJob(apiBase, state.sessionId);
+      const job = await enqueueVisualPreviewJob(apiBase, sessionId);
+      if (tryOnRequestRef.current !== tryOnRequestId) {
+        return;
+      }
       setState((current) => ({
         ...current,
         jobId: job.job_id,
         jobStatus: job.status || "queued",
       }));
-      pollTryOnJob(job.job_id);
+      pollTryOnJob(job.job_id, sessionId, tryOnRequestId);
     } catch (error) {
+      if (tryOnRequestRef.current !== tryOnRequestId) {
+        return;
+      }
       setState((current) => ({
         ...current,
         jobStatus: "failed",
@@ -593,20 +616,28 @@ function FittingRoomApp() {
     }
   }
 
-  async function pollTryOnJob(jobId, attempt = 0) {
+  async function pollTryOnJob(jobId, sessionId, tryOnRequestId, attempt = 0) {
+    if (tryOnRequestRef.current !== tryOnRequestId) {
+      return;
+    }
     try {
       const job = await getKioskJob(apiBase, jobId);
+      if (tryOnRequestRef.current !== tryOnRequestId) {
+        return;
+      }
       const result = job.result || {};
       const previewKey = result.personalized_tryon_key || "";
       const terminal = ["succeeded", "completed", "failed"].includes(String(job.status || "").toLowerCase());
       setState((current) => ({
-        ...current,
-        jobId,
-        jobStatus: job.status,
-        previewKey: previewKey || current.previewKey,
-        previewImageUrl: previewKey ? visualPreviewImageUrl(apiBase, previewKey) : current.previewImageUrl,
-        visualPreviewReady: Boolean(previewKey) || current.visualPreviewReady,
-        tryOnError: job.error || current.tryOnError,
+        ...(current.sessionId === sessionId ? {
+          ...current,
+          jobId,
+          jobStatus: job.status,
+          previewKey: previewKey || current.previewKey,
+          previewImageUrl: previewKey ? visualPreviewImageUrl(apiBase, previewKey) : current.previewImageUrl,
+          visualPreviewReady: Boolean(previewKey) || current.visualPreviewReady,
+          tryOnError: job.error || current.tryOnError,
+        } : current),
       }));
 
       if (previewKey) {
@@ -618,13 +649,18 @@ function FittingRoomApp() {
         return;
       }
       if (attempt < 90) {
-        window.setTimeout(() => pollTryOnJob(jobId, attempt + 1), 2000);
+        window.setTimeout(() => pollTryOnJob(jobId, sessionId, tryOnRequestId, attempt + 1), 2000);
       }
     } catch (error) {
+      if (tryOnRequestRef.current !== tryOnRequestId) {
+        return;
+      }
       setState((current) => ({
-        ...current,
-        jobStatus: "failed",
-        tryOnError: error.message || "Could not load try-on job status.",
+        ...(current.sessionId === sessionId ? {
+          ...current,
+          jobStatus: "failed",
+          tryOnError: error.message || "Could not load try-on job status.",
+        } : current),
       }));
       appendLog(`Try-on status failed: ${error.message || "unknown error"}`);
     }
@@ -715,7 +751,7 @@ function FittingRoomApp() {
               onBodyMeasurementChange={handleBodyMeasurementChange}
               onCapturePhoto={handleCapturePhoto}
               onFitIntentChange={handleFitIntentChange}
-              onContinueToReview={() => setWorkflowView("review")}
+              onContinueToReview={() => setWorkflowView("garments")}
               onContinueToScan={() => setWorkflowView("scan")}
               onDetectProfileFromSensor={detectProfileFromSensor}
               onOpenProduct={() => setProductModalOpen(true)}
@@ -773,9 +809,11 @@ function AppShell({ bottomNavigation, children, className, header, sidebar }) {
 
 function getAvailableWorkflowView(view, state, confirmedProfile = {}) {
   if (view === "review" && !state.fitReady && !state.fitRecommendation) {
-    return "scan";
+    return state.capturePassed && confirmedProfile.profileConfirmed ? "garments" : "scan";
   }
-  if (view === "scan" || view === "garment" || view === "review") return view;
+  if (view === "garment") return "garments";
+  if (view === "garments" && (!state.capturePassed || !confirmedProfile.profileConfirmed)) return "scan";
+  if (view === "scan" || view === "garments" || view === "review") return view;
   return "scan";
 }
 

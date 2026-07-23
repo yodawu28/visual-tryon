@@ -925,7 +925,7 @@ function stepStatus(key, activeWorkflowView, state, workflowState, confirmedProf
 function isStepAvailable(key, state, confirmedProfile) {
   if (key === "scan") return true;
   if (key === "garments") return Boolean(state.capturePassed && confirmedProfile?.profileConfirmed);
-  return Boolean(state.fitReady || state.fitRecommendation);
+  return Boolean(state.fitReady || state.fitRecommendation || isReviewUpdateAvailable(state));
 }
 
 function isStepComplete(key, state, workflowState, confirmedProfile) {
@@ -943,7 +943,7 @@ function resolveWorkflowView(view, state, confirmedProfile) {
     tryon: "review",
   }[view] || view;
 
-  if (normalized === "review" && !state.fitReady && !state.fitRecommendation) {
+  if (normalized === "review" && !state.fitReady && !state.fitRecommendation && !isReviewUpdateAvailable(state)) {
     return state.capturePassed && confirmedProfile?.profileConfirmed ? "garments" : "scan";
   }
   if (normalized === "garments" && (!state.capturePassed || !confirmedProfile?.profileConfirmed)) return "scan";
@@ -953,6 +953,10 @@ function resolveWorkflowView(view, state, confirmedProfile) {
     : state.capturePassed && confirmedProfile?.profileConfirmed
       ? "garments"
       : "scan";
+}
+
+function isReviewUpdateAvailable(state) {
+  return Boolean(state.garmentId && state.sessionId && state.capturePassed && state.fitRecommendationStatus === "needs_update");
 }
 
 function formatCategoryLabel(category) {

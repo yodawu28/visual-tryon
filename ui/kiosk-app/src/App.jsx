@@ -858,7 +858,12 @@ function AppShell({ bottomNavigation, children, className, header, sidebar }) {
 }
 
 function getAvailableWorkflowView(view, state, confirmedProfile = {}) {
-  if (view === "review" && !state.fitReady && !state.fitRecommendation) {
+  const reviewAvailable = Boolean(
+    state.fitReady ||
+      state.fitRecommendation ||
+      (state.garmentId && state.sessionId && state.capturePassed && state.fitRecommendationStatus === "needs_update"),
+  );
+  if (view === "review" && !reviewAvailable) {
     return state.capturePassed && confirmedProfile.profileConfirmed ? "garments" : "scan";
   }
   if (view === "garment") return "garments";

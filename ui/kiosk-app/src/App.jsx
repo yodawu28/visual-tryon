@@ -940,7 +940,7 @@ function ProductModal({ error, onClose, onSubmit, open, saving, sizeCharts, size
 
   return (
     <Modal
-      description="Use realistic product details so the fitting room reads like an operator app, not a demo wrapper."
+      description="Use realistic product details so recommendations and try-on output match the prepared catalog."
       onClose={onClose}
       open={open}
       title="Select product"

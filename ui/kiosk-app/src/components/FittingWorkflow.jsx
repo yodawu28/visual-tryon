@@ -152,7 +152,7 @@ export function WorkflowHeader({ activeWorkflowView, confirmedProfile, onWorkflo
     <header className="workflow-header border-b border-line/80 pb-3">
       <div className="grid gap-3 xl:grid-cols-[240px_minmax(0,1fr)] xl:items-end">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Step 1 of 3</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">{currentStepNumberLabel(activeWorkflowView)}</p>
           <h1 className="mt-1 text-lg font-semibold tracking-tight text-ink">Fitting Room</h1>
           <p className="mt-1 text-sm font-medium text-muted">{currentStepLabel(activeWorkflowView)}</p>
         </div>
@@ -473,11 +473,7 @@ function ProfileInput({ label, onChange, suffix, value }) {
 
 function OperatorSensorPanel({ mockSensorProfile, onChange, onClose, onDetectProfileFromSensor, operatorSensorOpen }) {
   if (!operatorSensorOpen) {
-    return (
-      <p className="rounded-lg border border-dashed border-line bg-white px-4 py-3 text-xs font-semibold text-muted">
-        Operator shortcut: Shift+S
-      </p>
-    );
+    return null;
   }
 
   return (
@@ -911,6 +907,12 @@ function currentStepLabel(activeWorkflowView) {
   if (activeWorkflowView === "scan") return "Scan shopper";
   if (activeWorkflowView === "garments") return "Choose garments";
   return "Review result";
+}
+
+function currentStepNumberLabel(activeWorkflowView) {
+  if (activeWorkflowView === "scan") return "Step 1 of 3";
+  if (activeWorkflowView === "garments") return "Step 2 of 3";
+  return "Step 3 of 3";
 }
 
 function stepStatus(key, activeWorkflowView, state, workflowState, confirmedProfile) {

@@ -21,7 +21,7 @@ export function Sidebar({ items, onSelect }) {
         </div>
         <div className="min-w-0">
           <p className="text-[11px] font-semibold text-muted">Visual fitting</p>
-          <h1 className="truncate text-sm font-semibold tracking-tight text-ink">Operator</h1>
+          <h1 className="truncate text-sm font-semibold tracking-tight text-ink">Fitting Room</h1>
         </div>
       </div>
 

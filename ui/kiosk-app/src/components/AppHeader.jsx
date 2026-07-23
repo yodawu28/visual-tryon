@@ -13,10 +13,8 @@ export function AppHeader(props) {
 }
 
 export function TopBar({
-  activeStage,
   garmentSelected,
   onNewSession,
-  onOpenDiagnostics,
   onOpenProduct,
   sessionLabel,
 }) {
@@ -40,15 +38,6 @@ export function TopBar({
           <Button className="min-w-0 w-full sm:w-auto" onClick={onNewSession} size="sm" variant="secondary">
             <span className="sm:hidden">New</span>
             <span className="hidden sm:inline">New session</span>
-          </Button>
-          <Button
-            aria-label={`Open tools for ${activeStage}`}
-            className="min-w-0 w-full sm:w-auto"
-            onClick={onOpenDiagnostics}
-            size="sm"
-            variant="ghost"
-          >
-            Tools
           </Button>
         </div>
       </div>

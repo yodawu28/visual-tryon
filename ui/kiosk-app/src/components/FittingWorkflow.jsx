@@ -342,7 +342,7 @@ export function CameraCapturePanel({ captureLabel, onCapturePhoto, onContinueToR
               <p className="mt-0.5 text-xs text-white/68">Keep head, torso, and garment area inside the guide.</p>
             </div>
             <div className="scan-action-row grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
-              <Button className="h-9 min-w-28 px-3 text-sm" disabled={disabled} onClick={() => openCapturePicker("guided_scan")}>
+              <Button className="h-9 min-w-28 px-3 text-sm" disabled={disabled} onClick={() => openCapturePicker("kiosk_webcam")}>
                 {state.scanBusy || state.fitLoading ? "Analyzing..." : scanComplete ? "Retake scan" : "Start scan"}
               </Button>
               <Button className="h-9 min-w-28 px-3 text-sm" disabled={disabled} onClick={() => openCapturePicker("file_upload")} variant="secondary">

@@ -119,7 +119,7 @@ def test_kiosk_ui_wires_garment_preview_and_visual_preview_jobs():
     workflow_source = Path("ui/kiosk-app/src/components/FittingWorkflow.jsx").read_text("utf-8")
 
     assert "garmentPreviewUrl" in app_js
-    assert "URL.createObjectURL(garmentImage)" in app_js
+    assert "URL.createObjectURL(garmentImage)" not in app_js
     assert "URL.revokeObjectURL" in app_js
     assert "garmentPreviewUrl" in workflow_source
     assert "<img" in workflow_source
@@ -280,12 +280,12 @@ def test_kiosk_ui_uses_scan_first_fitting_room_workflow():
     assert "Only render the active workflow view" in workflow_source
 
 
-def test_kiosk_ui_uses_backend_session_id_after_product_upload():
+def test_kiosk_ui_uses_backend_session_id_after_prepared_garment_selection():
     app_js = Path("ui/kiosk-app/src/App.jsx").read_text("utf-8")
     workflow_source = Path("ui/kiosk-app/src/components/FittingWorkflow.jsx").read_text("utf-8")
 
     assert "sessionResponse.session_id" in app_js
-    assert "sessionResponse.session?.session_id" not in app_js
+    assert "sessionResponse.session?.session_id" in app_js
     assert "Prepared products appear here" in workflow_source
     assert 'const displayName = selected ? garmentLabel : "T-Shirt";' not in workflow_source
 

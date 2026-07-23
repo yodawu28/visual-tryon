@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { AppHeader } from "./components/AppHeader.jsx";
 import { AppSidebar } from "./components/AppSidebar.jsx";
@@ -71,6 +71,8 @@ const initialSessionState = {
 };
 
 function FittingRoomApp() {
+  const fitRequestRef = useRef(0);
+  const selectionRequestRef = useRef(0);
   const [apiBase, setApiBase] = useState(resolveDefaultApiBase());
   const [apiStatus, setApiStatus] = useState("Checking");
   const [eventLog, setEventLog] = useState(["App loaded"]);
@@ -84,6 +86,7 @@ function FittingRoomApp() {
   const [preparedGarments, setPreparedGarments] = useState([]);
   const [preparedGarmentsStatus, setPreparedGarmentsStatus] = useState("Idle");
   const [pendingCaptureFile, setPendingCaptureFile] = useState(null);
+  const [pendingCaptureSource, setPendingCaptureSource] = useState("kiosk_webcam");
   const [profileEditorOpen, setProfileEditorOpen] = useState(false);
   const [operatorSensorOpen, setOperatorSensorOpen] = useState(false);
   const [mockSensorProfile, setMockSensorProfile] = useState(() => ({
@@ -152,6 +155,28 @@ function FittingRoomApp() {
   }, [apiBase]);
 
   useEffect(() => {
+    let cancelled = false;
+    setPreparedGarmentsStatus("Loading");
+    listGarments(apiBase, { limit: 100 })
+      .then((payload) => {
+        if (cancelled) return;
+        const garments = Array.isArray(payload.garments) ? payload.garments : [];
+        setPreparedGarments(garments);
+        setPreparedGarmentsStatus(garments.length ? "Ready" : "Empty");
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setPreparedGarments([]);
+        setPreparedGarmentsStatus("Unavailable");
+        appendLog(`Prepared garments unavailable: ${error.message || "unknown error"}`);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBase]);
+
+  useEffect(() => {
     if (!productModalOpen) return undefined;
 
     let cancelled = false;
@@ -190,12 +215,25 @@ function FittingRoomApp() {
   }
 
   function resetSession() {
+    fitRequestRef.current += 1;
+    selectionRequestRef.current += 1;
     clearStoredSessionState();
     if (state.garmentPreviewUrl) {
       URL.revokeObjectURL(state.garmentPreviewUrl);
     }
     setState(initialSessionState);
     setWorkflowView("scan");
+    setPendingCaptureFile(null);
+    setPendingCaptureSource("kiosk_webcam");
+    setProfileEditorOpen(false);
+    setConfirmedProfile({
+      heightCm: "",
+      weightKg: "",
+      fitIntent: "regular",
+      profileSource: "unknown",
+      profileConfirmed: false,
+      sensorStatus: "ready",
+    });
     setBodyMeasurements({ heightCm: "", weightKg: "" });
     setFitIntent("regular");
     appendLog("New fitting session prepared");
@@ -229,37 +267,40 @@ function FittingRoomApp() {
 
       const garmentResponse = await uploadGarment(apiBase, uploadPayload);
       const garment = garmentResponse.garment;
-      const sessionResponse = await createSession(apiBase, garment.garment_id);
-      const garmentPreviewUrl = URL.createObjectURL(garmentImage);
-      const nextState = {
-        ...initialSessionState,
-        garmentId: garment.garment_id,
-        garmentName: garment.name || garmentName,
-        garmentPreviewUrl,
-        garmentCategory: garment.category || garmentCategory,
-        garmentType: garment.garment_type || garmentType,
-        sessionId: sessionResponse.session_id || "",
-        sizeChartId: garment.size_chart_id || sizeChartId,
-        sizeChartName: selectedSizeChart?.name || "",
-        sizeChartSizes: formatSizeRange(selectedSizeChart?.size_chart || garment.size_chart || []),
+      const preparedGarment = {
+        ...garment,
+        size_chart_name: selectedSizeChart?.name || "",
+        size_chart_sizes: formatSizeRange(selectedSizeChart?.size_chart || garment.size_chart || []),
       };
-
-      persistSessionState(nextState);
-      setState((current) => {
-        if (current.garmentPreviewUrl) {
-          URL.revokeObjectURL(current.garmentPreviewUrl);
-        }
-        return nextState;
-      });
+      setPreparedGarments((current) => [
+        preparedGarment,
+        ...current.filter((item) => item.garment_id !== garment.garment_id),
+      ]);
+      setPreparedGarmentsStatus("Ready");
       setProductModalOpen(false);
-      setWorkflowView("scan");
-      appendLog(`Product uploaded: ${nextState.garmentName}`);
+      appendLog(`Product prepared: ${garment.name || garmentName}`);
     } catch (error) {
       setProductError(error.message || "Could not upload product.");
       appendLog(`Product upload failed: ${error.message || "unknown error"}`);
     } finally {
       setProductSaving(false);
     }
+  }
+
+  function detectProfileFromSensor(source = "mock_sensor") {
+    const heightCm = String(mockSensorProfile.heightCm || "").trim();
+    const weightKg = String(mockSensorProfile.weightKg || "").trim();
+    const nextProfile = {
+      heightCm,
+      weightKg,
+      fitIntent,
+      profileSource: source,
+      profileConfirmed: Boolean(heightCm && weightKg),
+      sensorStatus: heightCm && weightKg ? "detected" : "unavailable",
+    };
+    setConfirmedProfile(nextProfile);
+    setBodyMeasurements({ heightCm, weightKg });
+    return nextProfile;
   }
 
   function simulateCapture() {
@@ -273,71 +314,94 @@ function FittingRoomApp() {
   }
 
   async function handleCapturePhoto(file, captureSource = "file_upload") {
-    if (!state.sessionId) {
-      setProductError("Upload a garment and create a session before scanning the shopper.");
-      setProductModalOpen(true);
+    if (!file) {
       return;
     }
 
-    setState((current) => ({
-      ...current,
+    fitRequestRef.current += 1;
+    selectionRequestRef.current += 1;
+    clearStoredSessionState();
+    setPendingCaptureFile(file);
+    setPendingCaptureSource(captureSource);
+    detectProfileFromSensor("mock_sensor");
+    setState({
+      ...initialSessionState,
       captureUploaded: true,
-      capturePassed: false,
-      fitLoading: true,
-      fitReady: false,
+      capturePassed: true,
+      scanBusy: false,
+      fitLoading: false,
       fitNeedsMeasurements: false,
+      fitReady: false,
       fitRecommendation: null,
       fitRecommendationLabel: "",
       fitRecommendationStatus: "",
-      scanBusy: true,
       previewKey: "",
       previewImageUrl: "",
       visualPreviewReady: false,
       jobId: "",
       jobStatus: "",
       tryOnError: "",
+    });
+    setWorkflowView("scan");
+    appendLog("Shopper profile detected");
+  }
+
+  async function runBackendCaptureAndFit(
+    sessionId,
+    captureFile = pendingCaptureFile,
+    selectionRequestId = selectionRequestRef.current,
+    captureSource = pendingCaptureSource,
+  ) {
+    if (!sessionId || !captureFile) {
+      return false;
+    }
+
+    setState((current) => ({
+      ...current,
+      scanBusy: true,
+      fitLoading: true,
+      fitReady: false,
+      fitNeedsMeasurements: false,
     }));
-    appendLog("Uploading shopper scan");
 
-    try {
-      await uploadCapture(apiBase, state.sessionId, file, captureSource);
-      const captureResponse = await analyzeCapture(apiBase, state.sessionId);
-      const capturePassed = captureResponse.session?.capture_analysis?.passed !== false;
-      setState((current) => ({
-        ...current,
-        capturePassed,
-        scanBusy: false,
-      }));
-      appendLog(capturePassed ? "Capture analysis passed" : "Capture analysis needs review");
+    await uploadCapture(apiBase, sessionId, captureFile, captureSource || "file_upload");
+    if (selectionRequestRef.current !== selectionRequestId) {
+      return false;
+    }
+    const captureResponse = await analyzeCapture(apiBase, sessionId);
+    if (selectionRequestRef.current !== selectionRequestId) {
+      return false;
+    }
+    const capturePassed = captureResponse.session?.capture_analysis?.passed !== false;
+    setState((current) => ({
+      ...current,
+      capturePassed,
+      scanBusy: false,
+    }));
 
-      if (!capturePassed) {
-        setState((current) => ({
-          ...current,
-          fitLoading: false,
-          fitNeedsMeasurements: false,
-          fitReady: false,
-        }));
-        return;
-      }
-
-      await handleAnalyzeFit();
-    } catch (error) {
+    if (!capturePassed) {
       setState((current) => ({
         ...current,
         fitLoading: false,
-        scanBusy: false,
+        fitNeedsMeasurements: false,
+        fitReady: false,
       }));
-      appendLog(`Scan or fit failed: ${error.message || "unknown error"}`);
+      appendLog("Capture analysis needs review");
+      return false;
     }
+
+    return handleAnalyzeFit(sessionId);
   }
 
-  async function handleAnalyzeFit() {
-    if (!state.sessionId) {
-      setProductError("Upload a garment and create a session before running Fit Intelligence.");
-      setProductModalOpen(true);
+  async function handleAnalyzeFit(sessionIdOverride = state.sessionId) {
+    if (!sessionIdOverride) {
+      appendLog("Choose a prepared garment before running Fit Intelligence.");
+      setWorkflowView("garment");
       return;
     }
 
+    const fitRequestId = fitRequestRef.current + 1;
+    fitRequestRef.current = fitRequestId;
     setState((current) => ({
       ...current,
       fitLoading: true,
@@ -346,24 +410,40 @@ function FittingRoomApp() {
     }));
 
     try {
-      const fitResponse = await analyzeFit(apiBase, state.sessionId, getBodyMeasurementsPayload(bodyMeasurements), fitIntent);
+      const fitResponse = await analyzeFit(
+        apiBase,
+        sessionIdOverride,
+        getBodyMeasurementsPayload(confirmedProfile),
+        confirmedProfile.fitIntent || fitIntent,
+      );
+      if (fitRequestRef.current !== fitRequestId) {
+        return false;
+      }
       const recommendation = fitResponse.size_recommendation || {};
       setState((current) => ({
-        ...current,
-        ...fitRecommendationState(recommendation),
-        fitLoading: false,
+        ...(current.sessionId === sessionIdOverride ? {
+          ...current,
+          ...fitRecommendationState(recommendation),
+          fitLoading: false,
+        } : current),
       }));
       appendLog(
         recommendation.recommended_size
           ? `Fit recommendation: ${recommendation.recommended_size}`
           : `Fit result: ${recommendation.status || "needs input"}`,
       );
+      return true;
     } catch (error) {
+      if (fitRequestRef.current !== fitRequestId) {
+        return false;
+      }
       setState((current) => ({
-        ...current,
-        fitLoading: false,
+        ...(current.sessionId === sessionIdOverride
+          ? { ...current, fitLoading: false }
+          : current),
       }));
       appendLog(`Fit analysis failed: ${error.message || "unknown error"}`);
+      return false;
     }
   }
 
@@ -377,6 +457,10 @@ function FittingRoomApp() {
   function handleFitIntentChange(value) {
     const nextFitIntent = normalizeFitIntent(value);
     setFitIntent(nextFitIntent);
+    setConfirmedProfile((current) => ({
+      ...current,
+      fitIntent: nextFitIntent,
+    }));
     setState((current) => {
       if (!current.fitRecommendation && !current.fitReady && !current.previewKey && !current.jobId) {
         return current;
@@ -398,6 +482,81 @@ function FittingRoomApp() {
       };
     });
     appendLog(`Fit intent selected: ${nextFitIntent}`);
+  }
+
+  async function handleSelectPreparedGarment(garment) {
+    if (!garment?.garment_id) return;
+    if (!confirmedProfile.profileConfirmed) {
+      setProfileEditorOpen(true);
+      appendLog("Confirm shopper profile before choosing garments");
+      return;
+    }
+    if (!pendingCaptureFile) {
+      setWorkflowView("scan");
+      appendLog("Scan shopper before choosing garments");
+      return;
+    }
+
+    const selectionRequestId = selectionRequestRef.current + 1;
+    selectionRequestRef.current = selectionRequestId;
+    fitRequestRef.current += 1;
+    const selectedGarmentState = {
+      garmentId: garment.garment_id,
+      garmentName: garment.name || "Prepared garment",
+      garmentPreviewUrl: "",
+      garmentCategory: garment.category || "tops",
+      garmentType: garment.garment_type || "",
+      sizeChartId: garment.size_chart_id || "",
+      sizeChartName: garment.size_chart_name || "",
+      sizeChartSizes: garment.size_chart_sizes || formatSizeRange(garment.size_chart || []),
+    };
+
+    setState((current) => ({
+      ...current,
+      ...selectedGarmentState,
+      fitRecommendation: null,
+      fitRecommendationLabel: "",
+      fitRecommendationStatus: "",
+      fitNeedsMeasurements: false,
+      fitReady: false,
+      previewKey: "",
+      previewImageUrl: "",
+      visualPreviewReady: false,
+      jobId: "",
+      jobStatus: "",
+      tryOnError: "",
+    }));
+
+    try {
+      const sessionResponse = await createSession(apiBase, garment.garment_id);
+      if (selectionRequestRef.current !== selectionRequestId) {
+        return;
+      }
+      const sessionId = sessionResponse.session_id || sessionResponse.session?.session_id || "";
+      if (!sessionId) {
+        throw new Error("Could not create fitting session.");
+      }
+      setState((current) => ({ ...current, sessionId }));
+      persistSessionState({ ...initialSessionState, ...selectedGarmentState, sessionId });
+      const backendReady = await runBackendCaptureAndFit(
+        sessionId,
+        pendingCaptureFile,
+        selectionRequestId,
+        pendingCaptureSource,
+      );
+      if (selectionRequestRef.current !== selectionRequestId) {
+        return;
+      }
+      if (!backendReady) return;
+      setWorkflowView("review");
+      appendLog(`Garment selected: ${garment.name || garment.garment_id}`);
+    } catch (error) {
+      if (selectionRequestRef.current !== selectionRequestId) {
+        return;
+      }
+      setState((current) => ({ ...current, fitLoading: false, scanBusy: false }));
+      appendLog(`Garment selection failed: ${error.message || "unknown error"}`);
+    }
   }
 
   async function handleQueueTryOn() {
@@ -548,17 +707,26 @@ function FittingRoomApp() {
               activeStage={activeStage}
               bodyMeasurements={bodyMeasurements}
               captureLabel={captureLabel}
+              confirmedProfile={confirmedProfile}
               fitIntent={fitIntent}
               garmentLabel={garmentLabel}
+              mockSensorProfile={mockSensorProfile}
               onAnalyzeFit={handleAnalyzeFit}
               onBodyMeasurementChange={handleBodyMeasurementChange}
               onCapturePhoto={handleCapturePhoto}
               onFitIntentChange={handleFitIntentChange}
               onContinueToReview={() => setWorkflowView("review")}
               onContinueToScan={() => setWorkflowView("scan")}
+              onDetectProfileFromSensor={detectProfileFromSensor}
               onOpenProduct={() => setProductModalOpen(true)}
               onQueueTryOn={handleQueueTryOn}
+              onSelectPreparedGarment={handleSelectPreparedGarment}
               onWorkflowViewChange={(view) => setWorkflowView(getAvailableWorkflowView(view, state, confirmedProfile))}
+              operatorSensorOpen={operatorSensorOpen}
+              pendingCaptureFile={pendingCaptureFile}
+              preparedGarments={preparedGarments}
+              preparedGarmentsStatus={preparedGarmentsStatus}
+              profileEditorOpen={profileEditorOpen}
               state={state}
               tryOnLabel={tryOnLabel}
               workflowView={activeStage}

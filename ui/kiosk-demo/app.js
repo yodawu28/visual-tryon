@@ -7091,38 +7091,6 @@ function Button({
     }
   );
 }
-function HeaderStatus({ children }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-flex h-8 min-w-0 items-center justify-center rounded-md bg-slate-50 px-2.5 text-xs font-semibold text-slate-700 ring-1 ring-line/80 sm:px-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate", children }) });
-}
-function AppHeader(props) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(TopBar, { ...props });
-}
-function TopBar({
-  garmentSelected,
-  onNewSession,
-  onOpenProduct,
-  sessionLabel
-}) {
-  const productAction = garmentSelected ? "Change product" : "Select product";
-  const sessionStatus = sessionLabel === "Active" ? "Session active" : "New session";
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("header", { className: "sticky top-0 z-30 border-b border-line/80 bg-white/95 px-4 py-2.5 backdrop-blur-xl sm:px-6", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex w-full max-w-[1720px] flex-col gap-2 lg:flex-row lg:items-center lg:justify-between", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[11px] font-semibold uppercase tracking-[0.12em] text-muted", children: "Current workflow" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "truncate text-lg font-semibold tracking-tight text-ink", children: "Visual Fitting Room" })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid w-full grid-cols-2 items-center gap-2 sm:flex sm:w-auto sm:justify-end", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(HeaderStatus, { children: sessionStatus }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(Button, { className: "min-w-0 w-full sm:w-auto", onClick: onOpenProduct, size: "sm", variant: "secondary", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "sm:hidden", children: "Product" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "hidden sm:inline", children: productAction })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(Button, { className: "min-w-0 w-full sm:w-auto", onClick: onNewSession, size: "sm", variant: "secondary", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "sm:hidden", children: "New" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "hidden sm:inline", children: "New session" })
-      ] })
-    ] })
-  ] }) });
-}
 function ProductIcon({ className = "" }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { "aria-hidden": "true", className, fill: "none", viewBox: "0 0 24 24", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M8 7.5 5 9.2l1.4 4.1L8 12.7V19h8v-6.3l1.6.6L19 9.2l-3-1.7-2.1 1.8h-3.8L8 7.5Z", stroke: "currentColor", strokeLinejoin: "round", strokeWidth: "1.8" }),
@@ -7151,26 +7119,26 @@ function SettingsIcon({ className = "" }) {
   ] });
 }
 const appNavigation = [
+  { key: "products", label: "Garments", icon: ProductIcon },
+  { key: "size-charts", label: "Size charts", icon: TryOnIcon },
   { key: "sessions", label: "Sessions", icon: DashboardIcon },
-  { key: "products", label: "Products", icon: ProductIcon },
-  { key: "fitting-room", label: "Fitting Room", icon: ScanIcon },
-  { key: "history", label: "History", icon: TryOnIcon },
-  { key: "settings", label: "Settings", icon: SettingsIcon }
+  { key: "settings", label: "Settings", icon: SettingsIcon },
+  { key: "kiosk", label: "Visual Try-on", icon: ScanIcon }
 ];
-function AppSidebar({ onSelect }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(Sidebar, { items: appNavigation, onSelect });
+function AppSidebar({ activeKey = "products", onSelect }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(Sidebar, { activeKey, items: appNavigation, onSelect });
 }
-function Sidebar({ items, onSelect }) {
+function Sidebar({ activeKey = "products", items, onSelect }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { className: "hidden w-56 shrink-0 border-r border-line/70 bg-white px-3 py-4 lg:flex lg:flex-col", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 px-2", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid h-8 w-8 place-items-center rounded-md bg-ink text-xs font-black text-white shadow-sm", children: "VF" }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[11px] font-semibold text-muted", children: "Visual fitting" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "truncate text-sm font-semibold tracking-tight text-ink", children: "Fitting Room" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "truncate text-sm font-semibold tracking-tight text-ink", children: "Management" })
       ] })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("nav", { "aria-label": "Application navigation", className: "mt-6 grid gap-0.5", children: items.map((item) => {
-      const active = item.key === "fitting-room";
+      const active = item.key === activeKey;
       return /* @__PURE__ */ jsxRuntimeExports.jsxs(
         "button",
         {
@@ -7191,7 +7159,7 @@ function Sidebar({ items, onSelect }) {
     }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-auto border-t border-line/70 px-2 pt-4", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs font-medium text-muted", children: "Current section" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm font-semibold text-ink", children: "Fitting Room" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm font-semibold text-ink", children: "Management" })
     ] })
   ] });
 }
@@ -7234,7 +7202,6 @@ function FittingWorkflow({
   onDetectProfileFromSensor,
   onFitIntentChange,
   onMockSensorProfileChange,
-  onOpenProduct,
   onQueueTryOn,
   onSelectPreparedGarment,
   onToggleOperatorSensor,
@@ -7286,7 +7253,6 @@ function FittingWorkflow({
           {
             confirmedProfile,
             garmentLabel,
-            onOpenProduct,
             onSelectPreparedGarment,
             pendingCaptureFile,
             preparedGarments,
@@ -7819,7 +7785,6 @@ function OperatorSensorPanel({ mockSensorProfile, onChange, onClose, onDetectPro
 function PreparedGarmentPicker({
   confirmedProfile,
   garmentLabel,
-  onOpenProduct,
   onSelectPreparedGarment,
   pendingCaptureFile,
   preparedGarments = [],
@@ -7835,21 +7800,19 @@ function PreparedGarmentPicker({
         /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "mt-1 text-xl font-semibold tracking-tight text-ink", children: "Prepared products" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 max-w-2xl text-sm leading-6 text-muted", children: "Select a product after the shopper scan. The backend session is created only for the chosen garment." })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-2 sm:min-w-[220px]", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(DetectedProfileMini, { confirmedProfile }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: onOpenProduct, size: "sm", variant: "secondary", children: "Products" })
-      ] })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid gap-2 sm:min-w-[220px]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(DetectedProfileMini, { confirmedProfile }) })
     ] }),
     !preparedGarments.length && !loading ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-5 grid min-h-[260px] place-items-center rounded-lg border border-dashed border-line bg-white p-6 text-center", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(ProductIcon, { className: "mx-auto h-7 w-7 text-slate-400" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-3 text-sm font-semibold text-ink", children: "Prepared products appear here" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm text-muted", children: "Add products in the Products area before shopper sessions." })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm text-muted", children: "Add garments in Management before shopper sessions." }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("a", { className: "mt-3 inline-flex text-sm font-semibold text-brand-700", href: "/admin/garments", children: "Open Management" })
     ] }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3", children: preparedGarments.map((garment) => {
       var _a;
       const selected = state.garmentId === garment.garment_id;
       const chartReady = Boolean(garment.size_chart_id || ((_a = garment.size_chart) == null ? void 0 : _a.length) || garment.size_chart_name);
       const name = garment.name || "Prepared garment";
-      const categoryLabel = formatCategoryLabel(garment.category || "tops");
+      const categoryLabel = formatCategoryLabel$1(garment.category || "tops");
       const thumbnailUrl = garment.image_url || garment.garmentPreviewUrl || "";
       return /* @__PURE__ */ jsxRuntimeExports.jsxs(
         "button",
@@ -8072,7 +8035,7 @@ function ReviewActions({ onQueueTryOn, onTryAnotherGarment, state, workflowState
 function SelectedGarmentSummary({ compact = false, garmentLabel, state }) {
   const selected = Boolean(state.garmentId);
   const displayName = selected ? garmentLabel : "No garment selected";
-  const categoryLabel = selected ? formatCategoryLabel(state.garmentCategory || "tops") : "Add products before shopper sessions";
+  const categoryLabel = selected ? formatCategoryLabel$1(state.garmentCategory || "tops") : "Add products before shopper sessions";
   const garmentTypeLabel = state.garmentType ? state.garmentType.replaceAll("_", " ") : "";
   const chartLabel = getSizeChartLabel(state);
   return /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -8176,7 +8139,7 @@ function resolveWorkflowView(view, state, confirmedProfile) {
 function isReviewUpdateAvailable(state) {
   return Boolean(state.garmentId && state.sessionId && state.capturePassed && state.fitRecommendationStatus === "needs_update");
 }
-function formatCategoryLabel(category) {
+function formatCategoryLabel$1(category) {
   const labels = {
     bottoms: "Bottoms",
     full_outfit: "Full outfit",
@@ -8420,11 +8383,11 @@ function displayTryOnLabel(state) {
   return "Try-on queued";
 }
 const appNavItems = [
+  { key: "products", label: "Garments", icon: ProductIcon },
+  { key: "size-charts", label: "Size charts", icon: TryOnIcon },
   { key: "sessions", label: "Sessions", icon: DashboardIcon },
-  { key: "products", label: "Products", icon: ProductIcon },
-  { key: "fitting-room", label: "Fitting Room", icon: ScanIcon },
-  { key: "history", label: "History", icon: TryOnIcon },
-  { key: "settings", label: "Settings", icon: SettingsIcon }
+  { key: "settings", label: "Settings", icon: SettingsIcon },
+  { key: "kiosk", label: "Visual Try-on", icon: ScanIcon }
 ];
 const initialSessionState = {
   garmentId: "",
@@ -8458,12 +8421,14 @@ function FittingRoomApp() {
   const selectionRequestRef = reactExports.useRef(0);
   const [apiBase, setApiBase] = reactExports.useState(resolveDefaultApiBase());
   const [apiStatus, setApiStatus] = reactExports.useState("Checking");
+  const [readinessPayload, setReadinessPayload] = reactExports.useState(null);
   const [eventLog, setEventLog] = reactExports.useState(["App loaded"]);
   const [diagnosticsDrawer, setDiagnosticsDrawer] = reactExports.useState(false);
   const [productModalOpen, setProductModalOpen] = reactExports.useState(false);
   const [productError, setProductError] = reactExports.useState("");
   const [productSaving, setProductSaving] = reactExports.useState(false);
   const [workflowView, setWorkflowView] = reactExports.useState("scan");
+  const [routePath, setRoutePath] = reactExports.useState(() => window.location.pathname || "/kiosk");
   const [sizeCharts, setSizeCharts] = reactExports.useState([]);
   const [sizeChartsStatus, setSizeChartsStatus] = reactExports.useState("Idle");
   const [preparedGarments, setPreparedGarments] = reactExports.useState([]);
@@ -8507,9 +8472,18 @@ function FittingRoomApp() {
   const captureLabel = displayCaptureLabel(state);
   const tryOnLabel = displayTryOnLabel(state);
   const activeStage = getAvailableWorkflowView(workflowView, state, confirmedProfile);
+  const surface = resolveAppSurface(routePath);
+  const managementSection = resolveManagementSection(routePath);
   reactExports.useEffect(() => {
     localStorage.setItem("kioskApiBase", apiBase);
   }, [apiBase]);
+  reactExports.useEffect(() => {
+    function handlePopState() {
+      setRoutePath(window.location.pathname || "/kiosk");
+    }
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
   reactExports.useEffect(() => {
     localStorage.setItem("kioskFitIntent", fitIntent);
   }, [fitIntent]);
@@ -8525,6 +8499,7 @@ function FittingRoomApp() {
     checkReadiness(apiBase).then((result) => {
       if (cancelled) return;
       setApiStatus(result.label);
+      setReadinessPayload(result.payload || null);
       appendLog(`Readiness: ${result.label}`);
     });
     return () => {
@@ -8553,7 +8528,7 @@ function FittingRoomApp() {
     };
   }, [apiBase]);
   reactExports.useEffect(() => {
-    if (!productModalOpen) return void 0;
+    if (!productModalOpen && surface !== "management") return void 0;
     let cancelled = false;
     setSizeChartsStatus("Loading");
     listSizeCharts(apiBase).then((payload) => {
@@ -8570,7 +8545,7 @@ function FittingRoomApp() {
     return () => {
       cancelled = true;
     };
-  }, [apiBase, productModalOpen]);
+  }, [apiBase, productModalOpen, surface]);
   reactExports.useEffect(() => {
     function handleKeyDown(event) {
       if (event.shiftKey && event.key.toLowerCase() === "s") {
@@ -9037,104 +9012,76 @@ function FittingRoomApp() {
     setApiStatus("Checking");
     const result = await checkReadiness(apiBase);
     setApiStatus(result.label);
+    setReadinessPayload(result.payload || null);
     appendLog(`Manual readiness check: ${result.label}`);
   }
-  function handleNavigationAction(destination) {
-    if (destination === "products") {
-      setProductModalOpen(true);
-      return;
-    }
+  function handleManagementNavigation(destination) {
+    const pathByDestination = {
+      sessions: "/admin/sessions",
+      products: "/admin/garments",
+      "size-charts": "/admin/size-charts",
+      settings: "/admin/settings",
+      kiosk: "/kiosk"
+    };
+    const nextPath = pathByDestination[destination] || "/admin/garments";
+    window.history.pushState({}, "", nextPath);
+    setRoutePath(nextPath);
     if (destination === "settings") {
       setDiagnosticsDrawer(true);
-      return;
     }
-    if (destination !== "fitting-room") {
-      appendLog(`Navigation selected: ${destination}`);
-    }
+    appendLog(`Navigation selected: ${destination}`);
   }
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    AppShell,
-    {
-      bottomNavigation: /* @__PURE__ */ jsxRuntimeExports.jsx("nav", { "aria-label": "Mobile navigation", className: bottomNavigation, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-5 gap-1", children: appNavItems.map((item) => {
-        const active = item.key === "fitting-room";
-        return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "button",
-          {
-            className: [
-              "grid min-h-14 place-items-center gap-1 rounded-xl px-1 text-xs font-semibold transition",
-              active ? "bg-slate-100 text-brand-700" : "text-slate-500"
-            ].join(" "),
-            onClick: () => handleNavigationAction(item.key),
-            type: "button",
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(item.icon, { className: "h-5 w-5" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate", children: item.label.split(" ")[0] })
-            ]
-          },
-          item.key
-        );
-      }) }) }),
-      className: applicationShell,
-      header: /* @__PURE__ */ jsxRuntimeExports.jsx(
-        AppHeader,
-        {
-          activeStage,
-          garmentSelected: Boolean(state.garmentId),
-          onNewSession: resetSession,
-          onOpenDiagnostics: () => setDiagnosticsDrawer((open) => !open),
-          onOpenProduct: () => setProductModalOpen(true),
-          sessionLabel
-        }
-      ),
-      sidebar: /* @__PURE__ */ jsxRuntimeExports.jsx(AppSidebar, { onSelect: handleNavigationAction }),
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("main", { className: "mx-auto w-full max-w-[1680px] px-4 py-4 sm:px-5 lg:py-5", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-          FittingWorkflow,
-          {
-            activeStage,
-            bodyMeasurements,
-            captureLabel,
-            confirmedProfile,
-            fitIntent,
-            garmentLabel,
-            mockSensorProfile,
-            onAnalyzeFit: handleAnalyzeFit,
-            onBodyMeasurementChange: handleBodyMeasurementChange,
-            onCapturePhoto: handleCapturePhoto,
-            onConfirmedProfileChange: handleConfirmedProfileChange,
-            onFitIntentChange: handleFitIntentChange,
-            onContinueToReview: () => setWorkflowView("garments"),
-            onContinueToScan: () => setWorkflowView("scan"),
-            onDetectProfileFromSensor: detectProfileFromSensor,
-            onMockSensorProfileChange: handleMockSensorProfileChange,
-            onOpenProduct: () => setProductModalOpen(true),
-            onQueueTryOn: handleQueueTryOn,
-            onSelectPreparedGarment: handleSelectPreparedGarment,
-            onToggleOperatorSensor: () => setOperatorSensorOpen((open) => !open),
-            onWorkflowViewChange: (view) => setWorkflowView(getAvailableWorkflowView(view, state, confirmedProfile)),
-            operatorSensorOpen,
-            pendingCaptureFile,
-            preparedGarments,
-            preparedGarmentsStatus,
-            profileEditorOpen,
-            state,
-            tryOnLabel,
-            workflowView: activeStage
-          }
-        ) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          DiagnosticsDrawer,
-          {
-            apiBase,
-            apiStatus,
-            diagnosticsDrawer,
-            eventLog,
-            onApiBaseChange: (value) => setApiBase(trimTrailingSlash(value)),
-            onCheckApi: checkApi,
-            onClose: () => setDiagnosticsDrawer(false)
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
+  const workflowProps = {
+    activeStage,
+    bodyMeasurements,
+    captureLabel,
+    confirmedProfile,
+    fitIntent,
+    garmentLabel,
+    mockSensorProfile,
+    onAnalyzeFit: handleAnalyzeFit,
+    onBodyMeasurementChange: handleBodyMeasurementChange,
+    onCapturePhoto: handleCapturePhoto,
+    onConfirmedProfileChange: handleConfirmedProfileChange,
+    onFitIntentChange: handleFitIntentChange,
+    onContinueToReview: () => setWorkflowView("garments"),
+    onContinueToScan: () => setWorkflowView("scan"),
+    onDetectProfileFromSensor: detectProfileFromSensor,
+    onMockSensorProfileChange: handleMockSensorProfileChange,
+    onQueueTryOn: handleQueueTryOn,
+    onSelectPreparedGarment: handleSelectPreparedGarment,
+    onToggleOperatorSensor: () => setOperatorSensorOpen((open) => !open),
+    onWorkflowViewChange: (view) => setWorkflowView(getAvailableWorkflowView(view, state, confirmedProfile)),
+    operatorSensorOpen,
+    pendingCaptureFile,
+    preparedGarments,
+    preparedGarmentsStatus,
+    profileEditorOpen,
+    state,
+    tryOnLabel,
+    workflowView: activeStage
+  };
+  if (surface === "management") {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+      ManagementApp,
+      {
+        apiBase,
+        apiStatus,
+        bottomNavigationClassName: bottomNavigation,
+        className: applicationShell,
+        diagnosticsDrawer,
+        eventLog,
+        managementSection,
+        onApiBaseChange: (value) => setApiBase(trimTrailingSlash(value)),
+        onCheckApi: checkApi,
+        onCloseDiagnostics: () => setDiagnosticsDrawer(false),
+        onNavigation: handleManagementNavigation,
+        onNewSession: resetSession,
+        onOpenDiagnostics: () => setDiagnosticsDrawer((open) => !open),
+        onOpenProduct: () => setProductModalOpen(true),
+        preparedGarments,
+        preparedGarmentsStatus,
+        productModal: /* @__PURE__ */ jsxRuntimeExports.jsx(
           ProductModal,
           {
             error: productError,
@@ -9145,13 +9092,293 @@ function FittingRoomApp() {
             sizeCharts,
             sizeChartsStatus
           }
-        )
+        ),
+        routePath,
+        readinessPayload,
+        sessionLabel,
+        sizeCharts,
+        sizeChartsStatus,
+        state
+      }
+    );
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    VisualTryOnApp,
+    {
+      className: applicationShell,
+      onNewSession: resetSession,
+      preparedGarmentsStatus,
+      sessionLabel,
+      workflowProps
+    }
+  );
+}
+function VisualTryOnApp({
+  className,
+  onNewSession,
+  preparedGarmentsStatus,
+  sessionLabel,
+  workflowProps
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className, "data-app-shell": "visual-tryon-app", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      VisualTryOnHeader,
+      {
+        onNewSession,
+        preparedGarmentsStatus,
+        sessionLabel
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("main", { className: "mx-auto w-full max-w-[1500px] px-4 py-4 sm:px-5 lg:py-5", children: /* @__PURE__ */ jsxRuntimeExports.jsx(FittingWorkflow, { ...workflowProps }) })
+  ] });
+}
+function VisualTryOnHeader({ onNewSession, preparedGarmentsStatus, sessionLabel }) {
+  const catalogLabel = preparedGarmentsStatus === "Ready" ? "Catalog ready" : "Catalog pending";
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("header", { className: "sticky top-0 z-30 border-b border-line/80 bg-white/95 px-4 py-2.5 backdrop-blur-xl sm:px-6", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex w-full max-w-[1500px] items-center justify-between gap-3", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[11px] font-semibold uppercase tracking-[0.12em] text-muted", children: "Visual try-on" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "truncate text-lg font-semibold tracking-tight text-ink", children: "Scan, choose, review" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 items-center gap-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "hidden h-8 items-center rounded-md bg-slate-50 px-3 text-xs font-semibold text-slate-700 ring-1 ring-line/80 sm:inline-flex", children: catalogLabel }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "hidden h-8 items-center rounded-md bg-slate-50 px-3 text-xs font-semibold text-slate-700 ring-1 ring-line/80 sm:inline-flex", children: sessionLabel === "Active" ? "Session active" : "New session" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "min-w-0", onClick: onNewSession, size: "sm", variant: "secondary", children: "New session" })
+    ] })
+  ] }) });
+}
+function ManagementApp({
+  apiBase,
+  apiStatus,
+  bottomNavigationClassName,
+  className,
+  diagnosticsDrawer,
+  eventLog,
+  managementSection,
+  onApiBaseChange,
+  onCheckApi,
+  onCloseDiagnostics,
+  onNavigation,
+  onNewSession,
+  onOpenDiagnostics,
+  onOpenProduct,
+  preparedGarments,
+  preparedGarmentsStatus,
+  productModal,
+  readinessPayload,
+  routePath,
+  sessionLabel,
+  sizeCharts,
+  sizeChartsStatus,
+  state
+}) {
+  const activeKey = managementNavKey(managementSection);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    AppShell,
+    {
+      bottomNavigation: /* @__PURE__ */ jsxRuntimeExports.jsx("nav", { "aria-label": "Mobile navigation", className: bottomNavigationClassName, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-5 gap-1", children: appNavItems.map((item) => {
+        const active = item.key === activeKey;
+        return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "button",
+          {
+            className: [
+              "grid min-h-14 place-items-center gap-1 rounded-xl px-1 text-xs font-semibold transition",
+              active ? "bg-slate-100 text-brand-700" : "text-slate-500"
+            ].join(" "),
+            onClick: () => onNavigation(item.key),
+            type: "button",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(item.icon, { className: "h-5 w-5" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate", children: item.label.split(" ")[0] })
+            ]
+          },
+          item.key
+        );
+      }) }) }),
+      className,
+      dataShell: "management-app",
+      header: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        ManagementHeader,
+        {
+          onNewSession,
+          onOpenDiagnostics,
+          onOpenProduct,
+          routePath,
+          sessionLabel
+        }
+      ),
+      sidebar: /* @__PURE__ */ jsxRuntimeExports.jsx(AppSidebar, { activeKey, onSelect: onNavigation }),
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          ManagementShell,
+          {
+            apiBase,
+            apiStatus,
+            eventLog,
+            managementSection,
+            onOpenDiagnostics,
+            onOpenProduct,
+            preparedGarments,
+            preparedGarmentsStatus,
+            readinessPayload,
+            sizeCharts,
+            sizeChartsStatus,
+            state
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          DiagnosticsDrawer,
+          {
+            apiBase,
+            apiStatus,
+            diagnosticsDrawer,
+            eventLog,
+            onApiBaseChange,
+            onCheckApi,
+            onClose: onCloseDiagnostics
+          }
+        ),
+        productModal
       ]
     }
   );
 }
-function AppShell({ bottomNavigation, children, className, header, sidebar }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className, "data-app-shell": "virtual-fitting-app", children: [
+function ManagementHeader({ onNewSession, onOpenDiagnostics, onOpenProduct, routePath, sessionLabel }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "sticky top-0 z-30 border-b border-line/80 bg-white/95 px-4 py-2.5 backdrop-blur-xl sm:px-6", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mx-auto flex w-full max-w-[1720px] flex-col gap-2 lg:flex-row lg:items-center lg:justify-between", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[11px] font-semibold uppercase tracking-[0.12em] text-muted", children: "Management" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "truncate text-lg font-semibold tracking-tight text-ink", children: managementTitle(routePath) })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid w-full grid-cols-3 items-center gap-2 sm:flex sm:w-auto sm:justify-end", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "min-w-0 w-full sm:w-auto", onClick: onOpenProduct, size: "sm", variant: "secondary", children: "Add garment" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "min-w-0 w-full sm:w-auto", onClick: onOpenDiagnostics, size: "sm", variant: "secondary", children: "Settings" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { className: "min-w-0 w-full sm:w-auto", onClick: onNewSession, size: "sm", variant: "secondary", children: "New session" })
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "sr-only", children: sessionLabel === "Active" ? "Session active" : "New session" })
+  ] });
+}
+function ManagementShell({
+  apiBase,
+  apiStatus,
+  eventLog,
+  managementSection,
+  onOpenDiagnostics,
+  onOpenProduct,
+  preparedGarments,
+  preparedGarmentsStatus,
+  readinessPayload,
+  sizeCharts,
+  sizeChartsStatus,
+  state
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "mx-auto grid w-full max-w-[1680px] gap-4 px-4 py-4 sm:px-5 lg:py-5", children: [
+    managementSection === "sessions" && /* @__PURE__ */ jsxRuntimeExports.jsx(SessionHistoryPage, { state }),
+    managementSection === "size-charts" && /* @__PURE__ */ jsxRuntimeExports.jsx(SizeChartsPage, { sizeCharts, sizeChartsStatus }),
+    managementSection === "settings" && /* @__PURE__ */ jsxRuntimeExports.jsx(
+      SystemConfigPage,
+      {
+        apiBase,
+        apiStatus,
+        eventLog,
+        onOpenDiagnostics,
+        readinessPayload
+      }
+    ),
+    managementSection === "garments" && /* @__PURE__ */ jsxRuntimeExports.jsx(
+      GarmentCatalogPage,
+      {
+        onOpenProduct,
+        preparedGarments,
+        preparedGarmentsStatus
+      }
+    )
+  ] });
+}
+function SystemConfigPage(props) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(DiagnosticsSettingsPage, { ...props });
+}
+function GarmentCatalogPage({ onOpenProduct, preparedGarments, preparedGarmentsStatus }) {
+  const loading = preparedGarmentsStatus === "Loading";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs font-semibold uppercase tracking-[0.14em] text-muted", children: "Garment catalog" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "mt-1 text-xl font-semibold tracking-tight text-ink", children: "Prepared garments" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 max-w-2xl text-sm leading-6 text-muted", children: "Import defaults from data/garment_catalog or upload a garment before shopper sessions." })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: onOpenProduct, size: "sm", variant: "primary", children: "Add garment" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4", children: preparedGarments.map((garment) => {
+      var _a;
+      return /* @__PURE__ */ jsxRuntimeExports.jsxs("article", { className: "rounded-lg border border-line bg-white p-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid aspect-[4/5] place-items-center overflow-hidden rounded-md bg-slate-50", children: garment.image_url ? /* @__PURE__ */ jsxRuntimeExports.jsx("img", { alt: `${garment.name || "Garment"} preview`, className: "h-full w-full object-contain", src: garment.image_url }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ProductIcon, { className: "h-7 w-7 text-slate-400" }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "mt-3 truncate text-sm font-semibold text-ink", children: garment.name || "Prepared garment" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm text-muted", children: formatCategoryLabel(garment.category || "tops") }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-2 text-xs font-semibold text-muted", children: garment.size_chart_id || ((_a = garment.size_chart) == null ? void 0 : _a.length) ? "Size chart ready" : "Size chart missing" })
+      ] }, garment.garment_id);
+    }) }),
+    !preparedGarments.length && !loading && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-5 rounded-lg border border-dashed border-line bg-white p-6 text-center", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-semibold text-ink", children: "No garments prepared" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm text-muted", children: "Run the RunPod workflow import or add a garment manually." })
+    ] })
+  ] });
+}
+function SizeChartsPage({ sizeCharts, sizeChartsStatus }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs font-semibold uppercase tracking-[0.14em] text-muted", children: "Size charts" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "mt-1 text-xl font-semibold tracking-tight text-ink", children: "Fit engine references" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3", children: sizeCharts.map((chart) => /* @__PURE__ */ jsxRuntimeExports.jsxs("article", { className: "rounded-lg border border-line bg-white p-4", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-sm font-semibold text-ink", children: chart.name }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "mt-1 text-sm text-muted", children: [
+        chart.country_code,
+        " · ",
+        chart.category
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-2 text-xs font-semibold text-muted", children: formatSizeRange(chart.size_chart || []) })
+    ] }, chart.size_chart_id)) }),
+    !sizeCharts.length && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "mt-4 text-sm text-muted", children: [
+      "Status: ",
+      sizeChartsStatus
+    ] })
+  ] });
+}
+function SessionHistoryPage({ state }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs font-semibold uppercase tracking-[0.14em] text-muted", children: "Sessions" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "mt-1 text-xl font-semibold tracking-tight text-ink", children: "Current session" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-5 grid gap-3 md:grid-cols-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusTile, { label: "Garment", value: state.garmentName || "Not selected" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusTile, { label: "Fit", value: state.fitRecommendationLabel || "Not ready" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusTile, { label: "Try-on", value: state.previewImageUrl ? "Generated" : state.jobStatus || "Not generated" })
+    ] })
+  ] });
+}
+function DiagnosticsSettingsPage({ apiBase, apiStatus, eventLog, onOpenDiagnostics, readinessPayload }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs font-semibold uppercase tracking-[0.14em] text-muted", children: "Settings" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "mt-1 text-xl font-semibold tracking-tight text-ink", children: "Visual engine config" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-sm leading-6 text-muted", children: "Leffa provider, API base, and runtime diagnostics live here." })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: onOpenDiagnostics, size: "sm", variant: "secondary", children: "Open diagnostics" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusTile, { label: "Visual engine", value: formatVisualProviderStatus(readinessPayload) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusTile, { label: "Model path", value: formatVisualModelPath(readinessPayload) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusTile, { label: "Checkpoint", value: formatVisualCheckpointStatus(readinessPayload) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusTile, { label: "Backend", value: apiStatus })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-3 grid gap-3 md:grid-cols-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusTile, { label: "API base", value: apiBase }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(StatusTile, { label: "Readiness", value: (readinessPayload == null ? void 0 : readinessPayload.status) || apiStatus })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("pre", { className: "mt-4 max-h-44 overflow-auto rounded-lg bg-slate-950 p-4 text-xs leading-5 text-slate-100", children: eventLog.join("\n") })
+  ] });
+}
+function AppShell({ bottomNavigation, children, className, dataShell = "virtual-fitting-app", header, sidebar }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className, "data-app-shell": dataShell, children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-h-screen", children: [
       sidebar,
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0 max-w-full flex-1 overflow-x-hidden pb-24 lg:pb-0", children: [
@@ -9161,6 +9388,60 @@ function AppShell({ bottomNavigation, children, className, header, sidebar }) {
     ] }),
     bottomNavigation
   ] });
+}
+function resolveAppSurface(pathname) {
+  return String(pathname || "").startsWith("/admin") ? "management" : "visual-tryon";
+}
+function resolveManagementSection(pathname) {
+  const path = String(pathname || "");
+  if (path.includes("/admin/size-charts")) return "size-charts";
+  if (path.includes("/admin/sessions")) return "sessions";
+  if (path.includes("/admin/settings")) return "settings";
+  return "garments";
+}
+function managementNavKey(section) {
+  if (section === "sessions") return "sessions";
+  if (section === "settings") return "settings";
+  if (section === "size-charts") return "size-charts";
+  return "products";
+}
+function managementTitle(routePath) {
+  const section = resolveManagementSection(routePath);
+  if (section === "size-charts") return "Size charts";
+  if (section === "sessions") return "Sessions";
+  if (section === "settings") return "Settings";
+  return "Garment catalog";
+}
+function formatCategoryLabel(category) {
+  return String(category).replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+function getVisualPreviewCheck(readinessPayload) {
+  var _a;
+  return ((_a = readinessPayload == null ? void 0 : readinessPayload.checks) == null ? void 0 : _a.visual_preview_provider) || null;
+}
+function formatVisualProviderStatus(readinessPayload) {
+  var _a;
+  const check = getVisualPreviewCheck(readinessPayload);
+  const provider = ((_a = check == null ? void 0 : check.details) == null ? void 0 : _a.provider) || "unknown";
+  if (provider === "local_leffa" || provider === "leffa") {
+    return check.status === "ready" ? "Leffa enabled" : "Leffa needs setup";
+  }
+  if (provider === "disabled") return "Disabled";
+  if (provider === "replicate_qwen") return "Replicate Qwen";
+  return (check == null ? void 0 : check.status) || "Unknown";
+}
+function formatVisualModelPath(readinessPayload) {
+  var _a;
+  const details = ((_a = getVisualPreviewCheck(readinessPayload)) == null ? void 0 : _a.details) || {};
+  return details.leffa_root || details.model || "Not reported";
+}
+function formatVisualCheckpointStatus(readinessPayload) {
+  const check = getVisualPreviewCheck(readinessPayload);
+  const details = (check == null ? void 0 : check.details) || {};
+  if (Array.isArray(details.missing) && details.missing.length) {
+    return `Missing ${details.missing.join(", ")}`;
+  }
+  return details.checkpoint_dir || (check == null ? void 0 : check.message) || "Not reported";
 }
 function getAvailableWorkflowView(view, state, confirmedProfile = {}) {
   const reviewAvailable = Boolean(
@@ -9350,6 +9631,12 @@ function DiagnosticsDrawer({
       ]
     }
   );
+}
+function StatusTile({ label, value }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-2xl border border-line bg-white p-4 shadow-sm", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs font-bold uppercase tracking-[0.14em] text-muted", children: label }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-2 break-words text-sm font-semibold text-ink", children: value })
+  ] });
 }
 clientExports.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(FittingRoomApp, {}) })

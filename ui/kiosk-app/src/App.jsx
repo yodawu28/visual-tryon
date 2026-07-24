@@ -37,11 +37,11 @@ import {
 } from "./lib/displayLabels.js";
 
 const appNavItems = [
+  { key: "products", label: "Garments", icon: ProductIcon },
+  { key: "size-charts", label: "Size charts", icon: TryOnIcon },
   { key: "sessions", label: "Sessions", icon: DashboardIcon },
-  { key: "products", label: "Products", icon: ProductIcon },
-  { key: "fitting-room", label: "Fitting Room", icon: ScanIcon },
-  { key: "history", label: "History", icon: TryOnIcon },
   { key: "settings", label: "Settings", icon: SettingsIcon },
+  { key: "kiosk", label: "Visual Try-on", icon: ScanIcon },
 ];
 
 const initialSessionState = {
@@ -77,12 +77,14 @@ function FittingRoomApp() {
   const selectionRequestRef = useRef(0);
   const [apiBase, setApiBase] = useState(resolveDefaultApiBase());
   const [apiStatus, setApiStatus] = useState("Checking");
+  const [readinessPayload, setReadinessPayload] = useState(null);
   const [eventLog, setEventLog] = useState(["App loaded"]);
   const [diagnosticsDrawer, setDiagnosticsDrawer] = useState(false);
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [productError, setProductError] = useState("");
   const [productSaving, setProductSaving] = useState(false);
   const [workflowView, setWorkflowView] = useState("scan");
+  const [routePath, setRoutePath] = useState(() => window.location.pathname || "/kiosk");
   const [sizeCharts, setSizeCharts] = useState([]);
   const [sizeChartsStatus, setSizeChartsStatus] = useState("Idle");
   const [preparedGarments, setPreparedGarments] = useState([]);
@@ -127,10 +129,21 @@ function FittingRoomApp() {
   const captureLabel = displayCaptureLabel(state);
   const tryOnLabel = displayTryOnLabel(state);
   const activeStage = getAvailableWorkflowView(workflowView, state, confirmedProfile);
+  const surface = resolveAppSurface(routePath);
+  const managementSection = resolveManagementSection(routePath);
 
   useEffect(() => {
     localStorage.setItem("kioskApiBase", apiBase);
   }, [apiBase]);
+
+  useEffect(() => {
+    function handlePopState() {
+      setRoutePath(window.location.pathname || "/kiosk");
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("kioskFitIntent", fitIntent);
@@ -149,6 +162,7 @@ function FittingRoomApp() {
     checkReadiness(apiBase).then((result) => {
       if (cancelled) return;
       setApiStatus(result.label);
+      setReadinessPayload(result.payload || null);
       appendLog(`Readiness: ${result.label}`);
     });
     return () => {
@@ -184,7 +198,7 @@ function FittingRoomApp() {
   }, [apiBase]);
 
   useEffect(() => {
-    if (!productModalOpen) return undefined;
+    if (!productModalOpen && surface !== "management") return undefined;
 
     let cancelled = false;
     setSizeChartsStatus("Loading");
@@ -205,7 +219,7 @@ function FittingRoomApp() {
     return () => {
       cancelled = true;
     };
-  }, [apiBase, productModalOpen]);
+  }, [apiBase, productModalOpen, surface]);
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -737,30 +751,190 @@ function FittingRoomApp() {
     setApiStatus("Checking");
     const result = await checkReadiness(apiBase);
     setApiStatus(result.label);
+    setReadinessPayload(result.payload || null);
     appendLog(`Manual readiness check: ${result.label}`);
   }
 
-  function handleNavigationAction(destination) {
-    if (destination === "products") {
-      setProductModalOpen(true);
-      return;
-    }
+  function handleManagementNavigation(destination) {
+    const pathByDestination = {
+      sessions: "/admin/sessions",
+      products: "/admin/garments",
+      "size-charts": "/admin/size-charts",
+      settings: "/admin/settings",
+      kiosk: "/kiosk",
+    };
+    const nextPath = pathByDestination[destination] || "/admin/garments";
+    window.history.pushState({}, "", nextPath);
+    setRoutePath(nextPath);
     if (destination === "settings") {
       setDiagnosticsDrawer(true);
-      return;
     }
-    if (destination !== "fitting-room") {
-      appendLog(`Navigation selected: ${destination}`);
-    }
+    appendLog(`Navigation selected: ${destination}`);
   }
+
+  const workflowProps = {
+    activeStage,
+    bodyMeasurements,
+    captureLabel,
+    confirmedProfile,
+    fitIntent,
+    garmentLabel,
+    mockSensorProfile,
+    onAnalyzeFit: handleAnalyzeFit,
+    onBodyMeasurementChange: handleBodyMeasurementChange,
+    onCapturePhoto: handleCapturePhoto,
+    onConfirmedProfileChange: handleConfirmedProfileChange,
+    onFitIntentChange: handleFitIntentChange,
+    onContinueToReview: () => setWorkflowView("garments"),
+    onContinueToScan: () => setWorkflowView("scan"),
+    onDetectProfileFromSensor: detectProfileFromSensor,
+    onMockSensorProfileChange: handleMockSensorProfileChange,
+    onQueueTryOn: handleQueueTryOn,
+    onSelectPreparedGarment: handleSelectPreparedGarment,
+    onToggleOperatorSensor: () => setOperatorSensorOpen((open) => !open),
+    onWorkflowViewChange: (view) => setWorkflowView(getAvailableWorkflowView(view, state, confirmedProfile)),
+    operatorSensorOpen,
+    pendingCaptureFile,
+    preparedGarments,
+    preparedGarmentsStatus,
+    profileEditorOpen,
+    state,
+    tryOnLabel,
+    workflowView: activeStage,
+  };
+
+  if (surface === "management") {
+    return (
+      <ManagementApp
+        apiBase={apiBase}
+        apiStatus={apiStatus}
+        bottomNavigationClassName={bottomNavigation}
+        className={applicationShell}
+        diagnosticsDrawer={diagnosticsDrawer}
+        eventLog={eventLog}
+        managementSection={managementSection}
+        onApiBaseChange={(value) => setApiBase(trimTrailingSlash(value))}
+        onCheckApi={checkApi}
+        onCloseDiagnostics={() => setDiagnosticsDrawer(false)}
+        onNavigation={handleManagementNavigation}
+        onNewSession={resetSession}
+        onOpenDiagnostics={() => setDiagnosticsDrawer((open) => !open)}
+        onOpenProduct={() => setProductModalOpen(true)}
+        preparedGarments={preparedGarments}
+        preparedGarmentsStatus={preparedGarmentsStatus}
+        productModal={
+          <ProductModal
+            error={productError}
+            onClose={() => setProductModalOpen(false)}
+            onSubmit={saveProduct}
+            open={productModalOpen}
+            saving={productSaving}
+            sizeCharts={sizeCharts}
+            sizeChartsStatus={sizeChartsStatus}
+          />
+        }
+        routePath={routePath}
+        readinessPayload={readinessPayload}
+        sessionLabel={sessionLabel}
+        sizeCharts={sizeCharts}
+        sizeChartsStatus={sizeChartsStatus}
+        state={state}
+      />
+    );
+  }
+
+  return (
+    <VisualTryOnApp
+      className={applicationShell}
+      onNewSession={resetSession}
+      preparedGarmentsStatus={preparedGarmentsStatus}
+      sessionLabel={sessionLabel}
+      workflowProps={workflowProps}
+    />
+  );
+}
+
+function VisualTryOnApp({
+  className,
+  onNewSession,
+  preparedGarmentsStatus,
+  sessionLabel,
+  workflowProps,
+}) {
+  return (
+    <div className={className} data-app-shell="visual-tryon-app">
+      <VisualTryOnHeader
+        onNewSession={onNewSession}
+        preparedGarmentsStatus={preparedGarmentsStatus}
+        sessionLabel={sessionLabel}
+      />
+      <main className="mx-auto w-full max-w-[1500px] px-4 py-4 sm:px-5 lg:py-5">
+        <FittingWorkflow {...workflowProps} />
+      </main>
+    </div>
+  );
+}
+
+function VisualTryOnHeader({ onNewSession, preparedGarmentsStatus, sessionLabel }) {
+  const catalogLabel = preparedGarmentsStatus === "Ready" ? "Catalog ready" : "Catalog pending";
+
+  return (
+    <header className="sticky top-0 z-30 border-b border-line/80 bg-white/95 px-4 py-2.5 backdrop-blur-xl sm:px-6">
+      <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">Visual try-on</p>
+          <h1 className="truncate text-lg font-semibold tracking-tight text-ink">Scan, choose, review</h1>
+        </div>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="hidden h-8 items-center rounded-md bg-slate-50 px-3 text-xs font-semibold text-slate-700 ring-1 ring-line/80 sm:inline-flex">
+            {catalogLabel}
+          </span>
+          <span className="hidden h-8 items-center rounded-md bg-slate-50 px-3 text-xs font-semibold text-slate-700 ring-1 ring-line/80 sm:inline-flex">
+            {sessionLabel === "Active" ? "Session active" : "New session"}
+          </span>
+          <Button className="min-w-0" onClick={onNewSession} size="sm" variant="secondary">
+            New session
+          </Button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function ManagementApp({
+  apiBase,
+  apiStatus,
+  bottomNavigationClassName,
+  className,
+  diagnosticsDrawer,
+  eventLog,
+  managementSection,
+  onApiBaseChange,
+  onCheckApi,
+  onCloseDiagnostics,
+  onNavigation,
+  onNewSession,
+  onOpenDiagnostics,
+  onOpenProduct,
+  preparedGarments,
+  preparedGarmentsStatus,
+  productModal,
+  readinessPayload,
+  routePath,
+  sessionLabel,
+  sizeCharts,
+  sizeChartsStatus,
+  state,
+}) {
+  const activeKey = managementNavKey(managementSection);
 
   return (
     <AppShell
       bottomNavigation={
-        <nav aria-label="Mobile navigation" className={bottomNavigation}>
+        <nav aria-label="Mobile navigation" className={bottomNavigationClassName}>
           <div className="grid grid-cols-5 gap-1">
             {appNavItems.map((item) => {
-              const active = item.key === "fitting-room";
+              const active = item.key === activeKey;
 
               return (
                 <button
@@ -769,7 +943,7 @@ function FittingRoomApp() {
                     active ? "bg-slate-100 text-brand-700" : "text-slate-500",
                   ].join(" ")}
                   key={item.key}
-                  onClick={() => handleNavigationAction(item.key)}
+                  onClick={() => onNavigation(item.key)}
                   type="button"
                 >
                   <item.icon className="h-5 w-5" />
@@ -780,79 +954,229 @@ function FittingRoomApp() {
           </div>
         </nav>
       }
-      className={applicationShell}
+      className={className}
+      dataShell="management-app"
       header={
-          <AppHeader
-            activeStage={activeStage}
-            garmentSelected={Boolean(state.garmentId)}
-            onNewSession={resetSession}
-            onOpenDiagnostics={() => setDiagnosticsDrawer((open) => !open)}
-            onOpenProduct={() => setProductModalOpen(true)}
-            sessionLabel={sessionLabel}
-          />
+        <ManagementHeader
+          onNewSession={onNewSession}
+          onOpenDiagnostics={onOpenDiagnostics}
+          onOpenProduct={onOpenProduct}
+          routePath={routePath}
+          sessionLabel={sessionLabel}
+        />
       }
-      sidebar={<AppSidebar onSelect={handleNavigationAction} />}
+      sidebar={<AppSidebar activeKey={activeKey} onSelect={onNavigation} />}
     >
-      <main className="mx-auto w-full max-w-[1680px] px-4 py-4 sm:px-5 lg:py-5">
-            <FittingWorkflow
-              activeStage={activeStage}
-              bodyMeasurements={bodyMeasurements}
-              captureLabel={captureLabel}
-              confirmedProfile={confirmedProfile}
-              fitIntent={fitIntent}
-              garmentLabel={garmentLabel}
-              mockSensorProfile={mockSensorProfile}
-              onAnalyzeFit={handleAnalyzeFit}
-              onBodyMeasurementChange={handleBodyMeasurementChange}
-              onCapturePhoto={handleCapturePhoto}
-              onConfirmedProfileChange={handleConfirmedProfileChange}
-              onFitIntentChange={handleFitIntentChange}
-              onContinueToReview={() => setWorkflowView("garments")}
-              onContinueToScan={() => setWorkflowView("scan")}
-              onDetectProfileFromSensor={detectProfileFromSensor}
-              onMockSensorProfileChange={handleMockSensorProfileChange}
-              onOpenProduct={() => setProductModalOpen(true)}
-              onQueueTryOn={handleQueueTryOn}
-              onSelectPreparedGarment={handleSelectPreparedGarment}
-              onToggleOperatorSensor={() => setOperatorSensorOpen((open) => !open)}
-              onWorkflowViewChange={(view) => setWorkflowView(getAvailableWorkflowView(view, state, confirmedProfile))}
-              operatorSensorOpen={operatorSensorOpen}
-              pendingCaptureFile={pendingCaptureFile}
-              preparedGarments={preparedGarments}
-              preparedGarmentsStatus={preparedGarmentsStatus}
-              profileEditorOpen={profileEditorOpen}
-              state={state}
-              tryOnLabel={tryOnLabel}
-              workflowView={activeStage}
-            />
-      </main>
-
+      <ManagementShell
+        apiBase={apiBase}
+        apiStatus={apiStatus}
+        eventLog={eventLog}
+        managementSection={managementSection}
+        onOpenDiagnostics={onOpenDiagnostics}
+        onOpenProduct={onOpenProduct}
+        preparedGarments={preparedGarments}
+        preparedGarmentsStatus={preparedGarmentsStatus}
+        readinessPayload={readinessPayload}
+        sizeCharts={sizeCharts}
+        sizeChartsStatus={sizeChartsStatus}
+        state={state}
+      />
       <DiagnosticsDrawer
         apiBase={apiBase}
         apiStatus={apiStatus}
         diagnosticsDrawer={diagnosticsDrawer}
         eventLog={eventLog}
-        onApiBaseChange={(value) => setApiBase(trimTrailingSlash(value))}
-        onCheckApi={checkApi}
-        onClose={() => setDiagnosticsDrawer(false)}
+        onApiBaseChange={onApiBaseChange}
+        onCheckApi={onCheckApi}
+        onClose={onCloseDiagnostics}
       />
-
-      <ProductModal
-        error={productError}
-        onClose={() => setProductModalOpen(false)}
-        onSubmit={saveProduct}
-        open={productModalOpen}
-        saving={productSaving}
-        sizeCharts={sizeCharts}
-        sizeChartsStatus={sizeChartsStatus}
-      />
+      {productModal}
     </AppShell>
   );
 }
 
-function AppShell({ bottomNavigation, children, className, header, sidebar }) {
+function ManagementHeader({ onNewSession, onOpenDiagnostics, onOpenProduct, routePath, sessionLabel }) {
   return (
-    <div className={className} data-app-shell="virtual-fitting-app">
+    <header className="sticky top-0 z-30 border-b border-line/80 bg-white/95 px-4 py-2.5 backdrop-blur-xl sm:px-6">
+      <div className="mx-auto flex w-full max-w-[1720px] flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">Management</p>
+          <h1 className="truncate text-lg font-semibold tracking-tight text-ink">{managementTitle(routePath)}</h1>
+        </div>
+        <div className="grid w-full grid-cols-3 items-center gap-2 sm:flex sm:w-auto sm:justify-end">
+          <Button className="min-w-0 w-full sm:w-auto" onClick={onOpenProduct} size="sm" variant="secondary">
+            Add garment
+          </Button>
+          <Button className="min-w-0 w-full sm:w-auto" onClick={onOpenDiagnostics} size="sm" variant="secondary">
+            Settings
+          </Button>
+          <Button className="min-w-0 w-full sm:w-auto" onClick={onNewSession} size="sm" variant="secondary">
+            New session
+          </Button>
+        </div>
+      </div>
+      <span className="sr-only">{sessionLabel === "Active" ? "Session active" : "New session"}</span>
+    </header>
+  );
+}
+
+function ManagementShell({
+  apiBase,
+  apiStatus,
+  eventLog,
+  managementSection,
+  onOpenDiagnostics,
+  onOpenProduct,
+  preparedGarments,
+  preparedGarmentsStatus,
+  readinessPayload,
+  sizeCharts,
+  sizeChartsStatus,
+  state,
+}) {
+  return (
+    <main className="mx-auto grid w-full max-w-[1680px] gap-4 px-4 py-4 sm:px-5 lg:py-5">
+      {managementSection === "sessions" && <SessionHistoryPage state={state} />}
+      {managementSection === "size-charts" && (
+        <SizeChartsPage sizeCharts={sizeCharts} sizeChartsStatus={sizeChartsStatus} />
+      )}
+      {managementSection === "settings" && (
+        <SystemConfigPage
+          apiBase={apiBase}
+          apiStatus={apiStatus}
+          eventLog={eventLog}
+          onOpenDiagnostics={onOpenDiagnostics}
+          readinessPayload={readinessPayload}
+        />
+      )}
+      {managementSection === "garments" && (
+        <GarmentCatalogPage
+          onOpenProduct={onOpenProduct}
+          preparedGarments={preparedGarments}
+          preparedGarmentsStatus={preparedGarmentsStatus}
+        />
+      )}
+    </main>
+  );
+}
+
+function SystemConfigPage(props) {
+  return <DiagnosticsSettingsPage {...props} />;
+}
+
+function GarmentCatalogPage({ onOpenProduct, preparedGarments, preparedGarmentsStatus }) {
+  const loading = preparedGarmentsStatus === "Loading";
+
+  return (
+    <section className="rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Garment catalog</p>
+          <h2 className="mt-1 text-xl font-semibold tracking-tight text-ink">Prepared garments</h2>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
+            Import defaults from data/garment_catalog or upload a garment before shopper sessions.
+          </p>
+        </div>
+        <Button onClick={onOpenProduct} size="sm" variant="primary">
+          Add garment
+        </Button>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {preparedGarments.map((garment) => (
+          <article className="rounded-lg border border-line bg-white p-3" key={garment.garment_id}>
+            <div className="grid aspect-[4/5] place-items-center overflow-hidden rounded-md bg-slate-50">
+              {garment.image_url ? (
+                <img alt={`${garment.name || "Garment"} preview`} className="h-full w-full object-contain" src={garment.image_url} />
+              ) : (
+                <ProductIcon className="h-7 w-7 text-slate-400" />
+              )}
+            </div>
+            <h3 className="mt-3 truncate text-sm font-semibold text-ink">{garment.name || "Prepared garment"}</h3>
+            <p className="mt-1 text-sm text-muted">{formatCategoryLabel(garment.category || "tops")}</p>
+            <p className="mt-2 text-xs font-semibold text-muted">
+              {garment.size_chart_id || garment.size_chart?.length ? "Size chart ready" : "Size chart missing"}
+            </p>
+          </article>
+        ))}
+      </div>
+
+      {!preparedGarments.length && !loading && (
+        <div className="mt-5 rounded-lg border border-dashed border-line bg-white p-6 text-center">
+          <p className="text-sm font-semibold text-ink">No garments prepared</p>
+          <p className="mt-1 text-sm text-muted">Run the RunPod workflow import or add a garment manually.</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SizeChartsPage({ sizeCharts, sizeChartsStatus }) {
+  return (
+    <section className="rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Size charts</p>
+      <h2 className="mt-1 text-xl font-semibold tracking-tight text-ink">Fit engine references</h2>
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {sizeCharts.map((chart) => (
+          <article className="rounded-lg border border-line bg-white p-4" key={chart.size_chart_id}>
+            <h3 className="text-sm font-semibold text-ink">{chart.name}</h3>
+            <p className="mt-1 text-sm text-muted">{chart.country_code} · {chart.category}</p>
+            <p className="mt-2 text-xs font-semibold text-muted">{formatSizeRange(chart.size_chart || [])}</p>
+          </article>
+        ))}
+      </div>
+      {!sizeCharts.length && <p className="mt-4 text-sm text-muted">Status: {sizeChartsStatus}</p>}
+    </section>
+  );
+}
+
+function SessionHistoryPage({ state }) {
+  return (
+    <section className="rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Sessions</p>
+      <h2 className="mt-1 text-xl font-semibold tracking-tight text-ink">Current session</h2>
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <StatusTile label="Garment" value={state.garmentName || "Not selected"} />
+        <StatusTile label="Fit" value={state.fitRecommendationLabel || "Not ready"} />
+        <StatusTile label="Try-on" value={state.previewImageUrl ? "Generated" : state.jobStatus || "Not generated"} />
+      </div>
+    </section>
+  );
+}
+
+function DiagnosticsSettingsPage({ apiBase, apiStatus, eventLog, onOpenDiagnostics, readinessPayload }) {
+  return (
+    <section className="rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Settings</p>
+          <h2 className="mt-1 text-xl font-semibold tracking-tight text-ink">Visual engine config</h2>
+          <p className="mt-1 text-sm leading-6 text-muted">Leffa provider, API base, and runtime diagnostics live here.</p>
+        </div>
+        <Button onClick={onOpenDiagnostics} size="sm" variant="secondary">
+          Open diagnostics
+        </Button>
+      </div>
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <StatusTile label="Visual engine" value={formatVisualProviderStatus(readinessPayload)} />
+        <StatusTile label="Model path" value={formatVisualModelPath(readinessPayload)} />
+        <StatusTile label="Checkpoint" value={formatVisualCheckpointStatus(readinessPayload)} />
+        <StatusTile label="Backend" value={apiStatus} />
+      </div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <StatusTile label="API base" value={apiBase} />
+        <StatusTile label="Readiness" value={readinessPayload?.status || apiStatus} />
+      </div>
+      <pre className="mt-4 max-h-44 overflow-auto rounded-lg bg-slate-950 p-4 text-xs leading-5 text-slate-100">
+        {eventLog.join("\n")}
+      </pre>
+    </section>
+  );
+}
+
+function AppShell({ bottomNavigation, children, className, dataShell = "virtual-fitting-app", header, sidebar }) {
+  return (
+    <div className={className} data-app-shell={dataShell}>
       <div className="flex min-h-screen">
         {sidebar}
         <div className="min-w-0 max-w-full flex-1 overflow-x-hidden pb-24 lg:pb-0">
@@ -863,6 +1187,68 @@ function AppShell({ bottomNavigation, children, className, header, sidebar }) {
       {bottomNavigation}
     </div>
   );
+}
+
+function resolveAppSurface(pathname) {
+  return String(pathname || "").startsWith("/admin") ? "management" : "visual-tryon";
+}
+
+function resolveManagementSection(pathname) {
+  const path = String(pathname || "");
+  if (path.includes("/admin/size-charts")) return "size-charts";
+  if (path.includes("/admin/sessions")) return "sessions";
+  if (path.includes("/admin/settings")) return "settings";
+  return "garments";
+}
+
+function managementNavKey(section) {
+  if (section === "sessions") return "sessions";
+  if (section === "settings") return "settings";
+  if (section === "size-charts") return "size-charts";
+  return "products";
+}
+
+function managementTitle(routePath) {
+  const section = resolveManagementSection(routePath);
+  if (section === "size-charts") return "Size charts";
+  if (section === "sessions") return "Sessions";
+  if (section === "settings") return "Settings";
+  return "Garment catalog";
+}
+
+function formatCategoryLabel(category) {
+  return String(category || "tops")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function getVisualPreviewCheck(readinessPayload) {
+  return readinessPayload?.checks?.visual_preview_provider || null;
+}
+
+function formatVisualProviderStatus(readinessPayload) {
+  const check = getVisualPreviewCheck(readinessPayload);
+  const provider = check?.details?.provider || "unknown";
+  if (provider === "local_leffa" || provider === "leffa") {
+    return check.status === "ready" ? "Leffa enabled" : "Leffa needs setup";
+  }
+  if (provider === "disabled") return "Disabled";
+  if (provider === "replicate_qwen") return "Replicate Qwen";
+  return check?.status || "Unknown";
+}
+
+function formatVisualModelPath(readinessPayload) {
+  const details = getVisualPreviewCheck(readinessPayload)?.details || {};
+  return details.leffa_root || details.model || "Not reported";
+}
+
+function formatVisualCheckpointStatus(readinessPayload) {
+  const check = getVisualPreviewCheck(readinessPayload);
+  const details = check?.details || {};
+  if (Array.isArray(details.missing) && details.missing.length) {
+    return `Missing ${details.missing.join(", ")}`;
+  }
+  return details.checkpoint_dir || check?.message || "Not reported";
 }
 
 function getAvailableWorkflowView(view, state, confirmedProfile = {}) {

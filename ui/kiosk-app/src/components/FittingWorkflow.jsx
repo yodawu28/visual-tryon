@@ -45,7 +45,6 @@ export function FittingWorkflow({
   onDetectProfileFromSensor,
   onFitIntentChange,
   onMockSensorProfileChange,
-  onOpenProduct,
   onQueueTryOn,
   onSelectPreparedGarment,
   onToggleOperatorSensor,
@@ -96,7 +95,6 @@ export function FittingWorkflow({
         <PreparedGarmentPicker
           confirmedProfile={confirmedProfile}
           garmentLabel={garmentLabel}
-          onOpenProduct={onOpenProduct}
           onSelectPreparedGarment={onSelectPreparedGarment}
           pendingCaptureFile={pendingCaptureFile}
           preparedGarments={preparedGarments}
@@ -686,7 +684,6 @@ function OperatorSensorPanel({ mockSensorProfile, onChange, onClose, onDetectPro
 function PreparedGarmentPicker({
   confirmedProfile,
   garmentLabel,
-  onOpenProduct,
   onSelectPreparedGarment,
   pendingCaptureFile,
   preparedGarments = [],
@@ -708,9 +705,6 @@ function PreparedGarmentPicker({
         </div>
         <div className="grid gap-2 sm:min-w-[220px]">
           <DetectedProfileMini confirmedProfile={confirmedProfile} />
-          <Button onClick={onOpenProduct} size="sm" variant="secondary">
-            Products
-          </Button>
         </div>
       </div>
 
@@ -719,7 +713,10 @@ function PreparedGarmentPicker({
           <div>
             <ProductIcon className="mx-auto h-7 w-7 text-slate-400" />
             <p className="mt-3 text-sm font-semibold text-ink">Prepared products appear here</p>
-            <p className="mt-1 text-sm text-muted">Add products in the Products area before shopper sessions.</p>
+            <p className="mt-1 text-sm text-muted">Add garments in Management before shopper sessions.</p>
+            <a className="mt-3 inline-flex text-sm font-semibold text-brand-700" href="/admin/garments">
+              Open Management
+            </a>
           </div>
         </div>
       ) : (

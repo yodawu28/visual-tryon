@@ -81,11 +81,10 @@ def mount_kiosk_ui(application: FastAPI) -> None:
         return
 
     mount_path = settings.kiosk_ui_path.rstrip("/") or "/kiosk"
-    application.mount(
-        mount_path,
-        StaticFiles(directory=ui_dir, html=True),
-        name="kiosk-ui",
-    )
+    mounted_paths = {mount_path}
+    application.mount(mount_path, StaticFiles(directory=ui_dir, html=True), name="kiosk-ui")
+    if "/admin" not in mounted_paths:
+        application.mount("/admin", StaticFiles(directory=ui_dir, html=True), name="management-ui")
 
 
 mount_kiosk_ui(app)

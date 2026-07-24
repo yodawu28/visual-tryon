@@ -1,18 +1,18 @@
 import { DashboardIcon, ProductIcon, ScanIcon, SettingsIcon, TryOnIcon } from "./icons.jsx";
 
 const appNavigation = [
+  { key: "products", label: "Garments", icon: ProductIcon },
+  { key: "size-charts", label: "Size charts", icon: TryOnIcon },
   { key: "sessions", label: "Sessions", icon: DashboardIcon },
-  { key: "products", label: "Products", icon: ProductIcon },
-  { key: "fitting-room", label: "Fitting Room", icon: ScanIcon },
-  { key: "history", label: "History", icon: TryOnIcon },
   { key: "settings", label: "Settings", icon: SettingsIcon },
+  { key: "kiosk", label: "Visual Try-on", icon: ScanIcon },
 ];
 
-export function AppSidebar({ onSelect }) {
-  return <Sidebar items={appNavigation} onSelect={onSelect} />;
+export function AppSidebar({ activeKey = "products", onSelect }) {
+  return <Sidebar activeKey={activeKey} items={appNavigation} onSelect={onSelect} />;
 }
 
-export function Sidebar({ items, onSelect }) {
+export function Sidebar({ activeKey = "products", items, onSelect }) {
   return (
     <aside className="hidden w-56 shrink-0 border-r border-line/70 bg-white px-3 py-4 lg:flex lg:flex-col">
       <div className="flex items-center gap-2 px-2">
@@ -21,13 +21,13 @@ export function Sidebar({ items, onSelect }) {
         </div>
         <div className="min-w-0">
           <p className="text-[11px] font-semibold text-muted">Visual fitting</p>
-          <h1 className="truncate text-sm font-semibold tracking-tight text-ink">Fitting Room</h1>
+          <h1 className="truncate text-sm font-semibold tracking-tight text-ink">Management</h1>
         </div>
       </div>
 
       <nav aria-label="Application navigation" className="mt-6 grid gap-0.5">
         {items.map((item) => {
-          const active = item.key === "fitting-room";
+          const active = item.key === activeKey;
 
           return (
             <button
@@ -51,7 +51,7 @@ export function Sidebar({ items, onSelect }) {
 
       <div className="mt-auto border-t border-line/70 px-2 pt-4">
         <p className="text-xs font-medium text-muted">Current section</p>
-        <p className="mt-1 text-sm font-semibold text-ink">Fitting Room</p>
+        <p className="mt-1 text-sm font-semibold text-ink">Management</p>
       </div>
     </aside>
   );

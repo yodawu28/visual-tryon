@@ -66,6 +66,17 @@ def test_kiosk_ui_mount_preserves_api_routes(monkeypatch):
 
     assert "/api/v1/readiness" in paths
     assert "/kiosk" in paths
+    assert "/admin" in paths
+
+
+def test_admin_ui_is_served_from_fastapi(monkeypatch):
+    app = _load_main_app(monkeypatch)
+    client = TestClient(app)
+
+    response = client.get("/admin/")
+
+    assert response.status_code == 200
+    assert "Visual Fitting Room" in response.text
 
 
 def test_kiosk_ui_uses_same_origin_default_for_runpod():
@@ -249,7 +260,7 @@ def test_kiosk_ui_has_screen_navigation_state_contract():
     app_js = Path("ui/kiosk-app/src/App.jsx").read_text("utf-8")
 
     assert "activeStage" in app_js
-    assert "handleNavigationAction" in app_js
+    assert "handleManagementNavigation" in app_js
     assert "kioskActiveScreen" not in app_js
     assert "setActiveScreen" not in app_js
     assert "screenPanels" not in app_js
@@ -260,6 +271,27 @@ def test_kiosk_ui_has_screen_navigation_state_contract():
     assert 'garmentName: ""' in app_js
     assert 'garmentId: "local-demo-garment"' not in app_js
     assert "storedSessionValue" in app_js
+
+
+def test_kiosk_and_management_surfaces_are_split_by_route():
+    app_js = Path("ui/kiosk-app/src/App.jsx").read_text("utf-8")
+    workflow_source = Path("ui/kiosk-app/src/components/FittingWorkflow.jsx").read_text("utf-8")
+
+    assert "resolveAppSurface" in app_js
+    assert "VisualTryOnApp" in app_js
+    assert "ManagementApp" in app_js
+    assert 'surface === "management"' in app_js
+    assert 'data-app-shell="visual-tryon-app"' in app_js
+    assert 'dataShell="management-app"' in app_js
+    assert "ManagementShell" in app_js
+    assert "GarmentCatalogPage" in app_js
+    assert "SystemConfigPage" in app_js
+    assert "SessionHistoryPage" in app_js
+    assert "DiagnosticsSettingsPage" in app_js
+    assert "/admin/garments" in workflow_source
+    assert "onOpenProduct" not in workflow_source
+    assert "ProductModal" in app_js
+    assert "VisualTryOnHeader" in app_js
 
 
 def test_kiosk_ui_uses_scan_first_fitting_room_workflow():
@@ -465,11 +497,14 @@ def test_kiosk_ui_prioritizes_scan_workspace_over_demo_dashboard_cards():
     assert "tryOnLocked" in workflow_source
     assert "tryOnGenerating" in workflow_source
     assert "tryOnReady" in workflow_source
+    assert "Garments" in sidebar_source
+    assert "Size charts" in sidebar_source
     assert "Sessions" in sidebar_source
-    assert "Products" in sidebar_source
-    assert "Fitting Room" in sidebar_source
-    assert "History" in sidebar_source
     assert "Settings" in sidebar_source
+    assert "Visual Try-on" in sidebar_source
+    assert "Products" not in sidebar_source
+    assert "Fitting Room" not in sidebar_source
+    assert "History" not in sidebar_source
     assert "Fitting workflow" not in sidebar_source
     assert "String(index + 1).padStart" not in sidebar_source
     assert "Fit result will appear here" not in workflow_source
@@ -488,11 +523,14 @@ def test_kiosk_ui_rebuild_removes_demo_dashboard_fragments():
     assert "tryon-result-stage" in workflow_source
     assert "prepared-garment-picker" in workflow_source
     assert "Session active" in header_source
+    assert "Garments" in sidebar_source
+    assert "Size charts" in sidebar_source
     assert "Sessions" in sidebar_source
-    assert "Products" in sidebar_source
-    assert "Fitting Room" in sidebar_source
-    assert "History" in sidebar_source
     assert "Settings" in sidebar_source
+    assert "Visual Try-on" in sidebar_source
+    assert "Products" not in sidebar_source
+    assert "Fitting Room" not in sidebar_source
+    assert "History" not in sidebar_source
 
     assert "Selected garment context" not in workflow_source
     assert "workflowView" in app_source

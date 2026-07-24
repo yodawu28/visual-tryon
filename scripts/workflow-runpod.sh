@@ -80,6 +80,11 @@ import_default_size_charts() {
   make runpod-import-default-size-charts
 }
 
+import_default_garments() {
+  log "import default garments"
+  make runpod-import-default-garments
+}
+
 run_api() {
   log "start kiosk API on ${HOST}:${PORT}"
   exec python -m scripts.run_kiosk_all "$@"
@@ -94,10 +99,12 @@ Modes:
   bootstrap         switch branch, ensure Node/npm, then run make runpod-bootstrap
   import-default-size-charts
                     switch branch, then import default RunPod size charts
-  run               switch branch, install deps, import size charts, build UI, start API + worker
-  run-with-ollama   switch branch, install deps, import size charts, build UI, start API + worker + Ollama
+  import-default-garments
+                    switch branch, then import default RunPod garment catalog
+  run               switch branch, install deps, import size charts/garments, build UI, start API + worker
+  run-with-ollama   switch branch, install deps, import size charts/garments, build UI, start API + worker + Ollama
   preflight         switch branch, then run scripts.kiosk_preflight
-  check             switch branch, install deps, import size charts, build UI, and run JSON readiness preflight
+  check             switch branch, install deps, import size charts/garments, build UI, and run JSON readiness preflight
 
 Environment:
   RUNPOD_BRANCH     Git branch to switch to. Default: feature/kiosk-gpu-flow
@@ -125,11 +132,16 @@ case "$MODE" in
     switch_branch
     import_default_size_charts
     ;;
+  import-default-garments)
+    switch_branch
+    import_default_garments
+    ;;
   run)
     switch_branch
     install_system_dependencies
     bootstrap_runtime
     import_default_size_charts
+    import_default_garments
     build_ui
     run_api "$@"
     ;;
@@ -138,6 +150,7 @@ case "$MODE" in
     install_system_dependencies
     bootstrap_runtime
     import_default_size_charts
+    import_default_garments
     build_ui
     run_api --start-ollama "$@"
     ;;
@@ -150,6 +163,7 @@ case "$MODE" in
     install_system_dependencies
     bootstrap_runtime
     import_default_size_charts
+    import_default_garments
     build_ui
     python -m scripts.kiosk_preflight --json "$@"
     ;;

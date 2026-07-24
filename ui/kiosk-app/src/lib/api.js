@@ -150,3 +150,7 @@ export async function getKioskJob(apiBase, jobId) {
 export function visualPreviewImageUrl(apiBase, personalizedTryonKey) {
   return `${apiBase}/api/v1/kiosk/visual-previews/${encodeURIComponent(personalizedTryonKey)}/image`;
 }
+
+export function garmentImageUrl(apiBase, garmentId) {
+  return `${apiBase}${GARMENTS_PATH}/${encodeURIComponent(garmentId)}/image`;
+}

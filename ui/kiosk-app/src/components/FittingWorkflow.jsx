@@ -729,6 +729,7 @@ function PreparedGarmentPicker({
             const chartReady = Boolean(garment.size_chart_id || garment.size_chart?.length || garment.size_chart_name);
             const name = garment.name || "Prepared garment";
             const categoryLabel = formatCategoryLabel(garment.category || "tops");
+            const thumbnailUrl = garment.image_url || garment.garmentPreviewUrl || "";
 
             return (
               <button
@@ -745,8 +746,17 @@ function PreparedGarmentPicker({
                 type="button"
               >
                 <div className="flex min-w-0 items-start gap-3">
-                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-md bg-slate-50 text-slate-600 ring-1 ring-line">
-                    <ProductIcon className="h-6 w-6" />
+                  <div className="grid h-16 w-14 shrink-0 place-items-center overflow-hidden rounded-md bg-slate-50 text-slate-600 ring-1 ring-line">
+                    {thumbnailUrl ? (
+                      <img
+                        alt={`${name} garment`}
+                        className="h-full w-full object-contain"
+                        loading="lazy"
+                        src={thumbnailUrl}
+                      />
+                    ) : (
+                      <ProductIcon className="h-6 w-6" />
+                    )}
                   </div>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-ink">{name}</p>
@@ -873,7 +883,7 @@ export function SizeRecommendationPanel({ confirmedProfile, fitIntent, onAnalyze
       <Button
         className="mt-4 h-9 justify-center px-3 text-sm"
         disabled={!canUpdate || fitLocked || (!fitIntentNeedsUpdate && !needsMeasurements && Boolean(recommendedSize))}
-        onClick={onAnalyzeFit}
+        onClick={() => onAnalyzeFit?.()}
         size="sm"
         variant={needsMeasurements ? "primary" : "secondary"}
       >

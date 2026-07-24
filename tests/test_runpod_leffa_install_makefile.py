@@ -103,6 +103,22 @@ def test_runpod_workflow_run_mode_imports_default_size_charts_before_building_ui
     assert run_block.index("import_default_size_charts") < run_block.index("build_ui")
 
 
+def test_runpod_workflow_run_mode_imports_default_garments_after_size_charts():
+    script = Path("scripts/workflow-runpod.sh").read_text("utf-8")
+
+    assert "import_default_garments" in script
+    assert "make runpod-import-default-garments" in script
+
+    run_block_start = script.index("  run)")
+    run_block_end = script.index("  run-with-ollama)")
+    run_block = script[run_block_start:run_block_end]
+
+    assert run_block.index("import_default_size_charts") < run_block.index(
+        "import_default_garments"
+    )
+    assert run_block.index("import_default_garments") < run_block.index("build_ui")
+
+
 def test_runpod_workflow_make_targets_call_script():
     result = subprocess.run(
         ["make", "-n", "runpod-workflow"],
@@ -133,3 +149,17 @@ def test_runpod_import_default_size_charts_target_uses_runpod_data_dir():
 
     assert "python -m scripts.seed_size_charts" in result.stdout
     assert "--db-path /workspace/tryon-data/size_charts/size_charts.sqlite3" in result.stdout
+
+
+def test_runpod_import_default_garments_target_uses_runpod_data_dir():
+    result = subprocess.run(
+        ["make", "-n", "runpod-import-default-garments"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "python -m scripts.seed_garment_catalog" in result.stdout
+    assert "--source-dir data/garment_catalog" in result.stdout
+    assert "--storage-dir /workspace/tryon-data/garments" in result.stdout
+    assert "--size-chart-db-path /workspace/tryon-data/size_charts/size_charts.sqlite3" in result.stdout

@@ -737,10 +737,29 @@ def test_get_kiosk_garment_endpoint_returns_registered_garment():
     assert payload["garment"]["garment_id"] == "garment:v1:test"
 
 
+def test_get_kiosk_garment_image_endpoint_returns_stored_image():
+    client = _client()
+
+    response = client.get("/api/v1/kiosk/garments/garment:v1:test/image")
+
+    assert response.status_code == 200
+    assert response.content == b"garment-image"
+    assert response.headers["content-type"] == "image/png"
+
+
 def test_get_kiosk_garment_endpoint_returns_404_for_missing_garment():
     client = _client()
 
     response = client.get("/api/v1/kiosk/garments/garment:v1:missing")
+
+    assert response.status_code == 404
+    assert "Garment not found" in response.json()["detail"]
+
+
+def test_get_kiosk_garment_image_endpoint_returns_404_for_missing_garment():
+    client = _client()
+
+    response = client.get("/api/v1/kiosk/garments/garment:v1:missing/image")
 
     assert response.status_code == 404
     assert "Garment not found" in response.json()["detail"]

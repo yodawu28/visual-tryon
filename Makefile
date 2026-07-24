@@ -129,7 +129,7 @@ RUNPOD_TORCHAUDIO_CU124_VERSION ?= 2.6.0
 RUNPOD_TORCH_CU124_INDEX ?= https://download.pytorch.org/whl/cu124
 RUNPOD_LEFFA_FORCE_REINSTALL ?= 0
 
-.PHONY: help setup install install-kiosk run run-kiosk run-kiosk-all ui-kiosk kiosk-seed-size-charts kiosk-reset worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-bootstrap runpod-import-default-size-charts runpod-build runpod-workflow-bootstrap runpod-workflow runpod-run runpod-workflow-with-ollama runpod-workflow-preflight runpod-workflow-check runpod-install-qwen-edit-deps runpod-install-torch-cu124 runpod-install-catvton-deps runpod-install-leffa-torch-cu124 runpod-install-leffa-deps runpod-leffa-deps-check runpod-install-omnivton-deps runpod-catvton-import-check runpod-leffa-import-check runpod-leffa-preload runpod-omnivton-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-vton-input-quality runpod-vton-condition-smoke-inputs runpod-leffa-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke runpod-catvton-quality-smoke runpod-leffa-smoke runpod-leffa-conditioned-smoke runpod-leffa-web-garment-smoke runpod-leffa-web-garment-detail-smoke runpod-leffa-upper-body-web-garment-smoke runpod-omnivton-smoke runpod-omnivton-outpainting-smoke runpod-omnivton-web-garment-smoke test clean lint format check
+.PHONY: help setup install install-kiosk run run-kiosk run-kiosk-all ui-kiosk kiosk-seed-size-charts kiosk-seed-garments kiosk-reset worker worker-once kiosk-preflight runpod-help runpod-init runpod-install runpod-bootstrap runpod-import-default-size-charts runpod-import-default-garments runpod-build runpod-workflow-bootstrap runpod-workflow runpod-run runpod-workflow-with-ollama runpod-workflow-preflight runpod-workflow-check runpod-install-qwen-edit-deps runpod-install-torch-cu124 runpod-install-catvton-deps runpod-install-leffa-torch-cu124 runpod-install-leffa-deps runpod-leffa-deps-check runpod-install-omnivton-deps runpod-catvton-import-check runpod-leffa-import-check runpod-leffa-preload runpod-omnivton-import-check runpod-pull-ollama runpod-reset runpod-start runpod-start-with-ollama runpod-preflight runpod-disk-report runpod-cuda-report runpod-qwen-edit-smoke-data runpod-vton-smoke-data runpod-vton-input-quality runpod-vton-condition-smoke-inputs runpod-leffa-smoke-data runpod-qwen-edit-smoke runpod-catvton-smoke runpod-catvton-quality-smoke runpod-leffa-smoke runpod-leffa-conditioned-smoke runpod-leffa-web-garment-smoke runpod-leffa-web-garment-detail-smoke runpod-leffa-upper-body-web-garment-smoke runpod-omnivton-smoke runpod-omnivton-outpainting-smoke runpod-omnivton-web-garment-smoke test clean lint format check
 
 help:
 	@echo "Virtual Try-On MVP - Makefile commands"
@@ -142,6 +142,7 @@ help:
 	@echo "  make run-kiosk-all - Run kiosk API + worker in one foreground process"
 	@echo "  make ui-kiosk   - Serve the static kiosk app UI locally on 127.0.0.1:$(UI_PORT)"
 	@echo "  make kiosk-seed-size-charts - Import default local kiosk size charts"
+	@echo "  make kiosk-seed-garments - Import default local garment catalog"
 	@echo "  make kiosk-reset - Reset local runtime test data and seed default size charts"
 	@echo "  make worker     - Run local kiosk worker loop"
 	@echo "  make worker-once - Process one local kiosk job"
@@ -228,6 +229,9 @@ ui-kiosk-preview:
 
 kiosk-seed-size-charts:
 	python -m scripts.seed_size_charts --db-path $(LOCAL_DATA_DIR)/size_charts/size_charts.sqlite3
+
+kiosk-seed-garments:
+	python -m scripts.seed_garment_catalog --source-dir data/garment_catalog --storage-dir $(LOCAL_DATA_DIR)/garments --size-chart-db-path $(LOCAL_DATA_DIR)/size_charts/size_charts.sqlite3
 
 kiosk-reset:
 	python -m scripts.reset_kiosk_state --data-dir $(LOCAL_DATA_DIR) --execute --include-runtime-files --seed-default-size-charts
@@ -325,6 +329,9 @@ runpod-bootstrap: runpod-install runpod-install-leffa-deps
 
 runpod-import-default-size-charts:
 	python -m scripts.seed_size_charts --db-path $(RUNPOD_DATA_DIR)/size_charts/size_charts.sqlite3
+
+runpod-import-default-garments:
+	python -m scripts.seed_garment_catalog --source-dir data/garment_catalog --storage-dir $(RUNPOD_DATA_DIR)/garments --size-chart-db-path $(RUNPOD_DATA_DIR)/size_charts/size_charts.sqlite3
 
 runpod-build:
 	bash scripts/workflow-runpod.sh build

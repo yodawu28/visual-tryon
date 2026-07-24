@@ -138,6 +138,28 @@ def test_kiosk_ui_wires_garment_preview_and_visual_preview_jobs():
     assert "visualPreviewReady: true" not in app_js
 
 
+def test_kiosk_ui_uses_backend_garment_image_for_catalog_cards():
+    app_js = Path("ui/kiosk-app/src/App.jsx").read_text("utf-8")
+    api_js = Path("ui/kiosk-app/src/lib/api.js").read_text("utf-8")
+    workflow_source = Path("ui/kiosk-app/src/components/FittingWorkflow.jsx").read_text("utf-8")
+
+    assert "garmentImageUrl" in api_js
+    assert "}/image`" in api_js
+    assert "garmentImageUrl(apiBase, garment.garment_id)" in app_js
+    assert "garmentPreviewUrl: garmentImageUrl" in app_js
+    assert "garment.image_url || garment.garmentPreviewUrl" in workflow_source
+    assert 'alt={`${name} garment`}' in workflow_source
+
+
+def test_kiosk_ui_does_not_pass_click_event_as_fit_session_id():
+    app_js = Path("ui/kiosk-app/src/App.jsx").read_text("utf-8")
+    workflow_source = Path("ui/kiosk-app/src/components/FittingWorkflow.jsx").read_text("utf-8")
+
+    assert 'typeof sessionIdOverride === "string"' in app_js
+    assert "onClick={() => onAnalyzeFit?.()}" in workflow_source
+    assert "onClick={onAnalyzeFit}" not in workflow_source
+
+
 def test_kiosk_ui_sends_confirmed_profile_to_size_recommendation():
     app_js = Path("ui/kiosk-app/src/App.jsx").read_text("utf-8")
     workflow_source = Path("ui/kiosk-app/src/components/FittingWorkflow.jsx").read_text("utf-8")

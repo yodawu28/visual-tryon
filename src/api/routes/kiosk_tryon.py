@@ -9,7 +9,7 @@ from dataclasses import is_dataclass
 from functools import lru_cache
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from fastapi import status
 from fastapi.responses import FileResponse
 
@@ -292,6 +292,23 @@ async def get_kiosk_garment(
         garment=_garment_record_response(record),
         message="Kiosk garment loaded",
     )
+
+
+@router.get("/garments/{garment_id}/image")
+async def get_kiosk_garment_image(
+    garment_id: str,
+    registry: GarmentRegistry = Depends(get_kiosk_garment_registry),
+) -> Response:
+    record = registry.get_garment(garment_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Garment not found: {garment_id}")
+    try:
+        image_bytes = registry.read_image(garment_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return Response(content=image_bytes, media_type=record.mime_type)
 
 
 @router.post("/sessions", response_model=KioskSessionResponse)

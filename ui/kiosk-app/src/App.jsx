@@ -19,6 +19,7 @@ import {
   checkReadiness,
   createSession,
   enqueueVisualPreviewJob,
+  garmentImageUrl,
   getKioskJob,
   listGarments,
   listSizeCharts,
@@ -161,7 +162,12 @@ function FittingRoomApp() {
     listGarments(apiBase, { limit: 100 })
       .then((payload) => {
         if (cancelled) return;
-        const garments = Array.isArray(payload.garments) ? payload.garments : [];
+        const garments = Array.isArray(payload.garments)
+          ? payload.garments.map((garment) => ({
+              ...garment,
+              image_url: garmentImageUrl(apiBase, garment.garment_id),
+            }))
+          : [];
         setPreparedGarments(garments);
         setPreparedGarmentsStatus(garments.length ? "Ready" : "Empty");
       })
@@ -283,6 +289,7 @@ function FittingRoomApp() {
       const garment = garmentResponse.garment;
       const preparedGarment = {
         ...garment,
+        image_url: garmentImageUrl(apiBase, garment.garment_id),
         size_chart_name: selectedSizeChart?.name || "",
         size_chart_sizes: formatSizeRange(selectedSizeChart?.size_chart || garment.size_chart || []),
       };
@@ -409,7 +416,8 @@ function FittingRoomApp() {
   }
 
   async function handleAnalyzeFit(sessionIdOverride = state.sessionId) {
-    if (!sessionIdOverride) {
+    const sessionId = typeof sessionIdOverride === "string" ? sessionIdOverride : state.sessionId;
+    if (!sessionId) {
       appendLog("Choose a prepared garment before running Fit Intelligence.");
       setWorkflowView("garments");
       return;
@@ -427,7 +435,7 @@ function FittingRoomApp() {
     try {
       const fitResponse = await analyzeFit(
         apiBase,
-        sessionIdOverride,
+        sessionId,
         getBodyMeasurementsPayload(confirmedProfile),
         confirmedProfile.fitIntent || fitIntent,
       );
@@ -436,7 +444,7 @@ function FittingRoomApp() {
       }
       const recommendation = fitResponse.size_recommendation || {};
       setState((current) => ({
-        ...(current.sessionId === sessionIdOverride ? {
+        ...(current.sessionId === sessionId ? {
           ...current,
           ...fitRecommendationState(recommendation),
           fitLoading: false,
@@ -453,7 +461,7 @@ function FittingRoomApp() {
         return false;
       }
       setState((current) => ({
-        ...(current.sessionId === sessionIdOverride
+        ...(current.sessionId === sessionId
           ? { ...current, fitLoading: false }
           : current),
       }));
@@ -564,7 +572,7 @@ function FittingRoomApp() {
     const selectedGarmentState = {
       garmentId: garment.garment_id,
       garmentName: garment.name || "Prepared garment",
-      garmentPreviewUrl: "",
+      garmentPreviewUrl: garmentImageUrl(apiBase, garment.garment_id),
       garmentCategory: garment.category || "tops",
       garmentType: garment.garment_type || "",
       sizeChartId: garment.size_chart_id || "",

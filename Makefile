@@ -215,12 +215,12 @@ ui-kiosk:
 	python3 -m http.server $(UI_PORT) --bind 127.0.0.1 --directory ui/kiosk-demo
 
 ui-kiosk-install:
-	cd ui/kiosk-app && npm install
+	cd ui/kiosk-app && npm ci
 
 ui-kiosk-dev:
 	cd ui/kiosk-app && npm run dev
 
-ui-kiosk-build:
+ui-kiosk-build: ui-kiosk-install
 	cd ui/kiosk-app && npm run build
 
 ui-kiosk-preview:

@@ -112,6 +112,11 @@ def test_readiness_endpoint_reports_ready_for_local_leffa_provider(
         check["details"]["quality_gate_status"]["full_outfit"]
         == "experimental_needs_manual_review"
     )
+    assert check["details"]["quality_preset"] == "garment_preprocess_repaint_v1"
+    assert check["details"]["ref_acceleration"] is False
+    assert check["details"]["repaint"] is True
+    assert check["details"]["preprocess_garment"] is True
+    assert check["details"]["checkpoint_status"] == "ready"
 
 
 def test_readiness_endpoint_returns_503_when_local_leffa_assets_are_missing(
@@ -222,6 +227,9 @@ def _settings(
     tryon_analyzer_ollama_model: str = "qwen2.5vl:7b-q4_K_M",
     local_leffa_root: Path | None = None,
     local_leffa_checkpoint_dir: Path | None = None,
+    local_leffa_ref_acceleration: bool = False,
+    local_leffa_repaint: bool = True,
+    local_leffa_preprocess_garment: bool = True,
 ):
     return SimpleNamespace(
         temp_storage_dir=tmp_path,
@@ -237,6 +245,9 @@ def _settings(
         or tmp_path / "models" / "external" / "Leffa" / "ckpts",
         local_leffa_size="768x1024",
         local_leffa_device="cuda",
+        local_leffa_ref_acceleration=local_leffa_ref_acceleration,
+        local_leffa_repaint=local_leffa_repaint,
+        local_leffa_preprocess_garment=local_leffa_preprocess_garment,
     )
 
 

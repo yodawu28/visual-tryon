@@ -160,11 +160,11 @@ class Settings(BaseSettings):
         env="LOCAL_LEFFA_REF_ACCELERATION",
     )
     local_leffa_repaint: bool = Field(
-        default=False,
+        default=True,
         env="LOCAL_LEFFA_REPAINT",
     )
     local_leffa_preprocess_garment: bool = Field(
-        default=False,
+        default=True,
         env="LOCAL_LEFFA_PREPROCESS_GARMENT",
     )
     local_leffa_timeout: int = Field(default=1800, env="LOCAL_LEFFA_TIMEOUT")

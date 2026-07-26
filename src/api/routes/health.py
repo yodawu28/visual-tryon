@@ -261,6 +261,15 @@ def _check_visual_preview_provider(settings: Any) -> ReadinessCheckResponse:
                     "leffa_root": str(leffa_root),
                     "checkpoint_dir": str(checkpoint_dir),
                     "leffa_python": str(leffa_python) if leffa_python else None,
+                    "checkpoint_status": "missing",
+                    "quality_preset": "garment_preprocess_repaint_v1",
+                    "ref_acceleration": bool(
+                        getattr(settings, "local_leffa_ref_acceleration", False)
+                    ),
+                    "repaint": bool(getattr(settings, "local_leffa_repaint", True)),
+                    "preprocess_garment": bool(
+                        getattr(settings, "local_leffa_preprocess_garment", True)
+                    ),
                 },
             )
         return ReadinessCheckResponse(
@@ -271,8 +280,17 @@ def _check_visual_preview_provider(settings: Any) -> ReadinessCheckResponse:
                 "leffa_root": str(leffa_root),
                 "checkpoint_dir": str(checkpoint_dir),
                 "leffa_python": str(leffa_python) if leffa_python else None,
+                "checkpoint_status": "ready",
+                "quality_preset": "garment_preprocess_repaint_v1",
                 "size": getattr(settings, "local_leffa_size", None),
                 "device": getattr(settings, "local_leffa_device", None),
+                "ref_acceleration": bool(
+                    getattr(settings, "local_leffa_ref_acceleration", False)
+                ),
+                "repaint": bool(getattr(settings, "local_leffa_repaint", True)),
+                "preprocess_garment": bool(
+                    getattr(settings, "local_leffa_preprocess_garment", True)
+                ),
                 "supported_garment_categories": [
                     "tops",
                     "bottoms",

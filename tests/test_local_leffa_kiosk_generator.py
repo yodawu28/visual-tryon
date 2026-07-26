@@ -8,6 +8,21 @@ from src.modules.image_generator.local_leffa_kiosk_generator import (
 )
 
 
+def test_local_leffa_kiosk_generator_defaults_to_quality_preset(tmp_path):
+    generator = LocalLeffaKioskGenerator(
+        work_dir=tmp_path / "work",
+        leffa_root=tmp_path / "Leffa",
+        repo_url="https://example.test/Leffa.git",
+        model_repo_id="example/Leffa",
+        checkpoint_dir=tmp_path / "Leffa" / "ckpts",
+    )
+
+    assert generator.ref_acceleration is False
+    assert generator.repaint is True
+    assert generator.preprocess_garment is True
+    assert "repaint1:preprocess1" in generator.get_runtime_metadata()["preview_model"]
+
+
 def test_local_leffa_kiosk_generator_maps_tops_to_upper_body(monkeypatch, tmp_path):
     command = _run_fake_generation(monkeypatch, tmp_path, garment_category="tops")
 

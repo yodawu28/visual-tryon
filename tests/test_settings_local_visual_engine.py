@@ -23,8 +23,8 @@ def test_local_visual_engine_settings_default_to_subprocess_mode(monkeypatch):
     )
     assert settings.local_visual_engine_engine == "leffa"
     assert settings.local_leffa_ref_acceleration is False
-    assert settings.local_leffa_repaint is False
-    assert settings.local_leffa_preprocess_garment is False
+    assert settings.local_leffa_repaint is True
+    assert settings.local_leffa_preprocess_garment is True
 
 
 def test_local_visual_engine_settings_read_environment(monkeypatch):

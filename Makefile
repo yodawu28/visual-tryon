@@ -313,7 +313,6 @@ runpod-help:
 runpod-init:
 	@test -f .env || cp .env.runpod.example .env
 	@mkdir -p $(RUNPOD_DATA_DIR)/jobs
-	@mkdir -p $(RUNPOD_MODEL_DIR)/insightface
 	@mkdir -p $(RUNPOD_HF_HOME) $(RUNPOD_TORCH_HOME) $(RUNPOD_PIP_CACHE_DIR)
 	@echo "RunPod env/data initialized"
 	@echo "  .env: $$(pwd)/.env"

@@ -90,6 +90,11 @@ def mount_kiosk_ui(application: FastAPI) -> None:
 mount_kiosk_ui(app)
 
 
+def should_warm_up_face_detector(active_settings) -> bool:
+    """Legacy privacy routes need FaceDetector warmup; kiosk routes do not."""
+    return str(getattr(active_settings, "api_profile", "")).strip().lower() == "full"
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize models on startup"""
@@ -97,14 +102,16 @@ async def startup_event():
     logger.info(f"📍 Environment: {settings.environment}")
     logger.info(f"🔧 Debug mode: {settings.debug}")
 
-    # Warm up models
-    try:
-        from src.modules.privacy_guard.face_detector import FaceDetector
+    if should_warm_up_face_detector(settings):
+        try:
+            from src.modules.privacy_guard.face_detector import FaceDetector
 
-        _ = FaceDetector()
-        logger.info("✅ Face detector initialized")
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize face detector: {e}")
+            _ = FaceDetector()
+            logger.info("✅ Face detector initialized")
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize face detector: {e}")
+    else:
+        logger.info("Skipping legacy privacy face detector warmup for kiosk profile")
 
     if settings.seed_default_size_charts_on_startup:
         try:

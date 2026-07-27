@@ -8,6 +8,9 @@ fi
 
 RUNPOD_BRANCH="${RUNPOD_BRANCH:-feature/kiosk-gpu-flow}"
 RUNPOD_INSTALL_SYSTEM_DEPS="${RUNPOD_INSTALL_SYSTEM_DEPS:-1}"
+RUNPOD_MODEL_DIR="${RUNPOD_MODEL_DIR:-/workspace/tryon-models}"
+RUNPOD_INSTALL_STATE_DIR="${RUNPOD_INSTALL_STATE_DIR:-${RUNPOD_MODEL_DIR}/install-state}"
+RUNPOD_FORCE_INSTALL="${RUNPOD_FORCE_INSTALL:-0}"
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8080}"
 API_PROFILE="${API_PROFILE:-kiosk}"
@@ -63,9 +66,35 @@ install_system_dependencies() {
 
 build_ui() {
   log "build kiosk UI"
+  mkdir -p "${RUNPOD_INSTALL_STATE_DIR}"
+  if [[ "${RUNPOD_FORCE_INSTALL}" != "1" ]] \
+    && python -m scripts.install_state \
+      --state-dir "${RUNPOD_INSTALL_STATE_DIR}" \
+      --name kiosk-ui-npm \
+      --path ui/kiosk-app/package.json \
+      --path ui/kiosk-app/package-lock.json \
+      --value "node=$(node -v)" \
+      --value "npm=$(npm -v)" \
+      --exists ui/kiosk-app/node_modules \
+      check; then
+    log "kiosk UI npm dependencies already installed; skipping npm ci"
+  else
+    (
+      cd ui/kiosk-app
+      npm ci
+    )
+    python -m scripts.install_state \
+      --state-dir "${RUNPOD_INSTALL_STATE_DIR}" \
+      --name kiosk-ui-npm \
+      --path ui/kiosk-app/package.json \
+      --path ui/kiosk-app/package-lock.json \
+      --value "node=$(node -v)" \
+      --value "npm=$(npm -v)" \
+      --exists ui/kiosk-app/node_modules \
+      write
+  fi
   (
     cd ui/kiosk-app
-    npm ci
     npm run build
   )
 }
@@ -109,6 +138,8 @@ Modes:
 Environment:
   RUNPOD_BRANCH     Git branch to switch to. Default: feature/kiosk-gpu-flow
   RUNPOD_INSTALL_SYSTEM_DEPS  Install Node.js 20 via apt-get when npm is missing. Default: 1
+  RUNPOD_INSTALL_STATE_DIR    Install-state cache directory. Default: /workspace/tryon-models/install-state
+  RUNPOD_FORCE_INSTALL        Reinstall dependencies even when install-state matches. Default: 0
   HOST              API host. Default: 0.0.0.0
   PORT              API port. Default: 8080
   API_PROFILE       API profile. Default: kiosk

@@ -67,6 +67,10 @@ def test_runpod_workflow_script_switches_gpu_flow_branch_and_builds_ui():
     assert "https://deb.nodesource.com/node_20.x" in script
     assert "apt-get install -y nodejs" in script
     assert "make runpod-bootstrap" in script
+    assert "scripts.install_state" in script
+    assert "kiosk-ui-npm" in script
+    assert "check; then" in script
+    assert "RUNPOD_FORCE_INSTALL" in script
     assert "npm ci" in script
     assert "npm run build" in script
     assert "API_PROFILE=\"${API_PROFILE:-kiosk}\"" in script

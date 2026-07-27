@@ -73,6 +73,8 @@ RUNPOD_LEFFA_CONDITIONED_REPORT ?= $(RUNPOD_DATA_DIR)/leffa_smoke/leffa-conditio
 RUNPOD_HF_HOME ?= $(RUNPOD_MODEL_DIR)/huggingface
 RUNPOD_TORCH_HOME ?= $(RUNPOD_MODEL_DIR)/torch
 RUNPOD_PIP_CACHE_DIR ?= $(RUNPOD_MODEL_DIR)/pip-cache
+RUNPOD_INSTALL_STATE_DIR ?= $(RUNPOD_MODEL_DIR)/install-state
+RUNPOD_FORCE_INSTALL ?= 0
 RUNPOD_TORCH_CU124_VERSION ?= 2.6.0
 RUNPOD_TORCHVISION_CU124_VERSION ?= 0.21.0
 RUNPOD_TORCHAUDIO_CU124_VERSION ?= 2.6.0
@@ -143,9 +145,26 @@ install:
 	pip install -r requirements.txt
 
 install-kiosk:
-	pip install -U pip setuptools wheel
-	mkdir -p "$(RUNPOD_PIP_CACHE_DIR)"
-	PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install $(RUNPOD_PIP_INSTALL_FLAGS) -c $(RUNPOD_KIOSK_CONSTRAINTS) -r $(RUNPOD_REQUIREMENTS)
+	mkdir -p "$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_INSTALL_STATE_DIR)"
+	@if [ "$(RUNPOD_FORCE_INSTALL)" != "1" ] && python -m scripts.install_state \
+		--state-dir "$(RUNPOD_INSTALL_STATE_DIR)" \
+		--name kiosk-python \
+		--path "$(RUNPOD_REQUIREMENTS)" \
+		--path "$(RUNPOD_KIOSK_CONSTRAINTS)" \
+		--value "pip-flags=$(RUNPOD_PIP_INSTALL_FLAGS)" \
+		check; then \
+		echo "Kiosk Python dependencies already installed; skipping pip install."; \
+	else \
+		pip install -U pip setuptools wheel; \
+		PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" pip install $(RUNPOD_PIP_INSTALL_FLAGS) -c $(RUNPOD_KIOSK_CONSTRAINTS) -r $(RUNPOD_REQUIREMENTS); \
+		python -m scripts.install_state \
+			--state-dir "$(RUNPOD_INSTALL_STATE_DIR)" \
+			--name kiosk-python \
+			--path "$(RUNPOD_REQUIREMENTS)" \
+			--path "$(RUNPOD_KIOSK_CONSTRAINTS)" \
+			--value "pip-flags=$(RUNPOD_PIP_INSTALL_FLAGS)" \
+			write; \
+	fi
 
 run:
 	python -m uvicorn src.main:app --reload --host 127.0.0.1 --port 8080
@@ -230,7 +249,7 @@ runpod-help:
 runpod-init:
 	@test -f .env || cp .env.runpod.example .env
 	@mkdir -p $(RUNPOD_DATA_DIR)/jobs
-	@mkdir -p $(RUNPOD_HF_HOME) $(RUNPOD_TORCH_HOME) $(RUNPOD_PIP_CACHE_DIR)
+	@mkdir -p $(RUNPOD_HF_HOME) $(RUNPOD_TORCH_HOME) $(RUNPOD_PIP_CACHE_DIR) $(RUNPOD_INSTALL_STATE_DIR)
 	@echo "RunPod env/data initialized"
 	@echo "  .env: $$(pwd)/.env"
 	@echo "  data: $(RUNPOD_DATA_DIR)"
@@ -270,12 +289,20 @@ runpod-workflow-check:
 	bash scripts/workflow-runpod.sh check
 
 runpod-install-leffa-torch-cu124:
-	mkdir -p "$(RUNPOD_LEFFA_VENV)" "$(RUNPOD_PIP_CACHE_DIR)"
+	mkdir -p "$(RUNPOD_LEFFA_VENV)" "$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_INSTALL_STATE_DIR)"
 	@if [ ! -x "$(RUNPOD_LEFFA_PYTHON)" ]; then \
 		python -m venv "$(RUNPOD_LEFFA_VENV)"; \
 		PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_LEFFA_PYTHON)" -m pip install -U pip setuptools wheel; \
 	fi
-	@if [ "$(RUNPOD_LEFFA_FORCE_REINSTALL)" != "1" ] && "$(RUNPOD_LEFFA_PYTHON)" -m scripts.check_leffa_runtime --torch-only; then \
+	@if [ "$(RUNPOD_FORCE_INSTALL)" != "1" ] && [ "$(RUNPOD_LEFFA_FORCE_REINSTALL)" != "1" ] && "$(RUNPOD_LEFFA_PYTHON)" -m scripts.check_leffa_runtime --torch-only && python -m scripts.install_state \
+		--state-dir "$(RUNPOD_INSTALL_STATE_DIR)" \
+		--name leffa-torch-cu124 \
+		--value "torch=$(RUNPOD_TORCH_CU124_VERSION)" \
+		--value "torchvision=$(RUNPOD_TORCHVISION_CU124_VERSION)" \
+		--value "torchaudio=$(RUNPOD_TORCHAUDIO_CU124_VERSION)" \
+		--value "index=$(RUNPOD_TORCH_CU124_INDEX)" \
+		--exists "$(RUNPOD_LEFFA_PYTHON)" \
+		check; then \
 		echo "Leffa Torch stack already ready; skipping reinstall."; \
 	else \
 		echo "Installing Leffa Torch stack into $(RUNPOD_LEFFA_VENV)"; \
@@ -286,10 +313,26 @@ runpod-install-leffa-torch-cu124:
 			torchvision==$(RUNPOD_TORCHVISION_CU124_VERSION) \
 			torchaudio==$(RUNPOD_TORCHAUDIO_CU124_VERSION) \
 			--index-url $(RUNPOD_TORCH_CU124_INDEX); \
+		python -m scripts.install_state \
+			--state-dir "$(RUNPOD_INSTALL_STATE_DIR)" \
+			--name leffa-torch-cu124 \
+			--value "torch=$(RUNPOD_TORCH_CU124_VERSION)" \
+			--value "torchvision=$(RUNPOD_TORCHVISION_CU124_VERSION)" \
+			--value "torchaudio=$(RUNPOD_TORCHAUDIO_CU124_VERSION)" \
+			--value "index=$(RUNPOD_TORCH_CU124_INDEX)" \
+			--exists "$(RUNPOD_LEFFA_PYTHON)" \
+			write; \
 	fi
 
 runpod-install-leffa-deps: runpod-install-leffa-torch-cu124
-	@if [ "$(RUNPOD_LEFFA_FORCE_REINSTALL)" != "1" ] && "$(RUNPOD_LEFFA_PYTHON)" -m scripts.check_leffa_runtime; then \
+	@if [ "$(RUNPOD_FORCE_INSTALL)" != "1" ] && [ "$(RUNPOD_LEFFA_FORCE_REINSTALL)" != "1" ] && "$(RUNPOD_LEFFA_PYTHON)" -m scripts.check_leffa_runtime && python -m scripts.install_state \
+		--state-dir "$(RUNPOD_INSTALL_STATE_DIR)" \
+		--name leffa-runtime \
+		--path "$(RUNPOD_LEFFA_REQUIREMENTS)" \
+		--path "$(RUNPOD_LEFFA_CONSTRAINTS)" \
+		--value "pip-flags=$(RUNPOD_PIP_INSTALL_FLAGS)" \
+		--exists "$(RUNPOD_LEFFA_PYTHON)" \
+		check; then \
 		echo "Leffa runtime already ready; skipping dependency install."; \
 	else \
 		PIP_CACHE_DIR="$(RUNPOD_PIP_CACHE_DIR)" "$(RUNPOD_LEFFA_PYTHON)" -m pip install \
@@ -297,6 +340,14 @@ runpod-install-leffa-deps: runpod-install-leffa-torch-cu124
 			$(if $(filter 1 true yes,$(RUNPOD_LEFFA_FORCE_REINSTALL)),--force-reinstall,) \
 			-c "$(RUNPOD_LEFFA_CONSTRAINTS)" \
 			-r "$(RUNPOD_LEFFA_REQUIREMENTS)"; \
+		python -m scripts.install_state \
+			--state-dir "$(RUNPOD_INSTALL_STATE_DIR)" \
+			--name leffa-runtime \
+			--path "$(RUNPOD_LEFFA_REQUIREMENTS)" \
+			--path "$(RUNPOD_LEFFA_CONSTRAINTS)" \
+			--value "pip-flags=$(RUNPOD_PIP_INSTALL_FLAGS)" \
+			--exists "$(RUNPOD_LEFFA_PYTHON)" \
+			write; \
 	fi
 	@echo "Leffa runtime installed at $(RUNPOD_LEFFA_VENV)"
 	@echo "Set LOCAL_LEFFA_PYTHON=$(RUNPOD_LEFFA_PYTHON) before make runpod-start"

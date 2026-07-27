@@ -15,10 +15,12 @@ def test_kiosk_requirements_do_not_install_experimental_backends():
 def test_runpod_template_uses_kiosk_production_model_boundary():
     template = Path(".env.runpod.example").read_text("utf-8")
     makefile = Path("Makefile").read_text("utf-8")
+    settings = Path("src/config/settings.py").read_text("utf-8")
 
     assert "LOCAL_LEFFA_REPAINT=true" in template
     assert "LOCAL_LEFFA_PREPROCESS_GARMENT=true" in template
     assert "replicate_qwen" not in template
+    assert "replicate_qwen" not in settings
     assert "REPLICATE_PREVIEW_MODEL" not in template
     assert "INSIGHTFACE" not in template
     assert "insightface" not in makefile
@@ -50,6 +52,14 @@ def test_kiosk_router_does_not_import_replicate_provider_at_module_load():
     assert "replicate_avatar_preview_generator import" not in source
     assert "ReplicateAvatarPreviewGenerator()" not in source
     assert "_build_replicate_qwen_generator" not in source
+    assert "replicate_qwen" not in source
+
+
+def test_kiosk_worker_does_not_import_replicate_provider_at_module_load():
+    source = Path("scripts/run_kiosk_worker.py").read_text("utf-8")
+
+    assert "replicate_avatar_preview_generator import" not in source
+    assert "ReplicateAvatarPreviewGenerator()" not in source
     assert "replicate_qwen" not in source
 
 

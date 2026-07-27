@@ -15,9 +15,6 @@ from src.modules.avatar_preview.tryon_analyzer import OllamaTryOnAnalyzer
 from src.modules.image_generator.local_leffa_kiosk_generator import (
     LocalLeffaKioskGenerator,
 )
-from src.modules.image_generator.replicate_avatar_preview_generator import (
-    ReplicateAvatarPreviewGenerator,
-)
 from src.modules.jobs.queue import JobService, LocalJobQueueBackend
 from src.modules.jobs.worker import JobWorker
 from src.modules.kiosk_tryon.capture_analyzer import MediaPipeKioskCaptureAnalyzer
@@ -117,8 +114,6 @@ def _build_kiosk_visual_generator(settings):
         .strip()
         .lower()
     )
-    if provider == "replicate_qwen":
-        return ReplicateAvatarPreviewGenerator()
     if provider in {"local_leffa", "leffa"}:
         return LocalLeffaKioskGenerator(
             work_dir=settings.temp_storage_dir / "kiosk_tryons" / "leffa_work",
@@ -153,9 +148,9 @@ def _build_kiosk_visual_generator(settings):
         )
     raise RuntimeError(
         "Kiosk visual preview provider is disabled. Production kiosk visual "
-        "preview requires a self-hosted GPU engine; Replicate Qwen is available "
-        "only by explicitly setting KIOSK_VISUAL_PREVIEW_PROVIDER=replicate_qwen "
-        "for benchmark/debug."
+        "preview requires the self-hosted Leffa engine. Set "
+        "KIOSK_VISUAL_PREVIEW_PROVIDER=local_leffa after installing the Leffa "
+        "runtime."
     )
 
 

@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     kiosk_visual_preview_provider: str = Field(
         default="disabled",
         env="KIOSK_VISUAL_PREVIEW_PROVIDER",
-    )  # "disabled", "local_leffa" for self-hosted GPU tops preview, or "replicate_qwen" for benchmark/debug
+    )  # "disabled" or "local_leffa" for self-hosted GPU visual preview
     local_visual_engine_mode: str = Field(
         default="subprocess",
         env="LOCAL_VISUAL_ENGINE_MODE",

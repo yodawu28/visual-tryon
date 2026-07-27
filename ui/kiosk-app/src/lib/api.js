@@ -92,7 +92,10 @@ export async function listGarments(apiBase, filters = {}) {
   const params = new URLSearchParams();
   if (filters.limit) params.set("limit", String(filters.limit));
   const query = params.toString();
-  return request(apiBase, `${GARMENTS_PATH}${query ? `?${query}` : ""}`);
+  return request(apiBase, `${GARMENTS_PATH}${query ? `?${query}` : ""}`, {
+    cache: "no-store",
+    headers: { "Cache-Control": "no-cache" },
+  });
 }
 
 export async function createSession(apiBase, garmentId) {

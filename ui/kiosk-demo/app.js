@@ -7203,6 +7203,7 @@ function FittingWorkflow({
   onFitIntentChange,
   onMockSensorProfileChange,
   onQueueTryOn,
+  onRefreshPreparedGarments,
   onSelectPreparedGarment,
   onToggleOperatorSensor,
   onWorkflowViewChange,
@@ -7254,6 +7255,7 @@ function FittingWorkflow({
             confirmedProfile,
             garmentLabel,
             onSelectPreparedGarment,
+            onRefreshPreparedGarments,
             pendingCaptureFile,
             preparedGarments,
             preparedGarmentsStatus,
@@ -7785,6 +7787,7 @@ function OperatorSensorPanel({ mockSensorProfile, onChange, onClose, onDetectPro
 function PreparedGarmentPicker({
   confirmedProfile,
   garmentLabel,
+  onRefreshPreparedGarments,
   onSelectPreparedGarment,
   pendingCaptureFile,
   preparedGarments = [],
@@ -7800,7 +7803,10 @@ function PreparedGarmentPicker({
         /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "mt-1 text-xl font-semibold tracking-tight text-ink", children: "Prepared products" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 max-w-2xl text-sm leading-6 text-muted", children: "Select a product after the shopper scan. The backend session is created only for the chosen garment." })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid gap-2 sm:min-w-[220px]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(DetectedProfileMini, { confirmedProfile }) })
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid gap-2 sm:min-w-[220px]", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(DetectedProfileMini, { confirmedProfile }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { disabled: loading, onClick: onRefreshPreparedGarments, size: "sm", variant: "secondary", children: "Refresh catalog" })
+      ] })
     ] }),
     !preparedGarments.length && !loading ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-5 grid min-h-[260px] place-items-center rounded-lg border border-dashed border-line bg-white p-6 text-center", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(ProductIcon, { className: "mx-auto h-7 w-7 text-slate-400" }),
@@ -8306,7 +8312,10 @@ async function listGarments(apiBase, filters = {}) {
   const params = new URLSearchParams();
   if (filters.limit) params.set("limit", String(filters.limit));
   const query = params.toString();
-  return request(apiBase, `${GARMENTS_PATH}${query ? `?${query}` : ""}`);
+  return request(apiBase, `${GARMENTS_PATH}${query ? `?${query}` : ""}`, {
+    cache: "no-store",
+    headers: { "Cache-Control": "no-cache" }
+  });
 }
 async function createSession(apiBase, garmentId) {
   return request(apiBase, SESSIONS_PATH, {
@@ -8419,6 +8428,7 @@ function FittingRoomApp() {
   const fitRequestRef = reactExports.useRef(0);
   const tryOnRequestRef = reactExports.useRef(0);
   const selectionRequestRef = reactExports.useRef(0);
+  const catalogRequestRef = reactExports.useRef(0);
   const [apiBase, setApiBase] = reactExports.useState(resolveDefaultApiBase());
   const [apiStatus, setApiStatus] = reactExports.useState("Checking");
   const [readinessPayload, setReadinessPayload] = reactExports.useState(null);
@@ -8507,26 +8517,14 @@ function FittingRoomApp() {
     };
   }, [apiBase]);
   reactExports.useEffect(() => {
-    let cancelled = false;
-    setPreparedGarmentsStatus("Loading");
-    listGarments(apiBase, { limit: 100 }).then((payload) => {
-      if (cancelled) return;
-      const garments = Array.isArray(payload.garments) ? payload.garments.map((garment) => ({
-        ...garment,
-        image_url: garmentImageUrl(apiBase, garment.garment_id)
-      })) : [];
-      setPreparedGarments(garments);
-      setPreparedGarmentsStatus(garments.length ? "Ready" : "Empty");
-    }).catch((error) => {
-      if (cancelled) return;
-      setPreparedGarments([]);
-      setPreparedGarmentsStatus("Unavailable");
-      appendLog(`Prepared garments unavailable: ${error.message || "unknown error"}`);
-    });
-    return () => {
-      cancelled = true;
-    };
+    refreshPreparedGarments();
   }, [apiBase]);
+  reactExports.useEffect(() => {
+    const catalogVisible = surface === "management" && managementSection === "garments" || surface === "visual-tryon" && activeStage === "garments";
+    if (catalogVisible) {
+      refreshPreparedGarments({ silent: true });
+    }
+  }, [apiBase, activeStage, managementSection, surface]);
   reactExports.useEffect(() => {
     if (!productModalOpen && surface !== "management") return void 0;
     let cancelled = false;
@@ -8566,6 +8564,32 @@ function FittingRoomApp() {
   const bottomNavigation = "fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 px-2 py-2 backdrop-blur lg:hidden";
   function appendLog(message) {
     setEventLog((current) => [`${(/* @__PURE__ */ new Date()).toLocaleTimeString()} ${message}`, ...current].slice(0, 10));
+  }
+  async function refreshPreparedGarments(options = {}) {
+    const requestId = catalogRequestRef.current + 1;
+    catalogRequestRef.current = requestId;
+    const silent = Boolean(options.silent);
+    if (!silent) {
+      setPreparedGarmentsStatus("Loading");
+    }
+    try {
+      const payload = await listGarments(apiBase, { limit: 100 });
+      if (catalogRequestRef.current !== requestId) return;
+      const garments = Array.isArray(payload.garments) ? payload.garments.map((garment) => ({
+        ...garment,
+        image_url: garmentImageUrl(apiBase, garment.garment_id)
+      })) : [];
+      setPreparedGarments(garments);
+      setPreparedGarmentsStatus(garments.length ? "Ready" : "Empty");
+      if (!silent) {
+        appendLog(`Prepared garments refreshed: ${garments.length}`);
+      }
+    } catch (error) {
+      if (catalogRequestRef.current !== requestId) return;
+      setPreparedGarments([]);
+      setPreparedGarmentsStatus("Unavailable");
+      appendLog(`Prepared garments unavailable: ${error.message || "unknown error"}`);
+    }
   }
   function resetSession() {
     fitRequestRef.current += 1;
@@ -8628,6 +8652,7 @@ function FittingRoomApp() {
         ...current.filter((item) => item.garment_id !== garment.garment_id)
       ]);
       setPreparedGarmentsStatus("Ready");
+      refreshPreparedGarments({ silent: true });
       setProductModalOpen(false);
       appendLog(`Product prepared: ${garment.name || garmentName}`);
     } catch (error) {
@@ -9049,6 +9074,7 @@ function FittingRoomApp() {
     onDetectProfileFromSensor: detectProfileFromSensor,
     onMockSensorProfileChange: handleMockSensorProfileChange,
     onQueueTryOn: handleQueueTryOn,
+    onRefreshPreparedGarments: () => refreshPreparedGarments(),
     onSelectPreparedGarment: handleSelectPreparedGarment,
     onToggleOperatorSensor: () => setOperatorSensorOpen((open) => !open),
     onWorkflowViewChange: (view) => setWorkflowView(getAvailableWorkflowView(view, state, confirmedProfile)),
@@ -9079,6 +9105,7 @@ function FittingRoomApp() {
         onNewSession: resetSession,
         onOpenDiagnostics: () => setDiagnosticsDrawer((open) => !open),
         onOpenProduct: () => setProductModalOpen(true),
+        onRefreshPreparedGarments: () => refreshPreparedGarments(),
         preparedGarments,
         preparedGarmentsStatus,
         productModal: /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -9161,6 +9188,7 @@ function ManagementApp({
   onNewSession,
   onOpenDiagnostics,
   onOpenProduct,
+  onRefreshPreparedGarments,
   preparedGarments,
   preparedGarmentsStatus,
   productModal,
@@ -9217,6 +9245,7 @@ function ManagementApp({
             managementSection,
             onOpenDiagnostics,
             onOpenProduct,
+            onRefreshPreparedGarments,
             preparedGarments,
             preparedGarmentsStatus,
             readinessPayload,
@@ -9265,6 +9294,7 @@ function ManagementShell({
   managementSection,
   onOpenDiagnostics,
   onOpenProduct,
+  onRefreshPreparedGarments,
   preparedGarments,
   preparedGarmentsStatus,
   readinessPayload,
@@ -9289,6 +9319,7 @@ function ManagementShell({
       GarmentCatalogPage,
       {
         onOpenProduct,
+        onRefreshPreparedGarments,
         preparedGarments,
         preparedGarmentsStatus
       }
@@ -9298,7 +9329,7 @@ function ManagementShell({
 function SystemConfigPage(props) {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(DiagnosticsSettingsPage, { ...props });
 }
-function GarmentCatalogPage({ onOpenProduct, preparedGarments, preparedGarmentsStatus }) {
+function GarmentCatalogPage({ onOpenProduct, onRefreshPreparedGarments, preparedGarments, preparedGarmentsStatus }) {
   const loading = preparedGarmentsStatus === "Loading";
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "rounded-lg bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-line/80", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between", children: [
@@ -9307,7 +9338,10 @@ function GarmentCatalogPage({ onOpenProduct, preparedGarments, preparedGarmentsS
         /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "mt-1 text-xl font-semibold tracking-tight text-ink", children: "Prepared garments" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 max-w-2xl text-sm leading-6 text-muted", children: "Import defaults from data/garment_catalog or upload a garment before shopper sessions." })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: onOpenProduct, size: "sm", variant: "primary", children: "Add garment" })
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-2 sm:flex-row", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { disabled: loading, onClick: onRefreshPreparedGarments, size: "sm", variant: "secondary", children: "Refresh catalog" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: onOpenProduct, size: "sm", variant: "primary", children: "Add garment" })
+      ] })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4", children: preparedGarments.map((garment) => {
       var _a;

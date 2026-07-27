@@ -264,9 +264,11 @@ async def get_kiosk_size_chart(
 
 @router.get("/garments", response_model=KioskGarmentListResponse)
 async def list_kiosk_garments(
+    response: Response,
     limit: int = Query(default=100, ge=1, le=500),
     registry: GarmentRegistry = Depends(get_kiosk_garment_registry),
 ) -> KioskGarmentListResponse:
+    response.headers["Cache-Control"] = "no-store"
     records = registry.list_garments(limit=limit)
     return KioskGarmentListResponse(
         success=True,
@@ -305,7 +307,11 @@ async def get_kiosk_garment_image(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return Response(content=image_bytes, media_type=record.mime_type)
+    return Response(
+        content=image_bytes,
+        media_type=record.mime_type,
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.post("/sessions", response_model=KioskSessionResponse)

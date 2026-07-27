@@ -195,11 +195,16 @@ def test_kiosk_ui_loads_prepared_garments_for_post_scan_selection():
 
     assert "listGarments" in api_js
     assert '"/api/v1/kiosk/garments"' in api_js
+    assert 'cache: "no-store"' in api_js
+    assert "refreshPreparedGarments" in app_js
+    assert "catalogRequestRef" in app_js
+    assert "onRefreshPreparedGarments" in app_js
     assert "preparedGarments" in app_js
     assert "setPreparedGarments" in app_js
     assert "handleSelectPreparedGarment" in app_js
     assert "createSession(apiBase, garment.garment_id" in app_js
     assert "PreparedGarmentPicker" in workflow_source
+    assert "Refresh catalog" in workflow_source
     assert "Size chart ready" in workflow_source
     assert "Prepared products appear here" in workflow_source
     assert "Upload product" not in workflow_source

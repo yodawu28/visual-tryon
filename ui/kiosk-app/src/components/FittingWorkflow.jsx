@@ -46,6 +46,7 @@ export function FittingWorkflow({
   onFitIntentChange,
   onMockSensorProfileChange,
   onQueueTryOn,
+  onRefreshPreparedGarments,
   onSelectPreparedGarment,
   onToggleOperatorSensor,
   onWorkflowViewChange,
@@ -96,6 +97,7 @@ export function FittingWorkflow({
           confirmedProfile={confirmedProfile}
           garmentLabel={garmentLabel}
           onSelectPreparedGarment={onSelectPreparedGarment}
+          onRefreshPreparedGarments={onRefreshPreparedGarments}
           pendingCaptureFile={pendingCaptureFile}
           preparedGarments={preparedGarments}
           preparedGarmentsStatus={preparedGarmentsStatus}
@@ -684,6 +686,7 @@ function OperatorSensorPanel({ mockSensorProfile, onChange, onClose, onDetectPro
 function PreparedGarmentPicker({
   confirmedProfile,
   garmentLabel,
+  onRefreshPreparedGarments,
   onSelectPreparedGarment,
   pendingCaptureFile,
   preparedGarments = [],
@@ -705,6 +708,9 @@ function PreparedGarmentPicker({
         </div>
         <div className="grid gap-2 sm:min-w-[220px]">
           <DetectedProfileMini confirmedProfile={confirmedProfile} />
+          <Button disabled={loading} onClick={onRefreshPreparedGarments} size="sm" variant="secondary">
+            Refresh catalog
+          </Button>
         </div>
       </div>
 

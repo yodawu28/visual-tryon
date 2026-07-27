@@ -720,6 +720,7 @@ def test_list_kiosk_garments_endpoint_returns_registered_garments():
     response = client.get("/api/v1/kiosk/garments")
 
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
     payload = response.json()
     assert payload["success"] is True
     assert payload["count"] == 1
@@ -743,6 +744,7 @@ def test_get_kiosk_garment_image_endpoint_returns_stored_image():
     response = client.get("/api/v1/kiosk/garments/garment:v1:test/image")
 
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
     assert response.content == b"garment-image"
     assert response.headers["content-type"] == "image/png"
 

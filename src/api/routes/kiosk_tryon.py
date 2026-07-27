@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 from dataclasses import is_dataclass
 from functools import lru_cache
-from importlib import import_module
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
@@ -420,8 +419,6 @@ async def analyze_kiosk_user_capture(
 
 def _build_kiosk_visual_generator(settings: Any) -> Any:
     provider = _kiosk_visual_preview_provider(settings)
-    if provider == "replicate_qwen":
-        return _build_replicate_qwen_generator()
     if provider in {"local_leffa", "leffa"}:
         return LocalLeffaKioskGenerator(
             work_dir=settings.temp_storage_dir / "kiosk_tryons" / "leffa_work",
@@ -448,38 +445,23 @@ def _build_kiosk_visual_generator(settings: Any) -> Any:
         )
     raise RuntimeError(
         "Kiosk visual preview provider is disabled. Production kiosk visual "
-        "preview requires a self-hosted GPU engine; Replicate Qwen is available "
-        "only by explicitly setting KIOSK_VISUAL_PREVIEW_PROVIDER=replicate_qwen "
-        "for benchmark/debug."
+        "preview requires the self-hosted Leffa engine. Set "
+        "KIOSK_VISUAL_PREVIEW_PROVIDER=local_leffa after installing the Leffa "
+        "runtime."
     )
-
-
-def _build_replicate_qwen_generator() -> Any:
-    try:
-        module = import_module(
-            "src.modules.image_generator.replicate_avatar_preview_generator"
-        )
-    except ModuleNotFoundError as exc:
-        raise RuntimeError(
-            "Replicate Qwen preview is a debug provider and is not installed in "
-            "the slim kiosk runtime. Install full development dependencies or "
-            "use KIOSK_VISUAL_PREVIEW_PROVIDER=local_leffa."
-        ) from exc
-    generator_class = getattr(module, "ReplicateAvatarPreviewGenerator")
-    return generator_class()
 
 
 def require_kiosk_visual_preview_enabled() -> None:
     settings = get_settings()
     provider = _kiosk_visual_preview_provider(settings)
-    if provider in {"replicate_qwen", "local_leffa", "leffa"}:
+    if provider in {"local_leffa", "leffa"}:
         return
     raise HTTPException(
         status_code=503,
         detail=(
             "Kiosk visual preview provider is disabled. Set "
             "KIOSK_VISUAL_PREVIEW_PROVIDER=local_leffa for self-hosted production "
-            "preview, or replicate_qwen only for benchmark/debug."
+            "preview."
         ),
     )
 

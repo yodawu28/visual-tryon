@@ -34,7 +34,7 @@ def test_readiness_endpoint_reports_ready_for_local_kiosk_dependencies(
     assert (tmp_path / "size_charts" / "size_charts.sqlite3").exists()
 
 
-def test_readiness_endpoint_returns_503_when_required_config_is_missing(
+def test_readiness_endpoint_returns_503_when_visual_provider_is_unsupported(
     tmp_path: Path,
     monkeypatch,
 ):
@@ -57,7 +57,8 @@ def test_readiness_endpoint_returns_503_when_required_config_is_missing(
     assert payload["status"] == "not_ready"
     assert payload["checks"]["visual_preview_provider"]["status"] == "not_ready"
     assert (
-        "REPLICATE_API_TOKEN" in payload["checks"]["visual_preview_provider"]["message"]
+        "Unsupported KIOSK_VISUAL_PREVIEW_PROVIDER"
+        in payload["checks"]["visual_preview_provider"]["message"]
     )
 
 

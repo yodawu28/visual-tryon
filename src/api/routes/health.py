@@ -231,8 +231,8 @@ def _check_visual_preview_provider(settings: Any) -> ReadinessCheckResponse:
             details={
                 "provider": provider,
                 "production_note": (
-                    "Remote Replicate Qwen preview is not part of the production "
-                    "kiosk runtime."
+                    "Set KIOSK_VISUAL_PREVIEW_PROVIDER=local_leffa to enable the "
+                    "self-hosted production visual preview runtime."
                 ),
             },
         )
@@ -305,34 +305,8 @@ def _check_visual_preview_provider(settings: Any) -> ReadinessCheckResponse:
                 },
             },
         )
-    if provider != "replicate_qwen":
-        return ReadinessCheckResponse(
-            status="not_ready",
-            message=f"Unsupported KIOSK_VISUAL_PREVIEW_PROVIDER: {provider}",
-            details={"provider": provider},
-        )
-
-    model = str(settings.replicate_preview_model or "").strip()
-    token = str(settings.replicate_api_token or "").strip()
-    if not model:
-        return ReadinessCheckResponse(
-            status="not_ready",
-            message="REPLICATE_PREVIEW_MODEL is not configured",
-            details={},
-        )
-    if not token:
-        return ReadinessCheckResponse(
-            status="not_ready",
-            message="REPLICATE_API_TOKEN is not configured",
-            details={"model": model},
-        )
     return ReadinessCheckResponse(
-        status="ready",
-        message="Replicate Qwen preview config is present for benchmark/debug",
-        details={
-            "provider": provider,
-            "model": model,
-            "token_configured": True,
-            "input_mapping": settings.replicate_preview_input_mapping,
-        },
+        status="not_ready",
+        message=f"Unsupported KIOSK_VISUAL_PREVIEW_PROVIDER: {provider}",
+        details={"provider": provider},
     )
